@@ -5,7 +5,7 @@ Create a standalone, production-quality, mobile-first Home Assistant custom Love
 
 ## Source of truth and status
 - Read `SPEC.md` before any implementation.
-- **SPEC.md is currently a planning DRAFT. Do not begin implementing solely because this repository is present; wait for an explicit user implementation task.**
+- **The planning decisions in SPEC.md are approved. Implementation begins only on an explicit Codex task (for example the prepared GitHub implementation issue / a direct user request in Codex). Never assume GitHub file changes automatically launch Codex.**
 - Preserve the distinction between confirmed requirements and proposals/open decisions.
 - Never invent actual entity IDs, user sensor values, or the appearance/orientation of their property. The one user-supplied ID is `sensor.ecowitt_wind_direction_avg_175da` (10-minute average wind direction), used only as a suggested editable configuration.
 - If technical details are ambiguous, document the uncertainty instead of silently guessing.
@@ -19,7 +19,7 @@ Create a standalone, production-quality, mobile-first Home Assistant custom Love
 - Wind and rain receive visual priority; WH40 measures rain quantity and WS90 piezo determines wet status as separate sources.
 - Gracefully handle missing, unavailable, unknown or stale sensors.
 - Use local Home Assistant state/history APIs, no cloud or map calls, and do not modify Ecowitt Local.
-- Avoid duplicate views or multiple full dashboard YAMLs unless user explicitly decides otherwise.
+- Support two example VIEW YAMLs for the SAME card: Panel View (default for dedicated weather tab; one card) and Sections View (for integration with other dashboard cards). Do not auto-edit existing dashboards.
 - Deliver small, reviewable PRs, tests, setup documentation, screenshots/demos and honest limitations.
 
 ## Workflow
@@ -27,3 +27,17 @@ Create a standalone, production-quality, mobile-first Home Assistant custom Love
 2. When user authorizes coding, produce a PR plan with discrete milestones.
 3. Implement only approved scope and verify on mobile/desktop.
 4. Do not mark design or feature as complete on the basis of a mockup alone.
+
+
+## Current implementation priorities
+1. Read SPEC.md, docs/CODEX_IMPLEMENTATION.md and examples/ before editing code.
+2. Build the actual custom-card foundation and visual editor first, with deterministic demo states and an explicit setup placeholder.
+3. Build the north-up stylized 2D site-plan SVG and accurately transformed wind arrows. The original approved concept image exists only in the ChatGPT discussion and is not automatically available in this repository. Do not claim exact pixel reproduction of an inaccessible attachment. Explicitly flag any required artwork to the user.
+4. Add high-visibility wet/dry/unavailable rain status using WS90 piezo, WH40 accumulation/rate as distinct inputs.
+5. Implement responsive layout and tap-details with live HA data/recorder access; iPhone 17 portrait, iPhone landscape and desktop screenshot verification.
+6. Package for HACS, give a reliable visual editor and test the prepared View-YAML examples. Do not invent device entity IDs.
+
+## Quality gates
+- Test wind arrow semantics: meteorological FROM bearing vs movement arrow direction toward the house (bearing+180 degrees); north stays at image top.
+- Test rain wet/dry/unavailable, card in panel/sections, missing entities, 359-to-0 animation, all unit handling.
+- Prefer small reviewable PRs, include test results and known limitations; preserve scope, do not overwrite the user's other repositories.
