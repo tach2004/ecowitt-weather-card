@@ -22,3 +22,6 @@
 .DS_Store
 node_modules/
 dist/
+work/
+test-results/
+playwright-report/
