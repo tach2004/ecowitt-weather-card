@@ -1,40 +1,38 @@
 import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { resolve, extname, sep } from "node:path";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 const root = resolve(".");
-const types = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".json": "application/json",
-};
-const port = Number(process.env.PORT || 4173);
+// Exact routes keep the local demo independent of checkout directory names and
+// prevent serving repository internals, traversal paths or private scratch files.
+const routes = new Map([
+  ["/", ["demo/index.html", "text/html; charset=utf-8"]],
+  ["/demo/index.html", ["demo/index.html", "text/html; charset=utf-8"]],
+  ["/demo/generic-image.svg", ["demo/generic-image.svg", "image/svg+xml"]],
+  [
+    "/dist/ecowitt-weather-card.js",
+    ["dist/ecowitt-weather-card.js", "text/javascript; charset=utf-8"],
+  ],
+]);
+const port = Number(process.env.PORT ?? 4173);
 const server = createServer(async (req, res) => {
+  // Do not normalize or decode paths: encoded aliases and dot-segment traversal
+  // must not become one of the explicitly allowed public routes.
+  const route = routes.get((req.url ?? "/").split("?")[0]);
+  if (!route) {
+    res.writeHead(404).end();
+    return;
+  }
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(405, { Allow: "GET, HEAD" }).end();
+    return;
+  }
   try {
-    const pathname = decodeURIComponent(
-      new URL(req.url || "/", "http://localhost").pathname,
-    );
-    const path = resolve(
-      root,
-      "." + (pathname === "/" ? "/demo/index.html" : pathname),
-    );
-    if (
-      !path.startsWith(root + sep) ||
-      path.includes(`${sep}.git${sep}`) ||
-      path.includes(`${sep}work${sep}`)
-    ) {
-      res.writeHead(403).end();
-      return;
-    }
-    if (!(await stat(path)).isFile()) {
-      res.writeHead(404).end();
-      return;
-    }
-    const bytes = await readFile(path);
+    const [relativePath, contentType] = route;
+    const bytes = await readFile(resolve(root, relativePath));
     res
       .writeHead(200, {
-        "Content-Type": types[extname(path)] || "application/octet-stream",
+        "Content-Type": contentType,
         "Cache-Control": "no-store",
       })
       .end(bytes);
@@ -42,6 +40,11 @@ const server = createServer(async (req, res) => {
     res.writeHead(404).end();
   }
 });
-server.listen(port, "127.0.0.1", () =>
-  process.stdout.write(`Local synthetic demo: http://127.0.0.1:${port}\n`),
-);
+server.listen(port, "127.0.0.1", () => {
+  const address = server.address();
+  if (address && typeof address !== "string") {
+    process.stdout.write(
+      `Local synthetic demo: http://127.0.0.1:${address.port}\n`,
+    );
+  }
+});
