@@ -667,3 +667,34 @@ test("rendered polygon travels from N/E/S/W and WNW into the target", async ({
     expect(geometry.distanceToTarget).toBeLessThan(0.01);
   }
 });
+
+test("320px summary contains long German labels with a wider fallback font", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 874 });
+  for (const view of ["panel", "sections"]) {
+    await ready(page, `/?view=${view}`);
+    await page.locator("ecowitt-weather-card").evaluate((card) => {
+      // A real 16px monospace fallback exposes intrinsic grid minimums that can
+      // differ between the local machine and GitHub's installed system fonts.
+      (card as HTMLElement).style.setProperty("--paper-font-body1_-_font-family", "monospace");
+    });
+    const summary = page.locator(".mobile-summary");
+    await expect(summary.locator(".label").nth(1)).toContainText("Feuchtigkeitsstatus");
+    const layout = await summary.evaluate((element) => {
+      const root = element.closest("ha-card")!.getBoundingClientRect();
+      const nodes = [element, ...element.querySelectorAll("button, span")];
+      return {
+        font: getComputedStyle(element).fontFamily,
+        pageOverflow: document.documentElement.scrollWidth > innerWidth,
+        outside: nodes.filter((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.width > 0 && (rect.left < root.left - 1 || rect.right > root.right + 1);
+        }).map((node) => node.className),
+        overflowing: nodes.filter((node) => node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1).map((node) => node.className),
+      };
+    });
+    expect(layout.font).toContain("monospace");
+    expect(layout.pageOverflow).toBe(false);
+    expect(layout.outside).toEqual([]);
+    expect(layout.overflowing).toEqual([]);
+  }
+});

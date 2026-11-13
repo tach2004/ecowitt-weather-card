@@ -16,7 +16,7 @@ Version 0.1.0 setzt die eigenständige Karte und ihren visuellen Editor um. Das 
 
 ## Nachvollziehbare Prüfungen
 
-Die Tests sind unter `tests/` und in der Playwright-Konfiguration reproduzierbar. Am 13.11.2026 bestanden Typecheck, Build, 38 Unit-/Vertragstests und alle 42 Chromium-Browsertests einschließlich Screenshot-Erzeugung. Getestet wurden Panel-/Sections-Container mit 320/375/390/402/430/600/768/1024/1440 CSS-Pixeln, iPhone-Hoch-/Querformatgrößen, helle/dunkle Themes, reduzierte Bewegung, echte SVG-Pfeilgeometrie und scrollbare Details. Beide öffentlichen Screenshots wurden zusätzlich visuell geprüft.
+Die Tests sind unter `tests/` und in der Playwright-Konfiguration reproduzierbar. Am 13.11.2026 bestanden Typecheck, Build, 38 Unit-/Vertragstests und alle 43 Chromium-Browsertests einschließlich Screenshot-Erzeugung. Getestet wurden Panel-/Sections-Container mit 320/375/390/402/430/600/768/1024/1440 CSS-Pixeln, iPhone-Hoch-/Querformatgrößen, helle/dunkle Themes, reduzierte Bewegung, echte SVG-Pfeilgeometrie und scrollbare Details. Beide öffentlichen Screenshots wurden zusätzlich visuell geprüft.
 
 Reproduzierbare Befehle:
 
