@@ -32,7 +32,7 @@ Create a standalone, production-quality, mobile-first Home Assistant custom Love
 ## Current implementation priorities
 1. Read SPEC.md, docs/CODEX_IMPLEMENTATION.md and examples/ before editing code.
 2. Build the actual custom-card foundation and visual editor first, with deterministic demo states and an explicit setup placeholder.
-3. Build the north-up stylized 2D site-plan SVG and accurately transformed wind arrows. The original approved concept image exists only in the ChatGPT discussion and is not automatically available in this repository. Do not claim exact pixel reproduction of an inaccessible attachment. Explicitly flag any required artwork to the user.
+3. Build a **generic, non-identifying** north-up 2D site-plan demo SVG and accurately transformed wind arrows. The private real-world site photo or any derived recognizable asset must never be committed or included in public PRs/screenshots. Accept private reference images only through explicit Codex task attachments and keep personalized visual output out of the public repo.
 4. Add high-visibility wet/dry/unavailable rain status using WS90 piezo, WH40 accumulation/rate as distinct inputs.
 5. Implement responsive layout and tap-details with live HA data/recorder access; iPhone 17 portrait, iPhone landscape and desktop screenshot verification.
 6. Package for HACS, give a reliable visual editor and test the prepared View-YAML examples. Do not invent device entity IDs.
@@ -41,3 +41,11 @@ Create a standalone, production-quality, mobile-first Home Assistant custom Love
 - Test wind arrow semantics: meteorological FROM bearing vs movement arrow direction toward the house (bearing+180 degrees); north stays at image top.
 - Test rain wet/dry/unavailable, card in panel/sections, missing entities, 359-to-0 animation, all unit handling.
 - Prefer small reviewable PRs, include test results and known limitations; preserve scope, do not overwrite the user's other repositories.
+
+
+### PRIVATSPHÄRE – wichtige verbindliche Architekturentscheidung
+- Dieses Repo ist öffentlich. Keine persönlichen Luftbilder, Standortdaten, wiedererkennbaren Grundstückszeichnungen oder auf der privaten Vorlage basierenden Assets in Git-Commits, Issues, PR-Anhängen, Release-Assets, Testfixtures oder Screenshots veröffentlichen.
+- Codex darf die Originalvorlage nur erhalten, wenn der Nutzer sie separat als **privaten Task-Anhang** bereitstellt; nicht über GitHub-Issues oder Commits übertragen.
+- Die Custom Card benötigt ein editierbares Feld `background_image` / `site_image` für eine nutzereigene Bildquelle aus Home Assistant. Bei fehlendem Bild generische, nicht personenbezogene Standardillustration verwenden.
+- Realistisches Grundstücksbild optional **außerhalb des Git-Repositories** auf der privaten HA-Instanz hinterlegen und dort als Bildquelle konfigurieren. `/config/www` bzw. `/local/` ist nicht notwendigerweise zugriffsgeschützt; dies muss vor Auswahl der Speicherstrategie klar dokumentiert und bei externer HA-Erreichbarkeit geprüft werden. Wenn möglich, HA-Authentisierung/Media-Verwaltung nutzen und das Zugriffskonzept testen.
+- Niemals private Bilder in Build-Artefakte einbetten, die mit HACS verteilt werden. Keine Bild-Upload-Funktion implementieren, die private Nutzerbilder unbemerkt an Dritte übermittelt.
