@@ -5,12 +5,12 @@
 ## Verbindliche Grundlagen
 - Lies vor Code-Änderungen **SPEC.md** und **AGENTS.md**, einschließlich des Nachtrags vom 13.11.2026.
 - Das Design orientiert sich an der vom Nutzer bestätigten dunklen, hochwertigen Wetterkarte mit nordorientierter stilisierter 2D-Haus-/Grundstücksansicht. Dieses Ziel ist **eine einzige responsive Lovelace Card**, kein mehrteiliges Dashboard.
-- Die Design-Mockups und das Luftbild sind nicht automatisch als Dateien in diesem Repository vorhanden. Nutze die Positionsbeschreibung aus SPEC.md als Grundlage für ein lokales SVG, fordere bei unklaren Details die passende Asset-Datei an, und erfinde keine exakte Gebäudekarte.
+- Persönliche Design-/Luftbilder gehören nicht in das öffentliche Repository. Wenn der Nutzer Bildreferenzen direkt an den Codex-Task hängt, darfst du sie dort zur Orientierung ansehen, aber **niemals** Originale oder wiedererkennbare abgeleitete Immobilien-/Grundstücksgrafiken committen oder in öffentlichen PR-Screenshots veröffentlichen. Ohne private Vorlage nicht raten; generische lokale Demo-Draufsicht bereitstellen. Private Grafik wird später in Home Assistant vom Nutzer ausgewählt.
 - Implementierung ist freigegeben für einen **reviewbaren Entwicklungsstart**. Keine automatischen Writes an bestehende Home-Assistant-Dashboards des Nutzers und keine Änderungen an dessen Ecowitt-Local-Fork oder HausKlima-Card.
 
 ## Phasen / PR-Milestones
 1. **Architektur und Grundkarte:** HACS-kompatibles Repository, Build-/Testkonzept, Custom Card unter custom:ecowitt-weather-card, Registrierung im Kartenkatalog, getStubConfig, getConfigElement und eigener visueller Karteneditor. Karte mit gut sichtbarem Konfigurationshinweis für fehlende Sensoren. CSS-Containerbreiten-Responsivität. Beispiel-View-Dateien als Tests validieren.
-2. **Design und Wind:** eigenständig gezeichnetes nordorientiertes Grundstücks-SVG, überlagert mit hübschen Strömungspfeilen, aktuelle Windgeschwindigkeit und Böe, Mittelgeschwindigkeit/-richtung 10 Min, Tagesmax-Böe. Dynamische Richtung und 0/90/180/270/359/0 Tests. Korrekte Unterscheidung: meteorologische Wind-Herkunft vs Pfeil-Bewegungsrichtung.
+2. **Design und Wind:** eigenständig gezeichnetes **generisches, nicht identifizierendes** nordorientiertes Demo-SVG plus Möglichkeit zur Auswahl einer **privaten Home-Assistant-Bildquelle** im Editor. Überlagerung mit Strömungspfeilen, Windgeschwindigkeit/Böen, 10-Minuten-Mittelwerten, Tagesmax und Richtungstests. Die persönlichen Vorlagen bleiben außerhalb von GitHub.
 3. **Regen und Hauptmesswerte:** Regenmenge/-rate WH40, NASS/TROCKEN/NICHT VERFÜGBAR WS90 Piezo, Temperatur/Feuchte, relativer Druck, UV, Solarstrahlung; Farben/Animationen, fehlende Werte und unpassende Einheiten.
 4. **Interaktive Detailansichten:** Regen 24h, heute, Woche, Monat, Jahr, Ereignis, Verlauf; Winddiagramm und optionale Windrose; Temperatur-, Sonnen-, Druck-Details und WN31/WH31/GW3000-Diagnosen. Nutze HA Recorder/API und nur reale Historien; bei fehlenden Daten klaren Hinweis.
 5. **Qualität und Release:** iPhone 17 Hoch-/Querformat in der HA-App/Safari testen, Tablet/Desktop, helle/dunkle Themes, Accessibility, prefers-reduced-motion, Touch-Flächen, keine horizontalen Überläufe, Dokumentation und HACS-Installation. Vor erster Release Screenshots vom tatsächlich gerenderten Frontend vorlegen.
@@ -27,3 +27,11 @@
 - WS90 Piezo-Nassstatus und WH40-Mengen nicht vermischen; NASS/TROCKEN/nicht verfügbar müssen klar zu unterscheiden sein.
 - Keine fiktiven Entitätswerte, UV-/Druck-/Rain-Daten; kein zusätzlicher Cloud-Zwang.
 - Bitte PRs zur Kontrolle und kurze Hinweise, was getestet wurde und was noch offen ist.
+
+
+### PRIVATSPHÄRE – wichtige verbindliche Architekturentscheidung
+- Dieses Repo ist öffentlich. Keine persönlichen Luftbilder, Standortdaten, wiedererkennbaren Grundstückszeichnungen oder auf der privaten Vorlage basierenden Assets in Git-Commits, Issues, PR-Anhängen, Release-Assets, Testfixtures oder Screenshots veröffentlichen.
+- Codex darf die Originalvorlage nur erhalten, wenn der Nutzer sie separat als **privaten Task-Anhang** bereitstellt; nicht über GitHub-Issues oder Commits übertragen.
+- Die Custom Card benötigt ein editierbares Feld `background_image` / `site_image` für eine nutzereigene Bildquelle aus Home Assistant. Bei fehlendem Bild generische, nicht personenbezogene Standardillustration verwenden.
+- Realistisches Grundstücksbild optional **außerhalb des Git-Repositories** auf der privaten HA-Instanz hinterlegen und dort als Bildquelle konfigurieren. `/config/www` bzw. `/local/` ist nicht notwendigerweise zugriffsgeschützt; dies muss vor Auswahl der Speicherstrategie klar dokumentiert und bei externer HA-Erreichbarkeit geprüft werden. Wenn möglich, HA-Authentisierung/Media-Verwaltung nutzen und das Zugriffskonzept testen.
+- Niemals private Bilder in Build-Artefakte einbetten, die mit HACS verteilt werden. Keine Bild-Upload-Funktion implementieren, die private Nutzerbilder unbemerkt an Dritte übermittelt.
