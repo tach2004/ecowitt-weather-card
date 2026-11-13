@@ -1,0 +1,17 @@
+# Ecowitt Weather Card — komplette View-Konfiguration
+# Alternative für einen Wetter-Reiter in der Home-Assistant-Sections-Ansicht.
+# Eine Section, eine Custom Card, keine zusätzliche Überschrift.
+# In Home Assistant: Dashboard bearbeiten -> Ansicht Wetter bearbeiten -> ... -> In YAML bearbeiten.
+# Erst nutzbar, wenn die Custom Card implementiert und installiert ist.
+title: Wetter
+path: wetter
+icon: mdi:weather-partly-cloudy
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    column_span: 3
+    cards:
+      - type: custom:ecowitt-weather-card
+        grid_options:
+          columns: full
