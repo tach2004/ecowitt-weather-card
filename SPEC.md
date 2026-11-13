@@ -6,7 +6,7 @@
 
 ## Verbindlich beschlossene Grundlagen
 - Designbasis ist das zweite gemeinsam betrachtete Konzeptbild: stilisierte 2D-Draufsicht eines Grundstücks/Hauses mit darübergelegter Windvisualisierung und klar abgegrenzten Wetterwerten.
-- Die gezeigte Grundstücksgrafik ist ein Platzhalter, **keine** Abbildung des echten Grundstücks. Benutzer kann später ein eigenes, nordorientiertes Bild oder eine gezeichnete Draufsicht hinterlegen; ohne Bild ist ein stilisierter Ersatz nötig.
+- Standard: eine generische, nordorientierte illustrative Draufsicht ohne Bezug zu realen Grundstücken. Nutzer kann optional ein privates Bild in Home Assistant konfigurieren; das private Bild und individuelle abgeleitete Vektorgrafiken dürfen nicht in dieses öffentliche Repository gelangen.
 - Starke visuelle Hierarchie: Temperatur, Wind, Niederschlag / Nass-Trocken sofort erkennbar.
 - Große, gut lesbare Windgeschwindigkeit und Böen; aktuelle Windrichtung mit grafischem Pfeil; zusätzlich 10-Minuten-Mittelrichtung und möglichst Mittelgeschwindigkeit.
 - Tatsächlich bekannter HA-Entity-ID für die mittlere Windrichtung bei diesem Nutzer: `sensor.ecowitt_wind_direction_avg_175da`. **Konfigurierbar** gestalten, nicht hart in Programmlogik einbauen.
@@ -44,7 +44,7 @@
 - Genaue Gestaltung der mobilen Stapelung und der Größe des Hintergrundbildes.
 - Ob Regen- und Winddetails als eigenes Popup oder andere HA-konforme Präsentation erscheinen.
 - Welche zusätzlichen WN31-Kanäle auf der Hauptkarte sichtbar sind.
-- Genauer Umgang mit Bilddateien (Einbindung via HA `/local/` oder hochgeladenem Bild, keine externe Google-Maps-Abhängigkeit).
+- Private Grundstücksgrafik über eine durch den Nutzer gewählte, HA-lokal erreichbare Bildquelle. Bei /local/-URLs Privatsphärenrisiko dokumentieren; kein Online-Karten-Download. Eine HA-Media-Source-Lösung auf tatsächliche Verfügbarkeit und Berechtigungen testen.
 - Optionaler Windrose-Detailmodus und dessen Historien-Aufbereitung.
 - Genaues Animationsverhalten/Schwellwerte; kein Flackern, keine erfundenen Werte.
 - Finale Freigabe des Layouts durch Nutzer.
@@ -60,9 +60,9 @@
 ## Bestätigte Entscheidungen vom 13.11.2026 — verbindlicher Nachtrag
 
 ### Design und Grundstückskarte
-- Der Nutzer hat das zweite, dunkle Premium-Mockup mit der Haus-/Grundstücksdraufsicht als Hauptdesign bestätigt, einschließlich der zuletzt aus seinem nordorientierten Luftbild erstellten grafischen Version.
-- Eine hochwertige eigenständige gezeichnete 2D-Grundstücksgrafik als lokales SVG/Asset erstellen: Wohnhaus im östlich-rechten Zentrum mit zwei Dachflächen; Garage/Nebengebäude nordwestlich; kleiner Schuppen im nördlichen Garten; gebogene Straße auf West- und Südseite; Auffahrt/Parkplätze westlich des Hauses; Garten im Norden, Zaun/Grenze im Osten. Die Positionen bleiben relativ korrekt, Norden oben. Keine Live-Maps-API. Kein externes Copyright-/Kartenbild einbinden.
-- Design-Mockup und echte vom Nutzer hochgeladene Luftbildvorlage sind Gesprächsanhänge, derzeit KEINE Dateien im GitHub-Repo. Codex hat nicht automatisch Zugriff auf diese Anhänge. Es soll die Geometrie gemäß Beschreibung zunächst als eigens gezeichnetes SVG umsetzen; keine Behauptung, die Originalgrafik sei bereits verfügbar.
+- Das Premium-Design mit nordorientierter Draufsicht und grafischen Wind-Overlays ist bestätigt. Die exakte private Vorlage wird ausschließlich als Anlage im Codex-Auftrag und/oder separat auf der HA-Instanz des Nutzers bereitgestellt, niemals als öffentliches Repo-Asset.
+- Nur eine neutrale generische Beispiel-Grundstücksgrafik ohne reale Gebäudepositionen als Repo-Asset liefern. Exakte persönliche Grundstückslage, Dachformen, Zufahrten, Luftbilder und daraus gezeichnete Varianten gehören ausschließlich zu privaten Benutzer-Assets. Keine Live-Maps-API, keine externen Copyright-Bilder.
+- Codex bekommt die private Vorlage über den Codex-Auftragsanhang, falls der Nutzer sie dort hochlädt. Ohne Anhang darf Codex die persönliche Geometrie nicht erraten. Bilder/Renderings/abgeleitete SVGs der tatsächlichen Grundstücksform **nicht committen**, nicht in PRs oder öffentliche Screenshots einfügen. Der Nutzer verwendet seine endgültige Privatgrafik als HA-lokalen Bildhintergrund.
 - Großzügiger als das erste Kartenkonzept, aber kompakt und gut bedienbar. Hell-/Dunkelmodus, Kontrast, unaufdringliche Animationen und reduced-motion.
 
 ### Hauptbildschirm: immer sichtbar
@@ -109,3 +109,11 @@
 - Beispiel-YAML ist vor Fertigstellung der JS-Karte nicht funktionsfähig und dient der geplanten finalen Einrichtung.
 
 **Projektstatus:** Planung ist freigegeben. Die eigentliche Codex-Programmierung wird als Aufgabe dokumentiert; sie startet erst, wenn Codex im Projekt explizit damit beauftragt wird.
+
+
+### PRIVATSPHÄRE – wichtige verbindliche Architekturentscheidung
+- Dieses Repo ist öffentlich. Keine persönlichen Luftbilder, Standortdaten, wiedererkennbaren Grundstückszeichnungen oder auf der privaten Vorlage basierenden Assets in Git-Commits, Issues, PR-Anhängen, Release-Assets, Testfixtures oder Screenshots veröffentlichen.
+- Codex darf die Originalvorlage nur erhalten, wenn der Nutzer sie separat als **privaten Task-Anhang** bereitstellt; nicht über GitHub-Issues oder Commits übertragen.
+- Die Custom Card benötigt ein editierbares Feld `background_image` / `site_image` für eine nutzereigene Bildquelle aus Home Assistant. Bei fehlendem Bild generische, nicht personenbezogene Standardillustration verwenden.
+- Realistisches Grundstücksbild optional **außerhalb des Git-Repositories** auf der privaten HA-Instanz hinterlegen und dort als Bildquelle konfigurieren. `/config/www` bzw. `/local/` ist nicht notwendigerweise zugriffsgeschützt; dies muss vor Auswahl der Speicherstrategie klar dokumentiert und bei externer HA-Erreichbarkeit geprüft werden. Wenn möglich, HA-Authentisierung/Media-Verwaltung nutzen und das Zugriffskonzept testen.
+- Niemals private Bilder in Build-Artefakte einbetten, die mit HACS verteilt werden. Keine Bild-Upload-Funktion implementieren, die private Nutzerbilder unbemerkt an Dritte übermittelt.
