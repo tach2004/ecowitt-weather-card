@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ecowitt Weather Card · synthetische Testansicht</title>
+<style>
+  *{box-sizing:border-box}html,body{margin:0;min-height:100%;font:16px/1.4 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  body{background:#071019;color:#eef4fa;--primary-text-color:#eef4fa;--secondary-text-color:#a8bacc;--ha-card-background:#101d29;--card-background-color:#101d29;--divider-color:#304555;--primary-color:#14cbe5}
+  body.light{color:#102637;background:#edf3f7;--primary-text-color:#102637;--secondary-text-color:#4a6578;--ha-card-background:#f7fafc;--card-background-color:#f7fafc;--divider-color:#bad0de;--primary-color:#007f96}
+  .demo-label{display:flex;align-items:center;justify-content:space-between;gap:12px;width:min(1360px,100%);margin:auto;padding:12px 24px;color:var(--secondary-text-color);font-size:12px;letter-spacing:.04em}
+  .demo-label strong{color:var(--primary-text-color);font-weight:600}main{padding:0 16px 20px;width:100%;margin:auto}main.sections{max-width:1140px;display:grid;grid-template-columns:minmax(0,1fr);gap:12px}ecowitt-weather-card{display:block;min-width:0}#editor{display:none;background:var(--card-background-color);padding:16px;max-width:900px;margin:20px auto;border-radius:16px}#editor.visible{display:block}@media(max-width:600px){main{padding:0 4px 20px}.demo-label{padding:10px 16px;letter-spacing:0;align-items:flex-start}.demo-label span{max-width:48%;text-align:right}}
+</style>
+</head>
+<body>
+<div class="demo-label"><strong>ECOWITT · TESTANSICHT</strong><span>Synthetische Messwerte · neutrale Beispielgrafik</span></div>
+<main id="container"><ecowitt-weather-card></ecowitt-weather-card></main><section id="editor" aria-label="Test des visuellen Karteneditors"></section>
+<script type="module">
+import '/dist/ecowitt-weather-card.js';
+// These values and entity IDs are deliberately synthetic. No live user data or private images.
+const definitions={
+ temperature:[18.6,'°C','Außentemperatur WN32','temperature'], humidity:[76,'%','Luftfeuchte WN32','humidity'],
+ feels_like:[18.1,'°C','Gefühlte Temperatur','temperature'],dew_point:[14.4,'°C','Taupunkt','temperature'],temperature_min:[12.7,'°C','Tagesminimum','temperature'],temperature_max:[20.3,'°C','Tagesmaximum','temperature'],
+ wind_speed:[8,'km/h','Windgeschwindigkeit WS90','wind_speed'],wind_gust:[12.4,'km/h','Windböe WS90','wind_speed'],wind_direction:[292,'°','Windrichtung WS90'],wind_direction_avg:[315,'°','Windrichtung 10 min'],wind_speed_avg:[6.1,'km/h','Windgeschwindigkeit 10 min','wind_speed'],wind_gust_max:[18.6,'km/h','Tagesmaximalböe','wind_speed'],
+ rain_today:[3.2,'mm','Regen heute WH40','precipitation'],rain_rate:[0.8,'mm/h','Regenrate WH40','precipitation_intensity'],rain_wet:['on',undefined,'Piezo Feuchtigkeitsstatus WS90','moisture'],rain_24h:[4.7,'mm','Regen letzte 24h WH40','precipitation'],rain_week:[12.8,'mm','Regen Woche WH40','precipitation'],rain_month:[37.1,'mm','Regen Monat WH40','precipitation'],rain_year:[582.4,'mm','Regen Jahr WH40','precipitation'],rain_event:[3.2,'mm','Regenereignis WH40','precipitation'],
+ pressure:[1012,'hPa','Relativer Luftdruck GW3000','atmospheric_pressure'],uv:[2.1,'','UV-Index WS90'],solar:[287,'W/m²','Solarstrahlung WS90','irradiance'],
+ extra:[21.4,'°C','Beispiel Zusatzkanal WN31','temperature'],battery:[86,'%','Beispiel Batterie WH40','battery']
+};
+const idFor=key=>(key==='rain_wet'?'binary_sensor.':'sensor.')+'demo_'+key;
+const states=Object.fromEntries(Object.entries(definitions).map(([key,[state,unit,name,deviceClass]])=>[idFor(key),{entity_id:idFor(key),state:String(state),last_changed:new Date().toISOString(),last_updated:new Date().toISOString(),attributes:{friendly_name:name,...(unit!==undefined?{unit_of_measurement:unit}:{}),...(deviceClass?{device_class:deviceClass}:{})}}]));
+window.demoConfig={type:'custom:ecowitt-weather-card',title:'Wetterstation (Ecowitt)',subtitle:'Außensensor · Garten',entities:Object.fromEntries(Object.keys(definitions).filter(key=>!['extra','battery'].includes(key)).map(key=>[key,idFor(key)])),extra_entities:[idFor('extra')],diagnostic_entities:[idFor('battery')]};
+window.historyMode='data';window.historyRequests=[];
+window.hass={states,language:'de',callApi:async(method,path)=>{
+  window.historyRequests.push({method,path});
+  if(window.historyMode==='error')throw new Error('Synthetic recorder unavailable');
+  if(window.historyMode==='empty')return [];
+  const url=new URL(path,'http://fixture');
+  const ids=(url.searchParams.get('filter_entity_id')||'').split(',').filter(Boolean);
+  const end=Date.now(),start=end-24*3600000;
+  return ids.filter(id=>states[id]).map((id)=>Array.from({length:49},(_,i)=>{
+    const current=states[id];const unit=current.attributes.unit_of_measurement;
+    const value=Number(current.state);
+    const sample=Number.isFinite(value)?(value+(Math.sin(i*.43)+Math.cos(i*.19))*(id.includes('pressure')?1.1:Math.max(Math.abs(value)*.08,.2))).toFixed(2):current.state;
+    return {entity_id:id,state:sample,attributes:{unit_of_measurement:unit},last_changed:new Date(start+i*1800000).toISOString(),last_updated:new Date(start+i*1800000).toISOString()};
+  }));
+},callWS:async(message)=>{
+  if(message.type==='config/device_registry/list')return [
+    {id:'demo-ws90',name:'DEMO WS90',model:'WS90',manufacturer:'Ecowitt'},
+    {id:'demo-wh40',name:'DEMO WH40',model:'WH40',manufacturer:'Ecowitt'},
+    {id:'demo-wn32',name:'DEMO WN32',model:'WN32',manufacturer:'Ecowitt'},
+    {id:'demo-gw3000',name:'DEMO GW3000',model:'GW3000',manufacturer:'Ecowitt'},
+    {id:'demo-wn31',name:'DEMO WN31',model:'WN31',manufacturer:'Ecowitt'},
+  ];
+  if(message.type==='config/entity_registry/list')return Object.keys(states).map(id=>({entity_id:id,unique_id:id,platform:'demo_fixture',disabled_by:null,device_id:id.includes('rain')&&!id.includes('wet')?'demo-wh40':id.includes('temperature')||id.includes('humidity')?'demo-wn32':id.includes('pressure')?'demo-gw3000':id.includes('extra')?'demo-wn31':'demo-ws90'}));
+  if(message.type==='media_source/resolve_media')return {url:'/demo/generic-image.svg',mime_type:'image/svg+xml'};
+  throw new Error('Unsupported synthetic callWS');
+}};
+window.card=document.querySelector('ecowitt-weather-card');
+window.setDemoConfig=config=>{window.card.setConfig(config);window.card.hass={...window.hass,states:{...window.hass.states}};};
+window.updateDemo=(key,state,unit)=>{const id=idFor(key),old=window.hass.states[id];window.hass.states={...window.hass.states,[id]:{...old,state:String(state),last_updated:new Date().toISOString(),attributes:{...old.attributes,...(unit!==undefined?{unit_of_measurement:unit}:{})}}};window.card.hass={...window.hass};};
+const params=new URLSearchParams(location.search);
+if(params.get('theme')==='light')document.body.classList.add('light');
+if(params.get('view')==='sections')document.querySelector('main').classList.add('sections');
+window.setDemoConfig(params.has('setup')?{type:'custom:ecowitt-weather-card'}:window.demoConfig);
+window.demoReady=true;
+if(params.has('editor')){
+  // Test-only stand-in for Home Assistant's built-in picker; production uses HA's picker.
+  if(!customElements.get('ha-entity-picker'))customElements.define('ha-entity-picker',class extends HTMLElement{
+    set hass(value){this._hass=value;this.render();}get hass(){return this._hass;}
+    set value(value){this._value=value;this.render();}get value(){return this._value;}
+    connectedCallback(){this.render();}
+    render(){if(!this._hass)return;this.innerHTML='';const select=document.createElement('select');select.setAttribute('aria-label',this.label||'Entität');select.style.cssText='width:100%;min-height:44px;font:inherit';const empty=document.createElement('option');empty.value='';empty.textContent='Nicht zugeordnet';select.append(empty);for(const [id,state]of Object.entries(this._hass.states)){const option=document.createElement('option');option.value=id;option.textContent=state.attributes.friendly_name+' · '+id;select.append(option);}select.value=this._value||'';select.addEventListener('change',()=>{this._value=select.value;this.dispatchEvent(new CustomEvent('value-changed',{detail:{value:select.value},bubbles:true,composed:true}));});this.append(select);}
+  });
+  const editor=await customElements.get('ecowitt-weather-card').getConfigElement();
+  editor.hass=window.hass;editor.setConfig(window.demoConfig);
+  const host=document.querySelector('#editor');host.classList.add('visible');host.append(editor);window.editor=editor;
+  editor.addEventListener('config-changed',event=>{window.lastEditorConfig=event.detail.config;window.setDemoConfig(event.detail.config);});
+}
+</script>
+</body></html>

@@ -1,0 +1,27 @@
+{
+  "name": "ecowitt-weather-card",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone local Home Assistant Ecowitt weather card",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:browser": "playwright test",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:browser && npm run audit",
+    "dev": "node scripts/serve.mjs",
+    "audit": "node scripts/audit-public-assets.mjs"
+  },
+  "dependencies": {
+    "lit": "^3.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "yaml": "^2.8.1",
+    "@types/node": "^24.10.1"
+  }
+}

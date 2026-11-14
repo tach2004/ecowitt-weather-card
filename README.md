@@ -1,40 +1,48 @@
 # Ecowitt Weather Card
 
-Eine eigenständige, kompakte, hochwertige Home-Assistant-Lovelace-Karte für lokale Ecowitt-Wetterdaten.
+Eine eigenständige Home-Assistant-Lovelace-Karte für lokale Ecowitt-Wetterdaten: Wind und Regen im Mittelpunkt, nordorientierte Windgrafik, grafischer Karteneditor und ein Layout, das sich an der tatsächlichen Kartenbreite orientiert.
 
-**Projektstatus: Konzeption abgeschlossen, Umsetzung vorbereitet. Die JavaScript-Karte ist noch nicht fertig und noch nicht installierbar.**
+**Entwicklungsstand:** erster funktionsfähiger Meilenstein, Version 0.1.0 im Entwicklungsbranch. Noch keine veröffentlichte HACS-Release und keine Abnahme auf einer echten Home-Assistant-Instanz oder im iPhone-Safari. Der Build liefert eine installierbare JavaScript-Datei; die [Prüfergebnisse und offenen Punkte](docs/MILESTONE_1.md) benennen die Grenzen.
 
-## Zielbild
-- Die vom Nutzer bestätigte elegante Dark-Mode-Wetterkarte mit stilisierter, **nordorientierter 2D-Grundstücksgrafik** und überlagerten Windpfeilen.
-- Eine einzige responsive Custom Card statt eines großen, separaten Wetterstation-Dashboards.
-- Sofort sichtbar: Außentemperatur, Luftfeuchtigkeit, aktuelle Windgeschwindigkeit, Böen, mittlere Windrichtung, Nass-/Trockenstatus, Regenrate und -menge, Druck, UV, Sonneneinstrahlung.
-- Beim Tippen weitere Daten (Windrose/Verlauf, Regen 24h/Woche/Monat/Jahr, Temperaturtrends, WS90/WH40/WN32/WN31/GW3000-Sensordetails).
-- Für iPhone 17 (Hochformat) und Desktop; kein Fremd-Cards-Zwang (Mushroom, Bubble, card-mod etc.).
-- Ausgelegt für Ecowitt Local; tatsächliche HA-Entitäten werden im grafischen Editor ausgewählt.
+- `custom:ecowitt-weather-card` mit Kartenkatalog, Startkonfiguration und visuellem Editor.
+- Windgeschwindigkeit, Böen, Herkunftsrichtung, 10-Minuten-Mittelwerte und Tagesmaximalböe aus auswählbaren HA-Entitäten.
+- WH40-Regenmenge und Regenrate getrennt vom WS90-Piezo-Status **NASS / TROCKEN / UNAVAILABLE**.
+- Außentemperatur und Feuchte, Druck, UV und Solarstrahlung; zusätzliche Kanäle und Diagnosen in den Details.
+- Detailfenster mit lokalen HA-Recorder-Abfragen beim Öffnen; fehlende Historie bleibt erkennbar.
+- Neutrale, eigens gezeichnete Beispielgrafik. Optionale private Bildquelle aus Home Assistant, ohne Upload-Funktion.
+- Keine Pflichtabhängigkeit von Mushroom, Bubble, card-mod oder anderen Frontend-Karten; keine Cloud-, Karten- oder Wetter-API.
 
-## Schnell zur späteren Wetteransicht
+Fehlende Sensoren zeigen einen Einrichtungshinweis. Die produktive Karte erzeugt keine Beispielmesswerte. Die lokale Entwicklungsansicht verwendet ausdrücklich gekennzeichnete synthetische Testdaten.
 
-**Unsere Empfehlung: eigener Wetter-Reiter als Panel View.** Home Assistant legt dann genau eine Karte über die ganze Ansichtsbreite; diese richtet sich selbst responsiv aus. Es müssen keine Sections, Spalten oder Überschriften konfiguriert werden.
+## Einrichtung
 
-Zwei Vorlagen für dieselbe Karte:
+[Installationsanleitung](docs/INSTALLATION.md) lesen, den Build als JavaScript-Modul laden und **Ecowitt Weather Card** im Kartenkatalog auswählen. Anschließend die tatsächlich vorhandenen Sensoren im visuellen Editor zuordnen.
 
-- [Panel View — eigener Wetter-Reiter](examples/view-panel.yaml)
-- [Sections View — Wetterkarte neben anderen Karten](examples/view-sections.yaml)
+Für einen eigenen Wetter-Reiter empfehlen wir die [Panel View](examples/view-panel.yaml): eine Karte, keine manuell zu erstellenden Sections. Als Alternative gibt es eine fertige [Sections View](examples/view-sections.yaml) für dieselbe Karte.
 
-**Wichtig:** Beide Vorlagen sind derzeit nur die geplante Konfiguration. Sie funktionieren erst nach Fertigstellung und Installation des Custom-Card-JavaScripts.
+## Entwicklung
 
-## Dokumentation
+Node.js 22 oder neuer:
 
-- [SPEC.md](SPEC.md) — gesamte verbindliche Produktspezifikation
-- [AGENTS.md](AGENTS.md) — dauerhafte Arbeitsanweisungen für Codex
-- [docs/CODEX_IMPLEMENTATION.md](docs/CODEX_IMPLEMENTATION.md) — Phasen, Aufgaben und Abnahmekriterien für die Umsetzung
-- [docs/INSTALLATION.md](docs/INSTALLATION.md) — geplante Home-Assistant-Einbindung ohne manuelle Layoutarbeit
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run build
+npx playwright install --with-deps chromium
+npm run test:browser
+node scripts/audit-public-assets.mjs
+npm run dev
+```
 
-## Technischer Rahmen
+Der Build bündelt die Karte und ihren Editor in `dist/ecowitt-weather-card.js`. `npm run dev` startet ausschließlich die lokale Testansicht; sie ist kein Wetterdienst und wird nicht veröffentlicht. Für einen vorhandenen Chromium kann `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` verwendet werden.
 
-- Lokale Home-Assistant-Daten aus Ecowitt Local, keine Cloud-Pflicht.
-- Kein Zugriff auf oder Veränderungen an bestehenden Entity-IDs, HA-Langzeitstatistiken, anderen Repositories oder bestehenden Dashboards.
-- Regen WH40 und Piezo-Nassstatus WS90 bleiben unterschiedliche Messquellen.
-- Windrichtung meteorologisch als **Wind kommt aus ...** benannt; der auf das Haus zulaufende Strömungspfeil zeigt in die um 180° gedrehte Bewegungsrichtung.
+## Datenschutz und Windrichtung
+
+Private Luftbilder und erkennbare Grundstückszeichnungen gehören niemals in dieses öffentliche Repository, in PR-Screenshots oder Releases. Die Demo-Grafik hat keinen Bezug zu einer realen Immobilie. Bilder unter `/config/www` beziehungsweise `/local/` sind **nicht automatisch zugriffsgeschützt**. Für sensible Bilder eine authentisierte HA-Media-Lösung und deren tatsächliches Zugriffsverhalten prüfen; diese Karte verspricht keine Zugriffssicherheit. Siehe [private Bildquellen](docs/PRIVATE_IMAGES.md).
+
+Die Gradangabe bezeichnet die meteorologische **Herkunft**. Ein Wind aus 292° kommt aus WNW; der Strömungspfeil läuft von dort zum Haus und zeigt nach 112°. Heute und ein gleitendes 24-Stunden-Regenfenster sind ebenfalls unterschiedliche Messgrößen.
+
+Weitere Dokumentation: [Konfiguration](docs/CONFIGURATION.md), [Produktspezifikation](SPEC.md), [Umsetzungsphasen](docs/CODEX_IMPLEMENTATION.md) und [Agentenanweisungen](AGENTS.md).
 
 Lizenz: MIT.

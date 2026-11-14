@@ -1,7 +1,8 @@
 # Ecowitt Weather Card — komplette View-Konfiguration
 # Bevorzugt für einen EIGENEN Wetter-Reiter.
 # In Home Assistant: Dashboard bearbeiten -> Ansicht Wetter bearbeiten -> ... -> In YAML bearbeiten.
-# Erst nutzbar, wenn die Custom Card implementiert und installiert ist.
+# Voraussetzung: ecowitt-weather-card.js als JavaScript-Modul installieren.
+# Danach Sensoren im visuellen Karteneditor auswählen.
 title: Wetter
 path: wetter
 icon: mdi:weather-partly-cloudy
