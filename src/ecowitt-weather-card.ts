@@ -784,10 +784,14 @@ export class EcowittWeatherCard extends LitElement {
     const extras = [...new Set(this._config.extra_entities ?? [])];
     const diagnostic = [...new Set(this._config.diagnostic_entities ?? [])];
     return html`<p class="detail-caption">
-        Zusätzliche WN31/WH31-Kanäle sowie Batterie- und Signalquellen nur nach
-        Zuordnung. Eine allgemeine Online-Anzeige wird aus diesen Werten nicht
-        abgeleitet.
+        Jeder Gerätestatus basiert ausschließlich auf explizit ausgewählten
+        Home-Assistant-Entitäten. Batterien in Volt sind keine Prozentanzeige;
+        ohne echten Verbindungsstatus wird kein „Online“ behauptet.
       </p>
+      <h3>Geräte · Batterien, Empfang und Verbindung</h3>
+      ${(this._config.device_status || []).length
+        ? (this._config.device_status || []).map((device) => this._deviceDetail(device))
+        : html`<p class="empty">Geräte und Statussensoren im grafischen Editor auswählen.</p>`}
       <h3>Zusätzliche Kanäle · WN31 / WH31</h3>
       ${extras.length
         ? extras.map((id) => this._sensorRow(id))
@@ -806,6 +810,23 @@ export class EcowittWeatherCard extends LitElement {
           ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label)
           : nothing,
       )} `;
+  }
+
+  private _deviceDetail(device: DeviceStatusConfig) {
+    const indicators = deviceIndicators(this.hass, device);
+    return html`<section class="device-detail">
+      <h4>${device.role} · ${device.name || "Ecowitt-Sensor"}</h4>
+      <div class="device-detail-summary">
+        <span>${this._batteryGlyph(indicators.battery.percent)}
+          Batterie: ${indicators.battery.label}</span>
+        <span>${icon("signal")} Signal: ${indicators.signal.label}</span>
+        <span class="status-connection ${indicators.connection.state}">
+          <i aria-hidden="true"></i>Verbindung: ${indicators.connection.label}</span>
+      </div>
+      ${[device.battery, device.signal, device.connection].filter(
+        (id): id is string => Boolean(id),
+      ).map((id) => this._sensorRow(id))}
+    </section>`;
   }
   private _sensorRow(id: string, label?: string) {
     const entity = this.hass?.states[id];
