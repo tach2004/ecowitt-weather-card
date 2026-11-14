@@ -710,3 +710,74 @@ test("320px summary contains long German labels with a wider fallback font", asy
     expect(layout.overflowing).toEqual([]);
   }
 });
+
+test("compass degrees and actual WH40 rain animation, never just wet Piezo", async ({ page }) => {
+  await ready(page);
+  await expect(page.locator(".degree-ring text")).toHaveCount(8);
+  await expect(page.locator(".degree-ring")).toContainText("315°");
+  await expect(page.locator(".rain-atmosphere i")).toHaveCount(14);
+  await update(page, "rain_rate", 0, "mm/h");
+  await update(page, "rain_wet", "on");
+  await expect(page.locator(".rain-atmosphere")).toHaveCount(0);
+  await expect(page.locator(".sky-banner")).toContainText("Oberfläche nass");
+});
+
+test("source-grounded device status shows battery percent, raw dBm and real connectivity", async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const now = new Date().toISOString();
+    const items = [
+      ["sensor.test_ws90_battery", "64", "%", "battery"],
+      ["sensor.test_ws90_signal", "-68", "dBm", "signal_strength"],
+      ["binary_sensor.test_ws90_connected", "on", "", "connectivity"],
+    ] as const;
+    for (const [id, state, unit, deviceClass] of items)
+      win.hass.states[id] = {
+        entity_id: id, state, last_updated: now, last_changed: now,
+        attributes: { friendly_name: id, unit_of_measurement: unit, device_class: deviceClass },
+      };
+    win.setDemoConfig({
+      ...win.demoConfig,
+      device_status: [{
+        device_id: "demo-ws90", role: "WS90", name: "Test WS90",
+        show_on_main: true,
+        battery: "sensor.test_ws90_battery",
+        signal: "sensor.test_ws90_signal",
+        connection: "binary_sensor.test_ws90_connected",
+      }],
+    });
+    await win.card.updateComplete;
+  });
+  const badge = page.locator(".device-chip");
+  await expect(badge).toContainText("WS90");
+  await expect(badge).toContainText("64 %");
+  await expect(badge).toContainText("-68 dBm");
+  await expect(badge).toContainText("Verbunden");
+  await page.locator(".device-chip").click();
+  await expect(page.getByRole("dialog")).toContainText("Test WS90");
+});
+
+test("new editor uses checkbox lists and persists theme preferences", async ({ page }) => {
+  await ready(page, "/?editor=1");
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await editor.locator("summary").filter({ hasText: "Darstellung, Wetteranimation" }).click();
+  await editor.getByLabel("Farbschema").selectOption("dark");
+  await expect.poll(() =>
+    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.theme_mode)
+  ).toBe("dark");
+  await editor.locator("summary").filter({ hasText: "Zusatzsensoren & Diagnosen" }).click();
+  const list = editor.locator(".checkbox-list").first();
+  await expect(list.locator('select[multiple]')).toHaveCount(0);
+  const existing = list.locator('input[type="checkbox"]:checked').first();
+  await expect(existing).toBeVisible();
+  await existing.uncheck();
+  await expect.poll(() =>
+    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.extra_entities?.length)
+  ).toBe(0);
+  await existing.check();
+  await expect.poll(() =>
+    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.extra_entities?.length)
+  ).toBe(1);
+  await expect(editor.getByLabel(/Bildpfad|Bildquelle/).count()).resolves.toBeGreaterThan(0);
+});
