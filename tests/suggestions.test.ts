@@ -215,3 +215,127 @@ test("daily extrema and current values never suggest clearly different aggregati
     [],
   );
 });
+
+test("actual Ecowitt model aliases identify GW3000A and WH90 without an optional WN32", async () => {
+  const { roleForDevice } = await import("../src/suggestions");
+  const devices = [
+    { id: "fixture-wind", name: "Station wind", model: "wh90" },
+    { id: "fixture-rain", name: "Rain gauge", model: "wh40" },
+    { id: "fixture-gateway", name: "Gateway", model: "GW3000A" },
+    { id: "fixture-channel", name: "Extra channel", model: "wh31" },
+  ];
+  assert.deepEqual(devices.map(roleForDevice), [
+    "WS90",
+    "WH40",
+    "GW3000",
+    "WN31",
+  ]);
+  assert.deepEqual(uniqueRoleDevices(devices), {
+    WS90: "fixture-wind",
+    WH40: "fixture-rain",
+    GW3000: "fixture-gateway",
+    WN31: "fixture-channel",
+  });
+  assert.equal(uniqueRoleDevices(devices).WN32, undefined);
+  const hass: HomeAssistant = {
+    states: {
+      "sensor.fixture_relative_pressure": {
+        entity_id: "sensor.fixture_relative_pressure",
+        state: "1013",
+        attributes: {
+          device_class: "atmospheric_pressure",
+          unit_of_measurement: "hPa",
+        },
+      },
+    },
+  };
+  assert.deepEqual(
+    candidateEntities(
+      "pressure",
+      hass,
+      [
+        {
+          entity_id: "sensor.fixture_relative_pressure",
+          device_id: "fixture-gateway",
+        },
+      ],
+      uniqueRoleDevices(devices),
+    ),
+    ["sensor.fixture_relative_pressure"],
+  );
+});
+
+test("role matching trusts the registered model, preserves ambiguity and rejects lookalikes", async () => {
+  const { roleForDevice } = await import("../src/suggestions");
+  assert.equal(
+    roleForDevice({
+      id: "fixture",
+      model: "WH40",
+      name_by_user: "WS90 weather",
+    }),
+    "WH40",
+  );
+  assert.equal(
+    roleForDevice({ id: "fixture", name: "GW3000A gateway" }),
+    "GW3000",
+  );
+  assert.equal(roleForDevice({ id: "fixture", model: "GW30000" }), undefined);
+  assert.equal(roleForDevice({ id: "fixture", name: "notGW3000A" }), undefined);
+  assert.equal(
+    roleForDevice({ id: "fixture", name: "WS90 and WH40" }),
+    undefined,
+  );
+  assert.deepEqual(
+    uniqueRoleDevices([
+      { id: "a", model: "GW3000A" },
+      { id: "b", model: "GW3000" },
+    ]),
+    {},
+  );
+});
+
+test("current WS90 lux and VPD proposals reject extrema, averages and incompatible sources", () => {
+  const make = (
+    id: string,
+    unit: string,
+    deviceClass?: string,
+  ): HassEntity => ({
+    entity_id: id,
+    state: "12",
+    attributes: { unit_of_measurement: unit, device_class: deviceClass },
+  });
+  const hass: HomeAssistant = {
+    states: {
+      "sensor.fixture_light": make(
+        "sensor.fixture_light",
+        "klx",
+        "illuminance",
+      ),
+      "sensor.fixture_light_daily_max": make(
+        "sensor.fixture_light_daily_max",
+        "klx",
+        "illuminance",
+      ),
+      "sensor.fixture_light_mean": make(
+        "sensor.fixture_light_mean",
+        "lx",
+        "illuminance",
+      ),
+      "sensor.fixture_vpd": make("sensor.fixture_vpd", "kPa"),
+      "sensor.fixture_vpd_average": make("sensor.fixture_vpd_average", "kPa"),
+      "sensor.fixture_vpd_bad_unit": make("sensor.fixture_vpd_bad_unit", "%"),
+    },
+  };
+  const registry = Object.keys(hass.states).map((entity_id) => ({
+    entity_id,
+    device_id: "fixture-ws90",
+  }));
+  assert.deepEqual(
+    candidateEntities("solar_lux", hass, registry, { WS90: "fixture-ws90" }),
+    ["sensor.fixture_light"],
+  );
+  assert.deepEqual(
+    candidateEntities("vpd", hass, registry, { WS90: "fixture-ws90" }),
+    ["sensor.fixture_vpd"],
+  );
+});

@@ -1,6 +1,15 @@
-import { METRICS, type CardConfig, type DeviceRole, type DeviceStatusConfig, type MetricKey } from "./types";
+import {
+  METRICS,
+  type CardConfig,
+  type DeviceRole,
+  type DeviceStatusConfig,
+  type MetricKey,
+} from "./types";
 
-const knownMetrics = new Set<string>([...METRICS.map((metric) => metric.key), "wind_speed_avg"]); // Deprecated key retained for existing configs.
+const knownMetrics = new Set<string>([
+  ...METRICS.map((metric) => metric.key),
+  "wind_speed_avg",
+]); // Deprecated key retained for existing configs.
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -13,7 +22,13 @@ function ids(value: unknown): string[] | undefined {
     ...new Set(value.flatMap((item) => (text(item) ? [text(item)!] : []))),
   ];
 }
-const deviceRoles = new Set<DeviceRole>(["WS90", "WH40", "WN32", "WN31", "GW3000"]);
+const deviceRoles = new Set<DeviceRole>([
+  "WS90",
+  "WH40",
+  "WN32",
+  "WN31",
+  "GW3000",
+]);
 function deviceStatus(value: unknown): DeviceStatusConfig[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const unique = new Set<string>();
@@ -22,7 +37,8 @@ function deviceStatus(value: unknown): DeviceStatusConfig[] | undefined {
     if (!record(item)) continue;
     const deviceId = text(item.device_id);
     const role = text(item.role) as DeviceRole | undefined;
-    if (!deviceId || !role || !deviceRoles.has(role) || unique.has(deviceId)) continue;
+    if (!deviceId || !role || !deviceRoles.has(role) || unique.has(deviceId))
+      continue;
     unique.add(deviceId);
     result.push({
       device_id: deviceId,
@@ -32,6 +48,7 @@ function deviceStatus(value: unknown): DeviceStatusConfig[] | undefined {
       battery: text(item.battery),
       signal: text(item.signal),
       connection: text(item.connection),
+      extra_entities: ids(item.extra_entities),
     });
   }
   return result;
@@ -68,12 +85,15 @@ export function normalizeConfig(value: unknown): CardConfig {
     extra_entities: ids(value.extra_entities),
     diagnostic_entities: ids(value.diagnostic_entities),
     device_status: deviceStatus(value.device_status),
-    theme_mode: ["auto", "light", "dark"].includes(String(value.theme_mode))
-      ? value.theme_mode as "auto" | "light" | "dark"
-      : "auto",
-    weather_animation: typeof value.weather_animation === "boolean"
-      ? value.weather_animation
-      : true,
+    theme_mode:
+      typeof value.theme_mode === "string" &&
+      ["auto", "light", "dark"].includes(value.theme_mode)
+        ? (value.theme_mode as "auto" | "light" | "dark")
+        : "auto",
+    weather_animation:
+      typeof value.weather_animation === "boolean"
+        ? value.weather_animation
+        : true,
     history_hours: bounded(value.history_hours, 1, 168),
     stale_after_minutes: bounded(value.stale_after_minutes, 0, 10080),
     grid_options: record(value.grid_options)
