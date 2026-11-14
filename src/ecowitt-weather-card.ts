@@ -271,6 +271,7 @@ export class EcowittWeatherCard extends LitElement {
           ${icon("sensors")}
         </button>
       </header>
+      ${hasEntities ? this._sky() : nothing}
       ${!hasEntities
         ? this._setup()
         : html`
