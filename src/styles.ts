@@ -951,8 +951,16 @@ export const cardStyles = css`
     font-size: 3.1px; font-weight: 650; fill: #ffffff; letter-spacing: 0.03px;
     stroke: #092033; stroke-width: 0.6px; paint-order: stroke;
   }
+  .rain-sun-decoration {
+    position: absolute; right: 30px; top: 32px; width: 48px; height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff1b5 0, #ffd75a 60%, #ffa322 100%);
+    box-shadow: 0 0 22px #ffe07688, 0 0 65px #ffc24b3a;
+    opacity: .65; pointer-events: none;
+  }
+  .rain-sun-decoration.animated { animation: ecowitt-glow 5s ease-in-out infinite alternate; }
   .rain { position: relative; overflow: hidden; }
-  .rain > :not(.rain-atmosphere) { position: relative; z-index: 1; }
+  .rain > :not(.rain-atmosphere):not(.rain-sun-decoration) { position: relative; z-index: 1; }
   .rain.raining { border-color: color-mix(in srgb, var(--cyan) 55%, var(--line)); }
   .rain-atmosphere { position: absolute; inset: 0; pointer-events: none; opacity: .68; }
   .rain-atmosphere i {
@@ -1002,7 +1010,7 @@ export const cardStyles = css`
     .metric .value { font-size: 1.55rem; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .sky-art.animated *, .rain-atmosphere.animated i { animation: none !important; }
+    .sky-art.animated *, .rain-atmosphere.animated i, .rain-sun-decoration.animated { animation: none !important; }
   }
   @media (prefers-reduced-motion: reduce) {
     *,
