@@ -11,9 +11,12 @@ import {
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
 import { resolveImage } from "./image";
+import { observeWeather, type WeatherObservation } from "./weather";
+import { deviceIndicators } from "./device-status";
 import {
   METRICS,
   type CardConfig,
+  type DeviceStatusConfig,
   type HomeAssistant,
   type MetricKey,
 } from "./types";
@@ -36,7 +39,6 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "wind_gust",
     "wind_direction",
     "wind_direction_avg",
-    "wind_speed_avg",
     "wind_gust_max",
   ],
   rain: [
@@ -56,9 +58,10 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "dew_point",
     "temperature_min",
     "temperature_max",
+    "vpd",
   ],
   pressure: ["pressure"],
-  sun: ["uv", "solar"],
+  sun: ["uv", "solar", "solar_lux"],
   sensors: [],
 };
 const graphKeys: Record<Detail, MetricKey[]> = {
@@ -243,7 +246,7 @@ export class EcowittWeatherCard extends LitElement {
         !this._config.entities?.[key] ||
         !this.hass?.states[this._config.entities[key]!],
     );
-    return html`<ha-card>
+    return html`<ha-card data-theme=${this._config.theme_mode || "auto"}>
       <header>
         <div class="station-icon">${icon("station")}</div>
         <div>
@@ -252,6 +255,7 @@ export class EcowittWeatherCard extends LitElement {
             ${this._config.subtitle || "Ecowitt · Wetter vor Ort"}
           </p>
         </div>
+        ${this._headerDevices()}
         <button
           class="diagnostics"
           data-detail="sensors"
@@ -320,6 +324,13 @@ export class EcowittWeatherCard extends LitElement {
                 "#f2d669",
                 "sun",
               )}
+              ${this._metric(
+                "solar_lux",
+                "Beleuchtungsstärke",
+                "sun",
+                "#f2d669",
+                "sun",
+              )}
             </div>
             ${missing.length
               ? html`<div class="setup-missing">
@@ -362,19 +373,13 @@ export class EcowittWeatherCard extends LitElement {
     const current = this._reading("wind_direction");
     const avg = this._reading("wind_direction_avg");
     const speed = this._reading("wind_speed");
-    const avgSpeed = this._reading("wind_speed_avg");
     const calm = speed.status === "ok" && speed.value === 0;
     const currentVisible =
       current.status === "ok" &&
       speed.status === "ok" &&
       speed.value !== null &&
       speed.value > 0;
-    const averageVisible =
-      avg.status === "ok" &&
-      !(
-        avgSpeed.value === 0 ||
-        (avgSpeed.status !== "missing" && avgSpeed.status !== "ok")
-      );
+    const averageVisible = avg.status === "ok" && !calm;
     const offsetX = this._clamp(this._config.image_target_x, 50, 10, 90) - 50;
     const offsetY = this._clamp(this._config.image_target_y, 50, 10, 90) - 50;
     const radius = Math.hypot(offsetX, offsetY);
@@ -431,6 +436,14 @@ export class EcowittWeatherCard extends LitElement {
             ? svg`<g class="flow-current" data-bearing=${normalizeDegrees(current.value!)} data-flow-bearing=${flowBearing(current.value!)} style="transform:rotate(${this._rotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(1.7, current.value!)}/></g>`
             : nothing}
           <circle class="target" cx=${targetX} cy=${targetY} r="1" />
+        </svg>
+        <svg class="degree-ring" viewBox="0 0 100 100" aria-hidden="true">
+          ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
+            const theta = (bearing * Math.PI) / 180;
+            const x = 50 + Math.sin(theta) * 42;
+            const y = 50 - Math.cos(theta) * 42;
+            return svg`<text x=${x} y=${y} text-anchor="middle" dominant-baseline="middle">${bearing}°</text>`;
+          })}
         </svg>
         <span class="cardinal north">N</span><span class="cardinal east">O</span
         ><span class="cardinal south">S</span
@@ -490,12 +503,6 @@ export class EcowittWeatherCard extends LitElement {
         <div data-key="wind_direction_avg">
           <span class="label">Ø 10 Min. Richtung</span>${this._value(
             "wind_direction_avg",
-            true,
-          )}
-        </div>
-        <div data-key="wind_speed_avg">
-          <span class="label">Ø 10 Min. Tempo</span>${this._value(
-            "wind_speed_avg",
             true,
           )}
         </div>
