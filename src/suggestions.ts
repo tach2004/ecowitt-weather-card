@@ -25,10 +25,11 @@ export const DEVICE_ROLES: DeviceRole[] = [
 ];
 
 export function roleForDevice(device: RegistryDevice): DeviceRole | undefined {
-  const label = [device.model, device.name, device.name_by_user].filter(Boolean).join(" ");
+  const normalized = (" " + [device.model, device.name, device.name_by_user]
+    .filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ");
   for (const role of DEVICE_ROLES) {
-    const pattern = role === "WN31" ? /\\b(?:wn31|wh31)\\b/i : new RegExp("\\\\b" + role + "\\\\b", "i");
-    if (pattern.test(label)) return role;
+    if (normalized.includes(" " + role.toLowerCase() + " ") ||
+      (role === "WN31" && normalized.includes(" wh31 "))) return role;
   }
   return undefined;
 }
