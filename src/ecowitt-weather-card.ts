@@ -350,6 +350,69 @@ export class EcowittWeatherCard extends LitElement {
       ${this._renderDialog()}
     </ha-card>`;
   }
+
+  private _observation(): WeatherObservation {
+    return observeWeather(
+      this.hass?.states["sun.sun"],
+      this._reading("solar"),
+      this._reading("rain_rate"),
+      this._reading("rain_wet"),
+    );
+  }
+  private _batteryGlyph(percent?: number) {
+    const width = percent === undefined ? 0 : Math.min(14, Math.max(0, 14 * percent / 100));
+    return svg`<svg viewBox="0 0 24 16" class="battery-glyph" aria-hidden="true">
+      <rect x="1" y="2" width="19" height="12" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <rect x="21" y="5" width="2" height="6" rx="1" fill="currentColor" />
+      <rect x="3.5" y="4.5" width=${width} height="7" rx="1" fill="currentColor" />
+    </svg>`;
+  }
+  private _deviceChip(device: DeviceStatusConfig, compact = true) {
+    const indicator = deviceIndicators(this.hass, device);
+    return html`<button type="button" class="device-chip ${compact ? "compact" : "full"}"
+      title=${"Batterie: " + indicator.battery.label + ", Signal: " +
+        indicator.signal.label + ", Verbindung: " + indicator.connection.label}
+      @click=${() => this._openDetail("sensors")}>
+      <strong>${device.role}</strong>
+      <span class="status-battery ${indicator.battery.percent !== undefined && indicator.battery.percent < 20 ? "low" : ""}">
+        ${this._batteryGlyph(indicator.battery.percent)}
+        ${indicator.battery.label}
+      </span>
+      <span class="status-signal">${icon("signal")}${indicator.signal.label}</span>
+      <span class="status-connection ${indicator.connection.state}">
+        <i aria-hidden="true"></i>${indicator.connection.label}
+      </span>
+    </button>`;
+  }
+  private _headerDevices() {
+    const selected = (this._config.device_status || []).filter((device) => device.show_on_main);
+    return html`<div class="header-devices" aria-label="Gerätestatus">
+      ${selected.length
+        ? selected.map((device) => this._deviceChip(device))
+        : html`<button type="button" class="device-placeholder"
+            @click=${() => this._openDetail("sensors")} title="WS90-Gerätestatus im Karteneditor zuordnen">
+            WS90 · Status zuordnen
+          </button>`}
+    </div>`;
+  }
+  private _sky() {
+    const sky = this._observation();
+    if (sky.kind === "unknown") return nothing;
+    const animated = this._config.weather_animation !== false;
+    return html`<div class="sky-banner" role="status" title=${sky.note}>
+      <div class="sky-art ${sky.kind} ${animated ? "animated" : ""}" aria-hidden="true">
+        ${sky.kind === "sunny" || sky.kind === "partlycloudy"
+          ? html`<i class="sun-disc"></i>` : nothing}
+        ${sky.kind === "night" ? html`<i class="moon-disc"></i>` : nothing}
+        ${["cloudy","partlycloudy","rain"].includes(sky.kind)
+          ? html`<i class="cloud-one"></i><i class="cloud-two"></i>` : nothing}
+        ${sky.kind === "rain" ? html`<i class="sky-drop"></i>` : nothing}
+        ${sky.kind === "wet" ? html`<i class="wet-dot"></i>` : nothing}
+      </div>
+      <span>${sky.label}</span>
+      ${sky.estimated ? html`<small>Lokale Schätzung · WS90 + Sonnenstand</small>` : nothing}
+    </div>`;
+  }
   private _setup() {
     return html`<section class="setup">
       <div class="setup-icon">${icon("station")}</div>
