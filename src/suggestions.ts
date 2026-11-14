@@ -1,7 +1,8 @@
 import { type HassEntity, type HomeAssistant, type MetricKey } from "./types";
 import { isUnitValid } from "./data";
 
-export type DeviceRole = "WS90" | "WH40" | "WN32" | "WN31" | "GW3000";
+import type { DeviceRole } from "./types";
+export type { DeviceRole } from "./types";
 export interface RegistryDevice {
   id: string;
   name?: string;
@@ -23,6 +24,14 @@ export const DEVICE_ROLES: DeviceRole[] = [
   "GW3000",
 ];
 
+export function roleForDevice(device: RegistryDevice): DeviceRole | undefined {
+  const label = [device.model, device.name, device.name_by_user].filter(Boolean).join(" ");
+  for (const role of DEVICE_ROLES) {
+    const pattern = role === "WN31" ? /\\b(?:wn31|wh31)\\b/i : new RegExp("\\\\b" + role + "\\\\b", "i");
+    if (pattern.test(label)) return role;
+  }
+  return undefined;
+}
 export function deviceLabel(device: RegistryDevice): string {
   return [device.name_by_user || device.name || device.id, device.model]
     .filter(Boolean)
@@ -232,6 +241,13 @@ function matchesMetric(
       !average &&
       !longerPeriod
     );
+  if (key === "solar_lux")
+    return (
+      (dc === "illuminance" || /(?:lux|beleuchtungsstärke|illuminance|lichtstärke)/.test(name)) &&
+      !/(?:max|minimum|daily|average)/.test(name)
+    );
+  if (key === "vpd")
+    return /(?:vpd|dampfdruckdefizit|vapor.pressure.deficit)/.test(name);
   if (key === "solar")
     return (
       (dc === "irradiance" || /(?:solar|strahlung|irradiance)/.test(name)) &&
