@@ -159,6 +159,12 @@ export class EcowittWeatherCard extends LitElement {
     this._imageSource = "";
     this._dialog()?.close();
   }
+  /** A dialog must be opened after Lit commits its DOM, especially on short mobile landscapes. */
+  protected updated(_changes: PropertyValues) {
+    const dialog = this._dialog();
+    if (this._detail && dialog?.isConnected && !dialog.open)
+      dialog.showModal();
+  }
   protected willUpdate(_changes: PropertyValues) {
     const current = this._reading("wind_direction").value;
     const average = this._reading("wind_direction_avg").value;
