@@ -580,7 +580,8 @@ export class EcowittWeatherCard extends LitElement {
   }
 
   private _rain() {
-    const raining = this._observation().kind === "rain";
+    const sky = this._observation();
+    const raining = sky.kind === "rain";
     const animated = this._config.weather_animation !== false;
     return html`<button
       class="panel rain ${raining ? "raining" : ""}"
@@ -588,6 +589,7 @@ export class EcowittWeatherCard extends LitElement {
       aria-label="Regendetails öffnen"
       @click=${() => this._openDetail("rain")}
     >
+      ${["sunny", "partlycloudy"].includes(sky.kind) ? html`<span class="rain-sun-decoration ${animated ? "animated" : ""}" aria-hidden="true"></span>` : nothing}
       ${raining ? html`<span class="rain-atmosphere ${animated ? "animated" : ""}" aria-hidden="true">
         ${Array.from({length: 14}, (_, i) => html`<i style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}></i>`)}
       </span>` : nothing}
