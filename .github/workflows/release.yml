@@ -1,21 +1,47 @@
 name: Release card
+
+# A new patch release is produced after every merged PR targeting main.
+# Existing tags can be repaired explicitly without creating a new version.
 on:
-  push:
-    tags: ['v*']
+  pull_request:
+    branches: [main]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      repair_tag:
+        description: "Optional existing tag to rebuild and attach the JS file (e.g. v0.0.1). Leave empty for a new patch release."
+        required: false
+        type: string
+
 permissions:
   contents: read
+
+# Serialize version selection and publishing to avoid duplicate tags after
+# simultaneous merges. Never cancel a release that is already in progress.
+concurrency:
+  group: ecowitt-release
+  cancel-in-progress: false
+
 jobs:
-  build:
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
+          # Build exactly the tagged source when repairing an older release.
+          # Otherwise build the latest main after the merge.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_tag != '' && inputs.repair_tag || 'main' }}
           fetch-depth: 0
           persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -23,24 +49,60 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - run: node scripts/audit-public-assets.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-card
-          path: dist/ecowitt-weather-card.js
-          if-no-files-found: error
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-card
-          path: dist
-      - name: Publish the compiled JavaScript asset
+
+      - name: Validate output and choose version
+        id: version
+        shell: bash
+        env:
+          REPAIR_TAG: ${{ inputs.repair_tag }}
+        run: |
+          set -euo pipefail
+          test -s dist/ecowitt-weather-card.js
+          if [[ -n "$REPAIR_TAG" ]]; then
+            [[ "$REPAIR_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::repair_tag must be a stable SemVer tag like v0.0.1"
+              exit 1
+            }
+            git rev-parse --verify "refs/tags/$REPAIR_TAG" > /dev/null
+            TAG="$REPAIR_TAG"
+          else
+            LAST="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+            if [[ -z "$LAST" ]]; then
+              TAG="v0.0.1"
+            else
+              NUM="${LAST#v}"
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$NUM"
+              TAG="v$MAJOR.$MINOR.$((10#$PATCH + 1))"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $TAG"
+
+      - name: Publish HACS-compatible JS release asset
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" dist/ecowitt-weather-card.js --verify-tag --generate-notes
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            # Important for manually created, asset-less v0.0.1 releases.
+            gh release upload "$RELEASE_TAG" dist/ecowitt-weather-card.js --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/ecowitt-weather-card.js \
+              --target "$(git rev-parse HEAD)" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
+
+      - name: Confirm downloadable release asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --json assets \
+            --jq '.assets[].name' | grep -Fx 'ecowitt-weather-card.js'

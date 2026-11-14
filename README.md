@@ -2,7 +2,7 @@
 
 Eine eigenständige Home-Assistant-Lovelace-Karte für lokale Ecowitt-Wetterdaten: Wind und Regen im Mittelpunkt, nordorientierte Windgrafik, grafischer Karteneditor und ein Layout, das sich an der tatsächlichen Kartenbreite orientiert.
 
-**Entwicklungsstand:** erster funktionsfähiger Meilenstein, Version 0.1.0 im Entwicklungsbranch. Noch keine veröffentlichte HACS-Release und keine Abnahme auf einer echten Home-Assistant-Instanz oder im iPhone-Safari. Der Build liefert eine installierbare JavaScript-Datei; die [Prüfergebnisse und offenen Punkte](docs/MILESTONE_1.md) benennen die Grenzen.
+**Entwicklungsstand:** erster funktionsfähiger Meilenstein; automatisierte Tests liegen vor, die Abnahme auf deiner echten Home-Assistant-Instanz und auf dem iPhone steht noch aus. GitHub-Versionen und HACS-Downloads folgen ab jetzt den SemVer-Tags und GitHub-Releases (erstes manuelles Tag v0.0.1). [Prüfungen und offene Punkte](docs/MILESTONE_1.md).
 
 - `custom:ecowitt-weather-card` mit Kartenkatalog, Startkonfiguration und visuellem Editor.
 - Windgeschwindigkeit, Böen, Herkunftsrichtung, 10-Minuten-Mittelwerte und Tagesmaximalböe aus auswählbaren HA-Entitäten.
@@ -19,6 +19,14 @@ Fehlende Sensoren zeigen einen Einrichtungshinweis. Die produktive Karte erzeugt
 [Installationsanleitung](docs/INSTALLATION.md) lesen, den Build als JavaScript-Modul laden und **Ecowitt Weather Card** im Kartenkatalog auswählen. Anschließend die tatsächlich vorhandenen Sensoren im visuellen Editor zuordnen.
 
 Für einen eigenen Wetter-Reiter empfehlen wir die [Panel View](examples/view-panel.yaml): eine Karte, keine manuell zu erstellenden Sections. Als Alternative gibt es eine fertige [Sections View](examples/view-sections.yaml) für dieselbe Karte.
+
+## Automatische HACS-Releases
+
+Nach jedem erfolgreich gemergten Pull Request in `main` führt `.github/workflows/release.yml` den vollständigen Test-/Build-Prozess aus, ermittelt die nächste **Patch-Version** aus vorhandenen Tags (z. B. `v0.1.0` → `v0.1.1`) und erstellt ein GitHub-Release mit **`ecowitt-weather-card.js` als herunterladbarem Release-Asset**. Die HACS-Konfiguration verwendet den Release-Asset, nicht eine eingecheckte Datei im `dist/`-Ordner. Wenn das Build oder die Tests fehlschlagen, wird **kein neues Release** erzeugt.
+
+Ein früheres Release ohne Asset lässt sich per GitHub → Actions → Release card → Run workflow → `repair_tag` reparieren, z. B. `v0.0.1`. Die Reparatur baut genau den Code dieses Tags und ergänzt den fehlenden Release-Asset.
+
+Die Version im `package.json` wird als interne Entwicklungsversion verwendet; **die tatsächlich veröffentlichte HACS-Version ist der GitHub-Release-Tag**. Der Workflow erzeugt automatisch Patch-Releases; Major-/Minor-Versionen können später bewusst durch einen separaten Versionsprozess eingeführt werden. Keine Bilder aus deinem privaten Designpaket werden mit veröffentlicht.
 
 ## Entwicklung
 

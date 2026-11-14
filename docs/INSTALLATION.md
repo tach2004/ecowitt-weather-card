@@ -1,6 +1,6 @@
 # Installation und Einbindung
 
-**Stand:** Version 0.1.0 ist der erste Entwicklungsmeilenstein. Es gibt noch keine veröffentlichte Release. Der lokale Build ist installierbar; die Abnahme in echtem Home Assistant, in der Companion App und in iOS Safari steht aus. Es werden keine bestehenden Dashboards automatisch verändert.
+**Stand:** Der erste Entwicklungsmeilenstein ist implementiert und über Node-/Browser-Tests geprüft; die Abnahme in echtem Home Assistant, Companion App und iOS Safari steht noch aus. Ab dem nächsten automatischen Release stellt GitHub ein installierbares JavaScript-Asset bereit. Bestehende Dashboards werden nicht automatisch verändert.
 
 ## Entwicklungsstand manuell installieren
 
@@ -18,16 +18,16 @@
 
 Nach Updates den Browsercache erneuern oder den Versionsparameter der Ressource ändern. HACS und manuelle Installation nicht gleichzeitig mit zwei Ressourcen laden.
 
-## Später über HACS
+## Über HACS (nach erfolgreichem Release mit JS-Asset)
 
-Die Projektstruktur und der Release-Workflow sind für HACS vorbereitet. Erst nach einer veröffentlichten Release mit dem Asset `ecowitt-weather-card.js` ist dieser Weg nutzbar; eine Aufnahme in den HACS-Standardkatalog wird nicht behauptet.
+Die HACS-Installation ist verfügbar, sobald ein erfolgreiches GitHub-Release ein **Asset namens `ecowitt-weather-card.js`** enthält. Das zuerst manuell erstellte `v0.0.1` hatte noch keinen solchen Asset und wurde deshalb als nicht HACS-konform gemeldet. Die automatische Release-Versionierung korrigiert das für neue Releases. Eine Aufnahme in den HACS-Standardkatalog wird nicht behauptet.
 
 1. In HACS unter **Benutzerdefinierte Repositories** `https://github.com/tach2004/ecowitt-weather-card` als Kategorie **Dashboard** hinzufügen (in älteren HACS-Versionen **Lovelace/Plugin**).
 2. **Ecowitt Weather Card** installieren und das Frontend neu laden.
 3. Falls HACS die Ressource nicht angelegt hat, `/hacsfiles/ecowitt-weather-card/ecowitt-weather-card.js` als **JavaScript-Modul** ergänzen.
 4. Karte hinzufügen und Sensorzuordnung im visuellen Editor vornehmen.
 
-Das Repository enthält absichtlich kein versioniertes `dist`-Bundle. HACS lädt das einzelne JavaScript-Asset einer veröffentlichten Release; der unkompilierte Standardbranch ist deshalb in HACS ausgeblendet. Der Release-Workflow wird erst durch ein bewusst gepushtes Versions-Tag ausgelöst. Er veröffentlicht ausschließlich das geprüfte JavaScript-Bundle, keine Testbilder, Berichte oder Referenzdateien.
+Das Repository enthält absichtlich kein versioniertes `dist`-Bundle. HACS lädt den einzeln kompilierten JavaScript-Asset aus dem neuesten GitHub-Release; der unkompilierte Standardbranch ist deshalb in HACS ausgeblendet. **Nach jedem PR-Merge in `main`** erzeugt `.github/workflows/release.yml` nach erfolgreichen Tests automatisch den nächsten **Patch-Tag** (z. B. `v0.1.1`) sowie das Release mit dem richtigen JavaScript-Asset. Für das Reparieren eines existierenden Tags ohne Asset: auf GitHub **Actions → Release card → Run workflow**, bei `repair_tag` die vorhandene Version (`v0.0.1`) eintragen. Der Workflow veröffentlicht nur die geprüfte JavaScript-Datei, keine Testbilder, privaten Referenzen oder Berichte.
 
 ## Empfohlen: eigener Wetter-Reiter als Panel View
 
