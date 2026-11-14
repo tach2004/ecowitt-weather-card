@@ -60,3 +60,52 @@ Die mittlere Richtung ist keine Windrose. Eine Windrose benötigt eine echte Ric
 Tippen auf Wind, Regen, Temperatur, Druck oder Sonne öffnet das jeweilige Detailfenster innerhalb der Karte. Die Hauptwerte bleiben ihre konfigurierten HA-Zustände. Recorder-Verläufe werden erst beim Öffnen angefragt. Nicht verfügbare APIs, leere Aufzeichnung oder fehlende Entitäten erhalten einen Hinweis. Die Diagramme zeigen die empfangenen Recorder-Messpunkte; unbekannte Zustände und Einheitenwechsel trennen die Linien. Es werden keine Zwischenmessungen erzeugt und keine Daten aus fremden Diensten geladen. Zusätzliche Kanäle und Diagnosen zeigen nur zugeordnete Quellen; die native HA-More-Info-Ansicht kann einzelne Entitäten ergänzen.
 
 Private Bilder außerhalb des Repositories verwalten. `/local/` bietet allein keinen Zugriffsschutz; siehe [PRIVATE_IMAGES.md](PRIVATE_IMAGES.md). Die Karte lädt keine Bilder zu Dritten hoch.
+
+
+## Wetter- und Gerätestatus in der erweiterten Karte
+
+- `theme_mode`: `auto` (HA-Theme, Standard), `light` oder `dark`.
+- `weather_animation`: `true` (Standard) oder `false`. Die Systemeinstellung „Bewegung reduzieren“ schaltet Animationen ebenfalls ab.
+- `entities.solar_lux`: WS90-Beleuchtungsstärke in lx/lux oder klx. Keine Umrechnung von Lux in W/m².
+- `entities.vpd`: Dampfdruckdefizit in kPa, hPa oder Pa. Das ist ein eigener Quellwert, keine erfundene Berechnung.
+- `entities.wind_speed_avg`: bisheriger optionaler Key wird nur aus Gründen der Rückwärtskompatibilität behalten, aber in der Hauptkarte und im Editor **nicht mehr angeboten**. Die mittlere Windrichtung bleibt `entities.wind_direction_avg`.
+
+### Lokale Wetterabschätzung (keine Vorhersage)
+
+Die Karte verwendet **positive WH40-Regenrate** für die Anzeige fallenden Regens; eine nasse WS90-Piezo-Oberfläche ist kein Beweis für anhaltenden Regen. Für eine grobe, ausdrücklich als **Schätzung** bezeichnete Sonnig/Teilbewölkt/Bewölkt-Anzeige vergleicht sie WS90-Globalstrahlung mit dem Haurwitz-Klarhimmelmodell bei der Sonnenhöhe aus `sun.sun`. Die Schätzung wird bei tiefem Sonnenstand unter 12° oder fehlender/ungültiger Einstrahlung unterdrückt. Verschattung, Dunst und Sensorposition können das Ergebnis verfälschen; Schneefall, Hagel und Gewitter werden nicht ohne zusätzliche zuverlässige Quelle behauptet. Nachts wird nur der astronomische Nachtstatus angezeigt, keine wolkenfreie Nacht.
+
+### Gerätestatus pro Ecowitt-Gerät
+
+Im visuellen Editor unter **Zusatzsensoren & Diagnosen nach Gerät** können WS90, WH40, WN32, mehrere WN31/WH31 und GW3000 anhand ihrer tatsächlichen HA-Geräteregistereinträge ausgewählt werden. Jede Auswahl hat die folgenden Felder:
+
+- **Batterie**: expliziter Batteriesensor. Die grafische Füllung gibt es nur bei einem echten Prozent-Sensor (`%`); Batteriespannung wird in V angezeigt, nicht in einen erfundenen Prozentwert umgerechnet.
+- **Signal**: expliziter RSSI-/Signal-/Qualitätssensor; dBm wird ohne willkürliche Schwellen als dBm angezeigt.
+- **Verbindung**: `binary_sensor` mit `device_class: connectivity` oder explizit `online/offline/connected/disconnected` meldende Quelle. Fehlt der Sensor, steht „Nicht zugeordnet“ statt eines erfundenen Online-Häkchens.
+- **Auf Hauptkarte anzeigen**: per Gerät aktiviert; WS90 wird beim Hinzufügen als Vorschlag ausgewählt, weitere Geräte standardmäßig nur in den Details. Mehrere WN31/WH31 können getrennt ausgewählt werden.
+
+Die zusätzliche Sensorliste verwendet Suchfelder und Checkboxen, gruppiert nach Geräten. Strg-/⌘-Mehrfachauswahl entfällt. Alte `extra_entities` und `diagnostic_entities` bleiben erhalten.
+
+Beispielkonfiguration **ausschließlich als Struktur** (keine echten Entity-IDs):
+```yaml
+type: custom:ecowitt-weather-card
+theme_mode: auto
+weather_animation: true
+device_status:
+  - device_id: "<HA-Geräte-ID-aus-dem-Editor>"
+    role: WS90
+    name: "Wetterstation"
+    show_on_main: true
+    battery: "sensor.<vorhandener_batteriesensor>"
+    signal: "sensor.<vorhandener_signalsensor>"
+    connection: "binary_sensor.<vorhandener_connectivity_sensor>"
+```
+
+### Privates Bild
+
+Empfohlener Speicherort: `/media/ecowitt/Wohnhaus.png`. Kartenfeld:
+
+```yaml
+site_image: media-source://media_source/local/ecowitt/Wohnhaus.png
+```
+
+Der neue Editor kann außerdem das HA-Medienverzeichnis über eine WebSocket-Abfrage durchsuchen, sofern der angemeldete Benutzer entsprechende Rechte besitzt. Dies ist kein Upload. Ohne Zugriffsberechtigung oder bei inkompatiblen Medienquellen bleibt das Textfeld verwendbar. Den Zugriff auf das private Bild unbedingt ohne Anmeldung testen; `/local` ist öffentlich erreichbar und wird nicht empfohlen.
