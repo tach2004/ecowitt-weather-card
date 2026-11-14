@@ -578,13 +578,19 @@ export class EcowittWeatherCard extends LitElement {
       </div>
     </button>`;
   }
+
   private _rain() {
+    const raining = this._observation().kind === "rain";
+    const animated = this._config.weather_animation !== false;
     return html`<button
-      class="panel rain"
+      class="panel rain ${raining ? "raining" : ""}"
       data-detail="rain"
       aria-label="Regendetails öffnen"
       @click=${() => this._openDetail("rain")}
     >
+      ${raining ? html`<span class="rain-atmosphere ${animated ? "animated" : ""}" aria-hidden="true">
+        ${Array.from({length: 14}, (_, i) => html`<i style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}></i>`)}
+      </span>` : nothing}
       <div class="panel-heading">
         ${icon("rain")}
         <h2>Regen</h2>
@@ -592,9 +598,7 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="duo">
         <div data-key="rain_today">
-          <span class="label">Heute · Kalendertag</span>${this._value(
-            "rain_today",
-          )}
+          <span class="label">Heute · Kalendertag</span>${this._value("rain_today")}
         </div>
         <div data-key="rain_rate">
           <span class="label">Regenrate</span>${this._value("rain_rate")}
@@ -602,13 +606,10 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="wet-line" data-key="rain_wet">
         ${this._wetBadge()}<span class="wet-description"
-          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span
-        >
+          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span>
       </div>
       ${this._reading("rain_wet").status === "stale"
-        ? html`<span class="status-note stale"
-            >Feuchtigkeitsstatus veraltet</span
-          >`
+        ? html`<span class="status-note stale">Feuchtigkeitsstatus veraltet</span>`
         : nothing}
     </button>`;
   }
