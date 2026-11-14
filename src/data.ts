@@ -81,9 +81,13 @@ const precipitationRate = new Set([
   "in/hr",
 ]);
 const solar = new Set(["W/m²", "W/m2", "kW/m²", "kW/m2"]);
+const illuminance = new Set(["lx", "lux", "klx"]);
+const vpdUnits = new Set(["kPa", "hPa", "Pa"]);
 
 export function isUnitValid(key: MetricKey, unit: string): boolean {
   if (key === "rain_wet") return true;
+  if (key === "solar_lux") return illuminance.has(unit);
+  if (key === "vpd") return vpdUnits.has(unit);
   if (key === "wind_direction" || key === "wind_direction_avg")
     return ["°", "deg", "degrees"].includes(unit);
   if (key.startsWith("wind_")) return speed.has(unit);
@@ -120,6 +124,8 @@ function validRange(key: MetricKey, value: number): boolean {
     key.startsWith("wind_") ||
     key.startsWith("rain_") ||
     key === "solar" ||
+    key === "solar_lux" ||
+    key === "vpd" ||
     key === "uv" ||
     key === "pressure"
   )
@@ -134,6 +140,7 @@ function format(value: number, key: MetricKey): string {
     "humidity",
     "pressure",
     "solar",
+    "solar_lux",
   ].includes(key);
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: whole ? 0 : 1,
