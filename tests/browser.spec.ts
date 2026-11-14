@@ -367,36 +367,7 @@ test("light theme, reduced motion and iPhone landscape remain usable", async ({
   expect(
     duration.split(",").every((part) => parseFloat(part) === 0),
   ).toBeTruthy();
-  await page.evaluate(() => {
-    const card = (window as DemoWindow).card;
-    const events: string[] = [];
-    (card as any)._debugDialog = events;
-    const dlg = card.shadowRoot.querySelector("dialog");
-    const show = dlg.showModal.bind(dlg);
-    const close = dlg.close.bind(dlg);
-    dlg.showModal = () => { events.push("showModal called"); try { return show(); } catch (e) { events.push("showModal error: " + e); throw e; } };
-    dlg.close = () => { events.push("close called: " + new Error().stack); return close(); };
-    const oldOpen = card._openDetail.bind(card);
-    card._openDetail = async (...args: any[]) => {
-      events.push("open detail called");
-      try { await oldOpen(...args); events.push("open detail resolved"); }
-      catch (e) { events.push("open detail rejected: " + e); }
-    };
-  });
   await page.locator('[data-detail="temperature"]:visible').first().click();
-  const diagnostic = await page.evaluate(() => {
-    const card = (window as DemoWindow).card;
-    const dialog = card.shadowRoot?.querySelector("dialog");
-    return {
-      events: (card as any)._debugDialog,
-      detail: card._detail, dialogPresent: !!dialog,
-      open: dialog?.open, rect: dialog?.getBoundingClientRect().toJSON(),
-      buttons: [...card.shadowRoot.querySelectorAll('[data-detail="temperature"]')].map(
-        (el: Element) => ({visible: !!el.getBoundingClientRect().width, tag: el.tagName})
-      ),
-    };
-  });
-  console.log("TEMP_DIALOG_DIAGNOSTIC", JSON.stringify(diagnostic));
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /Schließen/ }),
