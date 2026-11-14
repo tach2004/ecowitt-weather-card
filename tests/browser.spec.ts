@@ -1663,3 +1663,40 @@ test("iPhone touch emulation can tap stacked device statuses and weather details
     await context.close();
   }
 });
+
+test("320px metrics contain long German labels with wider fallback fonts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 874 });
+  await ready(page);
+  for (const font of ["monospace", "Arial"]) {
+    await page.locator("ecowitt-weather-card").evaluate((el, font) => {
+      (el as HTMLElement).style.setProperty(
+        "--paper-font-body1_-_font-family",
+        font,
+      );
+    }, font);
+    await noOverflow(page);
+    const contents = await page.locator(".metric").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const metric = node.getBoundingClientRect();
+        const content = node.querySelector("div")!.getBoundingClientRect();
+        const label = node.querySelector(".label")!.getBoundingClientRect();
+        return {
+          left: metric.left,
+          right: metric.right,
+          contentLeft: content.left,
+          contentRight: content.right,
+          labelLeft: label.left,
+          labelRight: label.right,
+        };
+      }),
+    );
+    for (const content of contents) {
+      expect(content.contentLeft).toBeGreaterThanOrEqual(content.left);
+      expect(content.contentRight).toBeLessThanOrEqual(content.right);
+      expect(content.labelLeft).toBeGreaterThanOrEqual(content.left);
+      expect(content.labelRight).toBeLessThanOrEqual(content.right);
+    }
+  }
+});

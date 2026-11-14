@@ -453,6 +453,11 @@ export const cardStyles = css`
   .metric .label {
     font-size: 0.74rem;
   }
+  .metric > div {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
+  }
   .metric .value {
     font-size: clamp(1.25rem, 3cqi, 2rem);
   }
