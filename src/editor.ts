@@ -516,6 +516,25 @@ export class EcowittWeatherCardEditor extends LitElement {
               : nothing}
           </details>`,
       )}
+
+      <details>
+        <summary>Darstellung, Wetteranimation und Theme</summary>
+        <div class="fields">
+          <label>Farbschema
+            <select aria-label="Farbschema" .value=${this._config.theme_mode || "auto"}
+              @change=${(event: Event) => this._change({ theme_mode: this._value(event) as "auto" | "light" | "dark" })}>
+              <option value="auto">Automatisch · wie Home Assistant</option>
+              <option value="light">Hell</option>
+              <option value="dark">Dunkel</option>
+            </select>
+          </label>
+          <label class="check-row check-preference">
+            <input type="checkbox" .checked=${this._config.weather_animation !== false}
+              @change=${(event: Event) => this._change({ weather_animation: (event.target as HTMLInputElement).checked })} />
+            <span>Dezente Wetteranimationen aktivieren (Bewegung reduzieren wird respektiert)</span>
+          </label>
+        </div>
+      </details>
       <details>
         <summary>Private Bildquelle & Ausrichtung</summary>
         <label
@@ -525,7 +544,7 @@ export class EcowittWeatherCardEditor extends LitElement {
             .value=${this._config.site_image ??
             this._config.background_image ??
             ""}
-            placeholder="HA-Bildpfad oder media-source://…"
+            placeholder="media-source://media_source/local/ecowitt/Wohnhaus.png"
             @change=${(event: Event) =>
               this._change({
                 site_image: this._value(event),
@@ -537,10 +556,35 @@ export class EcowittWeatherCardEditor extends LitElement {
           HA-relative Pfade, URLs derselben Herkunft und media-source://. Keine
           Upload-Funktion, keine Cloud-Übertragung.
         </p>
+
+        <p class="hint">Empfohlen: Bild unter
+          <code>/media/ecowitt/Wohnhaus.png</code> speichern und im Feld
+          <code>media-source://media_source/local/ecowitt/Wohnhaus.png</code>
+          verwenden. Schreibweise und Groß-/Kleinschreibung beachten.
+        </p>
+        <button type="button" @click=${() => this._browseMedia()}>
+          Bild aus Home Assistant Medien auswählen …
+        </button>
+        ${this._mediaItems.length ? html`<div class="media-browser">
+          <button type="button" @click=${() => this._browseMedia()}>Hauptordner anzeigen</button>
+          ${this._mediaItems.map((item) => {
+            const folder = item.media_class === "directory";
+            const image = !folder && (item.media_content_type?.startsWith("image/") ||
+              /\.(png|jpe?g|webp|gif|svg)$/i.test(item.title));
+            if (!folder && !image) return nothing;
+            return html`<button type="button" @click=${() => folder
+              ? this._browseMedia(item.media_content_id)
+              : (this._change({ site_image: item.media_content_id, background_image: undefined }),
+                this._mediaItems = [])}>
+              ${folder ? "📁" : "🖼️"} ${item.title}
+            </button>`;
+          })}
+        </div>` : nothing}
+        ${this._mediaError ? html`<p class="warning" role="alert">${this._mediaError}</p>` : nothing}
         <p class="warning">
-          /config/www → /local ist nicht automatisch zugriffsgeschützt. Für
-          sensible Bilder eine authentisierte HA-Media-Lösung prüfen und den
-          Zugriff testen. Eine Sicherheitsgarantie besteht nicht.
+          /config/www → /local ist nicht automatisch zugriffsgeschützt.
+          Der Medienordner ist die bevorzugte Alternative, aber die
+          Zugriffsrechte müssen in deiner HA-Instanz geprüft werden.
         </p>
         <div class="fields">
           ${this._number(
@@ -570,7 +614,8 @@ export class EcowittWeatherCardEditor extends LitElement {
         </p>
       </details>
       <details>
-        <summary>Zusatzsensoren & Diagnosen</summary>
+        <summary>Zusatzsensoren & Diagnosen nach Gerät</summary>
+        ${this._deviceEditor()}
         ${this._multi(
           "extra_entities",
           "Zusatzsensoren · WN31 / WH31",
@@ -662,10 +707,27 @@ export class EcowittWeatherCardEditor extends LitElement {
       border-radius: 8px;
       font: inherit;
     }
-    select[multiple] {
-      min-height: 168px;
-      margin-top: 4px;
-    }
+    .check-groups { max-height: 360px; overflow-y: auto; display: grid; gap: 8px; padding: 4px; }
+    .check-group { padding: 0 10px 10px; }
+    .check-group summary { min-height: 44px; padding: 10px 0; font-size: 13px; }
+    .check-row { display: flex; flex-direction: row; align-items: center;
+      gap: 10px; min-height: 44px; padding: 5px 3px; overflow-wrap: anywhere; }
+    .check-row input[type="checkbox"] { width: 22px; min-width: 22px; height: 22px;
+      min-height: 22px; flex-shrink: 0; accent-color: var(--primary-color, #06a6c0); }
+    .check-row span { min-width: 0; overflow-wrap: anywhere; }
+    .check-row small { display: block; color: var(--secondary-text-color, #627586); }
+    .checkbox-list { display: grid; gap: 6px; margin: 16px 0; }
+    .checkbox-list strong { font-size: 0.95rem; }
+    .device-editor { display: grid; gap: 8px; }
+    .device-config { padding: 10px 12px; border: 1px solid var(--divider-color, #aebdca);
+      border-radius: 12px; }
+    .device-config-body { padding: 8px 0 4px 30px; display: grid; gap: 10px; }
+    .check-preference { align-self: end; }
+    .media-browser { display: grid; gap: 5px; margin-top: 8px; max-height: 240px;
+      overflow-y: auto; padding: 8px; border: 1px solid var(--divider-color, #aebdca);
+      border-radius: 10px; }
+    .media-browser button { min-height: 38px; }
+    code { font-size: 0.82em; overflow-wrap: anywhere; }
     option {
       min-height: 32px;
     }
