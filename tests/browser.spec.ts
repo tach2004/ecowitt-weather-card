@@ -769,7 +769,8 @@ test("new editor uses checkbox lists and persists theme preferences", async ({ p
   await editor.locator("summary").filter({ hasText: "Zusatzsensoren & Diagnosen" }).click();
   const list = editor.locator(".checkbox-list").first();
   await expect(list.locator('select[multiple]')).toHaveCount(0);
-  const existing = list.locator('input[type="checkbox"]:checked').first();
+  const existing = list.locator(".check-row").filter({ hasText: "Beispiel Zusatzkanal WN31" })
+    .locator('input[type="checkbox"]').first();
   await expect(existing).toBeVisible();
   await existing.uncheck();
   await expect.poll(() =>
