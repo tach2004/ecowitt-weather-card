@@ -22,7 +22,7 @@ Für einen eigenen Wetter-Reiter empfehlen wir die [Panel View](examples/view-pa
 
 ## Automatische HACS-Releases
 
-Nach jedem erfolgreich gemergten Pull Request in `main` führt `.github/workflows/release.yml` den vollständigen Test-/Build-Prozess aus, ermittelt die nächste **Patch-Version** aus vorhandenen Tags (z. B. `v0.0.1` → `v0.0.2`) und erstellt ein GitHub-Release mit **`ecowitt-weather-card.js` als herunterladbarem Release-Asset**. Die HACS-Konfiguration verwendet den Release-Asset, nicht eine eingecheckte Datei im `dist/`-Ordner. Wenn das Build oder die Tests fehlschlagen, wird **kein neues Release** erzeugt.
+Nach jedem erfolgreich gemergten Pull Request in `main` führt `.github/workflows/release.yml` den vollständigen Test-/Build-Prozess aus, ermittelt die nächste **Patch-Version** aus vorhandenen Tags (z. B. `v0.1.0` → `v0.1.1`) und erstellt ein GitHub-Release mit **`ecowitt-weather-card.js` als herunterladbarem Release-Asset**. Die HACS-Konfiguration verwendet den Release-Asset, nicht eine eingecheckte Datei im `dist/`-Ordner. Wenn das Build oder die Tests fehlschlagen, wird **kein neues Release** erzeugt.
 
 Ein früheres Release ohne Asset lässt sich per GitHub → Actions → Release card → Run workflow → `repair_tag` reparieren, z. B. `v0.0.1`. Die Reparatur baut genau den Code dieses Tags und ergänzt den fehlenden Release-Asset.
 
