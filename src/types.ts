@@ -163,6 +163,17 @@ export const METRICS: {
     deviceClass: "temperature",
   },
   {
+    key: "vpd",
+    label: "Dampfdruckdefizit · WS90",
+    group: "Außenklima",
+  },
+  {
+    key: "solar_lux",
+    label: "Solare Beleuchtungsstärke · WS90",
+    group: "Druck & Sonne",
+    deviceClass: "illuminance",
+  },
+  {
     key: "pressure",
     label: "Relativer Luftdruck · GW3000",
     group: "Druck & Sonne",
