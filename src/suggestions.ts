@@ -1,7 +1,8 @@
 import { type HassEntity, type HomeAssistant, type MetricKey } from "./types";
 import { isUnitValid } from "./data";
 
-export type DeviceRole = "WS90" | "WH40" | "WN32" | "WN31" | "GW3000";
+import type { DeviceRole } from "./types";
+export type { DeviceRole } from "./types";
 export interface RegistryDevice {
   id: string;
   name?: string;
@@ -23,6 +24,15 @@ export const DEVICE_ROLES: DeviceRole[] = [
   "GW3000",
 ];
 
+export function roleForDevice(device: RegistryDevice): DeviceRole | undefined {
+  const normalized = (" " + [device.model, device.name, device.name_by_user]
+    .filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ");
+  for (const role of DEVICE_ROLES) {
+    if (normalized.includes(" " + role.toLowerCase() + " ") ||
+      (role === "WN31" && normalized.includes(" wh31 "))) return role;
+  }
+  return undefined;
+}
 export function deviceLabel(device: RegistryDevice): string {
   return [device.name_by_user || device.name || device.id, device.model]
     .filter(Boolean)
@@ -232,6 +242,13 @@ function matchesMetric(
       !average &&
       !longerPeriod
     );
+  if (key === "solar_lux")
+    return (
+      (dc === "illuminance" || /(?:lux|beleuchtungsstärke|illuminance|lichtstärke)/.test(name)) &&
+      !/(?:max|minimum|daily|average)/.test(name)
+    );
+  if (key === "vpd")
+    return /(?:vpd|dampfdruckdefizit|vapor.pressure.deficit)/.test(name);
   if (key === "solar")
     return (
       (dc === "irradiance" || /(?:solar|strahlung|irradiance)/.test(name)) &&

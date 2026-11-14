@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import {
   METRICS,
   type CardConfig,
+  type DeviceStatusConfig,
   type HomeAssistant,
   type MetricKey,
 } from "./types";
@@ -10,6 +11,7 @@ import {
   DEVICE_ROLES,
   candidateEntities,
   deviceLabel,
+  roleForDevice,
   uniqueRoleDevices,
   type DeviceRole,
   type RegistryDevice,
@@ -24,6 +26,9 @@ export class EcowittWeatherCardEditor extends LitElement {
     _registry: { state: true },
     _roleDevices: { state: true },
     _registryState: { state: true },
+    _listSearch: { state: true },
+    _mediaItems: { state: true },
+    _mediaError: { state: true },
   };
   hass?: HomeAssistant;
   private _config: CardConfig = {
@@ -34,6 +39,12 @@ export class EcowittWeatherCardEditor extends LitElement {
   private _registry: RegistryEntity[] = [];
   private _roleDevices: Partial<Record<DeviceRole, string>> = {};
   private _registryState: "idle" | "loading" | "ready" | "unavailable" = "idle";
+  private _listSearch: Record<"extra_entities" | "diagnostic_entities", string> = {
+    extra_entities: "", diagnostic_entities: "",
+  };
+  private _mediaItems: { title: string; media_content_id: string; media_class?: string; media_content_type?: string }[] = [];
+  private _mediaError = "";
+  private _mediaCurrent = "media-source://media_source/local";
 
   setConfig(config: CardConfig): void {
     this._config = normalizeConfig(config);
@@ -177,38 +188,163 @@ export class EcowittWeatherCardEditor extends LitElement {
         : nothing}
     </div>`;
   }
+
+  private _toggleSelected(
+    key: "extra_entities" | "diagnostic_entities", id: string, checked: boolean,
+  ) {
+    const current = this._config[key] || [];
+    this._change({ [key]: checked
+      ? [...new Set([...current, id])]
+      : current.filter((candidate) => candidate !== id) });
+  }
   private _multi(
     key: "extra_entities" | "diagnostic_entities",
     label: string,
     hint: string,
   ) {
-    const current = this._config[key] || [];
-    const ids = [...new Set([...current, ...this._entities()])];
-    return html`<label
-        >${label}<select
-          multiple
-          size="7"
-          aria-label=${label}
-          @change=${(event: Event) => {
-            const value = [
-              ...(event.target as HTMLSelectElement).selectedOptions,
-            ].map((option) => option.value);
-            this._change({ [key]: value });
-          }}
-        >
-          ${ids.map(
-            (id) =>
-              html`<option value=${id} .selected=${current.includes(id)}>
-                ${this._label(id)}${this.hass?.states[id]
-                  ? ""
-                  : " · nicht verfügbar"}
-              </option>`,
-          )}
-        </select></label
-      >
-      <p class="hint">
-        ${hint} Mehrfachauswahl mit Strg/⌘ oder über die native Mobil-Auswahl.
-      </p>`;
+    const selected = this._config[key] || [];
+    const search = this._listSearch[key].toLowerCase().trim();
+    const all = [...new Set([...selected, ...this._entities()])];
+    const devicesById = new Map(this._devices.map((device) => [device.id, device]));
+    const registryById = new Map(this._registry.map((item) => [item.entity_id, item]));
+    const groups = new Map<string, { title: string; ids: string[] }>();
+    for (const id of all) {
+      const labelText = this._label(id);
+      const registryDevice = devicesById.get(registryById.get(id)?.device_id || "");
+      const role = registryDevice ? roleForDevice(registryDevice) : undefined;
+      if (!search && !selected.includes(id) && !role) continue;
+      if (search && ![labelText, id, registryDevice ? deviceLabel(registryDevice) : ""]
+        .join(" ").toLowerCase().includes(search)) continue;
+      const title = registryDevice
+        ? (role ? role + " · " : "") + deviceLabel(registryDevice)
+        : "Sonstige oder nicht zugeordnete Sensoren";
+      const group = groups.get(title) || { title, ids: [] };
+      group.ids.push(id);
+      groups.set(title, group);
+    }
+    return html`<section class="checkbox-list">
+      <strong>${label}</strong>
+      <p class="hint">${hint} Keine Strg-Taste erforderlich.</p>
+      <label class="search-label">Sensoren durchsuchen
+        <input type="search" placeholder="Sensorname, Gerät oder Entity-ID"
+          .value=${this._listSearch[key]}
+          @input=${(event: Event) => {
+            this._listSearch = { ...this._listSearch, [key]: this._value(event) };
+          }} />
+      </label>
+      <p class="hint">${selected.length} Sensoren ausgewählt ·
+        ${search ? "Suchergebnisse" : "Ecowitt-Geräte und ausgewählte Sensoren"}
+      </p>
+      <div class="check-groups">
+        ${[...groups.values()].map((group) => html`<details class="check-group" open>
+          <summary>${group.title} · ${group.ids.filter((id) => selected.includes(id)).length}/${group.ids.length}</summary>
+          ${group.ids.map((id) => html`<label class="check-row">
+            <input type="checkbox" .checked=${selected.includes(id)}
+              @change=${(event: Event) => this._toggleSelected(key, id, (event.target as HTMLInputElement).checked)} />
+            <span>${this._label(id)}
+              ${!this.hass?.states[id] ? html`<small>Momentan nicht verfügbar</small>` : nothing}
+            </span>
+          </label>`)}
+        </details>`)}
+        ${!groups.size ? html`<p class="hint">
+          Keine Treffer. Nutze die Suche oder wähle die Ecowitt-Geräte oben aus.
+        </p>` : nothing}
+      </div>
+    </section>`;
+  }
+  private _deviceField(device: DeviceStatusConfig, key: "battery" | "signal" | "connection") {
+    const registry = this._registry
+      .filter((item) => item.device_id === device.device_id && !item.disabled_by &&
+        !!this.hass?.states[item.entity_id]);
+    const ids = [...new Set([...(device[key] ? [device[key]!] : []),
+      ...registry.map((item) => item.entity_id)])];
+    const priority = key === "battery" ? /batter|akku|voltage|spannung/i
+      : key === "signal" ? /signal|rssi|empfang|qualit/i
+      : /connect|verbund|online|offline|status/i;
+    ids.sort((a, b) => Number(priority.test(this._label(b))) - Number(priority.test(this._label(a))) ||
+      a.localeCompare(b));
+    const title = key === "battery" ? "Batterie" : key === "signal" ? "Signalqualität" : "Verbindungsstatus";
+    return html`<label>${title}
+      <select .value=${device[key] || ""} @change=${(event: Event) =>
+        this._editDevice(device, { [key]: this._value(event) || undefined })}>
+        <option value="">Nicht zugeordnet</option>
+        ${ids.map((id) => html`<option value=${id} .selected=${device[key] === id}>
+          ${this._label(id)}
+        </option>`)}
+      </select>
+    </label>`;
+  }
+  private _editDevice(device: DeviceStatusConfig, patch?: Partial<DeviceStatusConfig>, remove = false) {
+    const configured = [...(this._config.device_status || [])];
+    const index = configured.findIndex((item) => item.device_id === device.device_id);
+    if (remove) {
+      if (index >= 0) configured.splice(index, 1);
+    } else if (index >= 0) {
+      configured[index] = { ...configured[index], ...patch };
+    } else configured.push({ ...device, ...patch });
+    this._change({ device_status: configured });
+  }
+  private _deviceEditor() {
+    const configured = this._config.device_status || [];
+    const byId = new Map(this._devices.map((device) => [device.id, device]));
+    const matches = this._devices.filter((device) => roleForDevice(device));
+    const ids = [...new Set([...matches.map((d) => d.id), ...configured.map((d) => d.device_id)])];
+    return html`<section class="device-editor">
+      <p class="hint">Jedes Gerät besitzt eigene Batterie-, Signal- und
+        Verbindungsquellen. Markiere die Geräte für die Hauptkarte; WS90 wird
+        vorgeschlagen. Mehrere WN31/WH31 sind möglich. Keine Werte werden geraten.</p>
+      ${ids.map((id) => {
+        const existing = configured.find((device) => device.device_id === id);
+        const registryDevice = byId.get(id);
+        const role = existing?.role || (registryDevice ? roleForDevice(registryDevice) : undefined);
+        if (!role) return nothing;
+        const device: DeviceStatusConfig = existing || {
+          device_id: id, role, name: registryDevice ? deviceLabel(registryDevice) : role,
+          show_on_main: role === "WS90",
+        };
+        return html`<div class="device-config">
+          <label class="check-row">
+            <input type="checkbox" .checked=${!!existing}
+              @change=${(event: Event) => this._editDevice(device, undefined,
+                !(event.target as HTMLInputElement).checked)} />
+            <span><strong>${role}</strong> · ${device.name || id}</span>
+          </label>
+          ${existing ? html`<div class="device-config-body">
+            <label class="check-row">
+              <input type="checkbox" .checked=${!!existing.show_on_main}
+                @change=${(event: Event) =>
+                  this._editDevice(device, { show_on_main: (event.target as HTMLInputElement).checked })} />
+              <span>Auf der Hauptkarte anzeigen</span>
+            </label>
+            <div class="fields">
+              ${this._deviceField(device, "battery")}
+              ${this._deviceField(device, "signal")}
+              ${this._deviceField(device, "connection")}
+            </div>
+          </div>` : nothing}
+        </div>`;
+      })}
+      ${!ids.length ? html`<p class="warning">
+        Keine Ecowitt-Geräte im HA-Geräteregister gefunden. Bitte die
+        Integration und Gerätezuordnung prüfen.
+      </p>` : nothing}
+    </section>`;
+  }
+  private async _browseMedia(id = "media-source://media_source/local") {
+    this._mediaError = "";
+    if (!this.hass?.callWS) {
+      this._mediaError = "Der Home-Assistant-Medienbrowser ist hier nicht verfügbar.";
+      return;
+    }
+    try {
+      const response = await this.hass.callWS<{
+        children?: {title:string;media_content_id:string;media_class?:string;media_content_type?:string}[];
+      }>({ type: "media_source/browse_media", media_content_id: id });
+      this._mediaCurrent = id;
+      this._mediaItems = response.children || [];
+    } catch {
+      this._mediaError = "Medien konnten nicht geladen werden. Alternativ eine media-source://-ID eingeben.";
+    }
   }
   private _number(
     key:
@@ -380,6 +516,25 @@ export class EcowittWeatherCardEditor extends LitElement {
               : nothing}
           </details>`,
       )}
+
+      <details>
+        <summary>Darstellung, Wetteranimation und Theme</summary>
+        <div class="fields">
+          <label>Farbschema
+            <select aria-label="Farbschema" .value=${this._config.theme_mode || "auto"}
+              @change=${(event: Event) => this._change({ theme_mode: this._value(event) as "auto" | "light" | "dark" })}>
+              <option value="auto">Automatisch · wie Home Assistant</option>
+              <option value="light">Hell</option>
+              <option value="dark">Dunkel</option>
+            </select>
+          </label>
+          <label class="check-row check-preference">
+            <input type="checkbox" .checked=${this._config.weather_animation !== false}
+              @change=${(event: Event) => this._change({ weather_animation: (event.target as HTMLInputElement).checked })} />
+            <span>Dezente Wetteranimationen aktivieren (Bewegung reduzieren wird respektiert)</span>
+          </label>
+        </div>
+      </details>
       <details>
         <summary>Private Bildquelle & Ausrichtung</summary>
         <label
@@ -389,7 +544,7 @@ export class EcowittWeatherCardEditor extends LitElement {
             .value=${this._config.site_image ??
             this._config.background_image ??
             ""}
-            placeholder="HA-Bildpfad oder media-source://…"
+            placeholder="media-source://media_source/local/ecowitt/Wohnhaus.png"
             @change=${(event: Event) =>
               this._change({
                 site_image: this._value(event),
@@ -401,10 +556,35 @@ export class EcowittWeatherCardEditor extends LitElement {
           HA-relative Pfade, URLs derselben Herkunft und media-source://. Keine
           Upload-Funktion, keine Cloud-Übertragung.
         </p>
+
+        <p class="hint">Empfohlen: Bild unter
+          <code>/media/ecowitt/Wohnhaus.png</code> speichern und im Feld
+          <code>media-source://media_source/local/ecowitt/Wohnhaus.png</code>
+          verwenden. Schreibweise und Groß-/Kleinschreibung beachten.
+        </p>
+        <button type="button" @click=${() => this._browseMedia()}>
+          Bild aus Home Assistant Medien auswählen …
+        </button>
+        ${this._mediaItems.length ? html`<div class="media-browser">
+          <button type="button" @click=${() => this._browseMedia()}>Hauptordner anzeigen</button>
+          ${this._mediaItems.map((item) => {
+            const folder = item.media_class === "directory";
+            const image = !folder && (item.media_content_type?.startsWith("image/") ||
+              /\.(png|jpe?g|webp|gif|svg)$/i.test(item.title));
+            if (!folder && !image) return nothing;
+            return html`<button type="button" @click=${() => folder
+              ? this._browseMedia(item.media_content_id)
+              : (this._change({ site_image: item.media_content_id, background_image: undefined }),
+                this._mediaItems = [])}>
+              ${folder ? "📁" : "🖼️"} ${item.title}
+            </button>`;
+          })}
+        </div>` : nothing}
+        ${this._mediaError ? html`<p class="warning" role="alert">${this._mediaError}</p>` : nothing}
         <p class="warning">
-          /config/www → /local ist nicht automatisch zugriffsgeschützt. Für
-          sensible Bilder eine authentisierte HA-Media-Lösung prüfen und den
-          Zugriff testen. Eine Sicherheitsgarantie besteht nicht.
+          /config/www → /local ist nicht automatisch zugriffsgeschützt.
+          Der Medienordner ist die bevorzugte Alternative, aber die
+          Zugriffsrechte müssen in deiner HA-Instanz geprüft werden.
         </p>
         <div class="fields">
           ${this._number(
@@ -434,7 +614,8 @@ export class EcowittWeatherCardEditor extends LitElement {
         </p>
       </details>
       <details>
-        <summary>Zusatzsensoren & Diagnosen</summary>
+        <summary>Zusatzsensoren & Diagnosen nach Gerät</summary>
+        ${this._deviceEditor()}
         ${this._multi(
           "extra_entities",
           "Zusatzsensoren · WN31 / WH31",
@@ -526,10 +707,27 @@ export class EcowittWeatherCardEditor extends LitElement {
       border-radius: 8px;
       font: inherit;
     }
-    select[multiple] {
-      min-height: 168px;
-      margin-top: 4px;
-    }
+    .check-groups { max-height: 360px; overflow-y: auto; display: grid; gap: 8px; padding: 4px; }
+    .check-group { padding: 0 10px 10px; }
+    .check-group summary { min-height: 44px; padding: 10px 0; font-size: 13px; }
+    .check-row { display: flex; flex-direction: row; align-items: center;
+      gap: 10px; min-height: 44px; padding: 5px 3px; overflow-wrap: anywhere; }
+    .check-row input[type="checkbox"] { width: 22px; min-width: 22px; height: 22px;
+      min-height: 22px; flex-shrink: 0; accent-color: var(--primary-color, #06a6c0); }
+    .check-row span { min-width: 0; overflow-wrap: anywhere; }
+    .check-row small { display: block; color: var(--secondary-text-color, #627586); }
+    .checkbox-list { display: grid; gap: 6px; margin: 16px 0; }
+    .checkbox-list strong { font-size: 0.95rem; }
+    .device-editor { display: grid; gap: 8px; }
+    .device-config { padding: 10px 12px; border: 1px solid var(--divider-color, #aebdca);
+      border-radius: 12px; }
+    .device-config-body { padding: 8px 0 4px 30px; display: grid; gap: 10px; }
+    .check-preference { align-self: end; }
+    .media-browser { display: grid; gap: 5px; margin-top: 8px; max-height: 240px;
+      overflow-y: auto; padding: 8px; border: 1px solid var(--divider-color, #aebdca);
+      border-radius: 10px; }
+    .media-browser button { min-height: 38px; }
+    code { font-size: 0.82em; overflow-wrap: anywhere; }
     option {
       min-height: 32px;
     }

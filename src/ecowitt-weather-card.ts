@@ -11,9 +11,12 @@ import {
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
 import { resolveImage } from "./image";
+import { observeWeather, type WeatherObservation } from "./weather";
+import { deviceIndicators } from "./device-status";
 import {
   METRICS,
   type CardConfig,
+  type DeviceStatusConfig,
   type HomeAssistant,
   type MetricKey,
 } from "./types";
@@ -36,7 +39,6 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "wind_gust",
     "wind_direction",
     "wind_direction_avg",
-    "wind_speed_avg",
     "wind_gust_max",
   ],
   rain: [
@@ -56,9 +58,10 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "dew_point",
     "temperature_min",
     "temperature_max",
+    "vpd",
   ],
   pressure: ["pressure"],
-  sun: ["uv", "solar"],
+  sun: ["uv", "solar", "solar_lux"],
   sensors: [],
 };
 const graphKeys: Record<Detail, MetricKey[]> = {
@@ -156,6 +159,12 @@ export class EcowittWeatherCard extends LitElement {
     this._imageSource = "";
     this._dialog()?.close();
   }
+  /** A dialog must be opened after Lit commits its DOM, especially on short mobile landscapes. */
+  protected updated(_changes: PropertyValues) {
+    const dialog = this._dialog();
+    if (this._detail && dialog?.isConnected && !dialog.open)
+      dialog.showModal();
+  }
   protected willUpdate(_changes: PropertyValues) {
     const current = this._reading("wind_direction").value;
     const average = this._reading("wind_direction_avg").value;
@@ -243,7 +252,7 @@ export class EcowittWeatherCard extends LitElement {
         !this._config.entities?.[key] ||
         !this.hass?.states[this._config.entities[key]!],
     );
-    return html`<ha-card>
+    return html`<ha-card data-theme=${this._config.theme_mode || "auto"}>
       <header>
         <div class="station-icon">${icon("station")}</div>
         <div>
@@ -252,6 +261,7 @@ export class EcowittWeatherCard extends LitElement {
             ${this._config.subtitle || "Ecowitt · Wetter vor Ort"}
           </p>
         </div>
+        ${this._headerDevices()}
         <button
           class="diagnostics"
           data-detail="sensors"
@@ -261,6 +271,7 @@ export class EcowittWeatherCard extends LitElement {
           ${icon("sensors")}
         </button>
       </header>
+      ${hasEntities ? this._sky() : nothing}
       ${!hasEntities
         ? this._setup()
         : html`
@@ -320,6 +331,13 @@ export class EcowittWeatherCard extends LitElement {
                 "#f2d669",
                 "sun",
               )}
+              ${this._metric(
+                "solar_lux",
+                "Beleuchtungsstärke",
+                "sun",
+                "#f2d669",
+                "sun",
+              )}
             </div>
             ${missing.length
               ? html`<div class="setup-missing">
@@ -338,6 +356,69 @@ export class EcowittWeatherCard extends LitElement {
           `}
       ${this._renderDialog()}
     </ha-card>`;
+  }
+
+  private _observation(): WeatherObservation {
+    return observeWeather(
+      this.hass?.states["sun.sun"],
+      this._reading("solar"),
+      this._reading("rain_rate"),
+      this._reading("rain_wet"),
+    );
+  }
+  private _batteryGlyph(percent?: number) {
+    const width = percent === undefined ? 0 : Math.min(14, Math.max(0, 14 * percent / 100));
+    return svg`<svg viewBox="0 0 24 16" class="battery-glyph" aria-hidden="true">
+      <rect x="1" y="2" width="19" height="12" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <rect x="21" y="5" width="2" height="6" rx="1" fill="currentColor" />
+      <rect x="3.5" y="4.5" width=${width} height="7" rx="1" fill="currentColor" />
+    </svg>`;
+  }
+  private _deviceChip(device: DeviceStatusConfig, compact = true) {
+    const indicator = deviceIndicators(this.hass, device);
+    return html`<button type="button" class="device-chip ${compact ? "compact" : "full"}"
+      title=${"Batterie: " + indicator.battery.label + ", Signal: " +
+        indicator.signal.label + ", Verbindung: " + indicator.connection.label}
+      @click=${() => this._openDetail("sensors")}>
+      <strong>${device.role}</strong>
+      <span class="status-battery ${indicator.battery.percent !== undefined && indicator.battery.percent < 20 ? "low" : ""}">
+        ${this._batteryGlyph(indicator.battery.percent)}
+        ${indicator.battery.label}
+      </span>
+      <span class="status-signal">${icon("signal")}${indicator.signal.label}</span>
+      <span class="status-connection ${indicator.connection.state}">
+        <i aria-hidden="true"></i>${indicator.connection.label}
+      </span>
+    </button>`;
+  }
+  private _headerDevices() {
+    const selected = (this._config.device_status || []).filter((device) => device.show_on_main);
+    return html`<div class="header-devices" aria-label="Gerätestatus">
+      ${selected.length
+        ? selected.map((device) => this._deviceChip(device))
+        : html`<button type="button" class="device-placeholder"
+            @click=${() => this._openDetail("sensors")} title="WS90-Gerätestatus im Karteneditor zuordnen">
+            WS90 · Status zuordnen
+          </button>`}
+    </div>`;
+  }
+  private _sky() {
+    const sky = this._observation();
+    if (sky.kind === "unknown") return nothing;
+    const animated = this._config.weather_animation !== false;
+    return html`<div class="sky-banner" role="status" title=${sky.note}>
+      <div class="sky-art ${sky.kind} ${animated ? "animated" : ""}" aria-hidden="true">
+        ${sky.kind === "sunny" || sky.kind === "partlycloudy"
+          ? html`<i class="sun-disc"></i>` : nothing}
+        ${sky.kind === "night" ? html`<i class="moon-disc"></i>` : nothing}
+        ${["cloudy","partlycloudy","rain"].includes(sky.kind)
+          ? html`<i class="cloud-one"></i><i class="cloud-two"></i>` : nothing}
+        ${sky.kind === "rain" ? html`<i class="sky-drop"></i>` : nothing}
+        ${sky.kind === "wet" ? html`<i class="wet-dot"></i>` : nothing}
+      </div>
+      <span>${sky.label}</span>
+      ${sky.estimated ? html`<small>Lokale Schätzung · WS90 + Sonnenstand</small>` : nothing}
+    </div>`;
   }
   private _setup() {
     return html`<section class="setup">
@@ -362,19 +443,13 @@ export class EcowittWeatherCard extends LitElement {
     const current = this._reading("wind_direction");
     const avg = this._reading("wind_direction_avg");
     const speed = this._reading("wind_speed");
-    const avgSpeed = this._reading("wind_speed_avg");
     const calm = speed.status === "ok" && speed.value === 0;
     const currentVisible =
       current.status === "ok" &&
       speed.status === "ok" &&
       speed.value !== null &&
       speed.value > 0;
-    const averageVisible =
-      avg.status === "ok" &&
-      !(
-        avgSpeed.value === 0 ||
-        (avgSpeed.status !== "missing" && avgSpeed.status !== "ok")
-      );
+    const averageVisible = avg.status === "ok" && !calm;
     const offsetX = this._clamp(this._config.image_target_x, 50, 10, 90) - 50;
     const offsetY = this._clamp(this._config.image_target_y, 50, 10, 90) - 50;
     const radius = Math.hypot(offsetX, offsetY);
@@ -431,6 +506,14 @@ export class EcowittWeatherCard extends LitElement {
             ? svg`<g class="flow-current" data-bearing=${normalizeDegrees(current.value!)} data-flow-bearing=${flowBearing(current.value!)} style="transform:rotate(${this._rotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(1.7, current.value!)}/></g>`
             : nothing}
           <circle class="target" cx=${targetX} cy=${targetY} r="1" />
+        </svg>
+        <svg class="degree-ring" viewBox="0 0 100 100" aria-hidden="true">
+          ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
+            const theta = (bearing * Math.PI) / 180;
+            const x = 50 + Math.sin(theta) * 42;
+            const y = 50 - Math.cos(theta) * 42;
+            return svg`<text x=${x} y=${y} text-anchor="middle" dominant-baseline="middle">${bearing}°</text>`;
+          })}
         </svg>
         <span class="cardinal north">N</span><span class="cardinal east">O</span
         ><span class="cardinal south">S</span
@@ -493,12 +576,6 @@ export class EcowittWeatherCard extends LitElement {
             true,
           )}
         </div>
-        <div data-key="wind_speed_avg">
-          <span class="label">Ø 10 Min. Tempo</span>${this._value(
-            "wind_speed_avg",
-            true,
-          )}
-        </div>
         <div data-key="wind_gust_max">
           <span class="label">Max. Böe heute</span>${this._value(
             "wind_gust_max",
@@ -508,13 +585,21 @@ export class EcowittWeatherCard extends LitElement {
       </div>
     </button>`;
   }
+
   private _rain() {
+    const sky = this._observation();
+    const raining = sky.kind === "rain";
+    const animated = this._config.weather_animation !== false;
     return html`<button
-      class="panel rain"
+      class="panel rain ${raining ? "raining" : ""}"
       data-detail="rain"
       aria-label="Regendetails öffnen"
       @click=${() => this._openDetail("rain")}
     >
+      ${["sunny", "partlycloudy"].includes(sky.kind) ? html`<span class="rain-sun-decoration ${animated ? "animated" : ""}" aria-hidden="true"></span>` : nothing}
+      ${raining ? html`<span class="rain-atmosphere ${animated ? "animated" : ""}" aria-hidden="true">
+        ${Array.from({length: 14}, (_, i) => html`<i style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}></i>`)}
+      </span>` : nothing}
       <div class="panel-heading">
         ${icon("rain")}
         <h2>Regen</h2>
@@ -522,9 +607,7 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="duo">
         <div data-key="rain_today">
-          <span class="label">Heute · Kalendertag</span>${this._value(
-            "rain_today",
-          )}
+          <span class="label">Heute · Kalendertag</span>${this._value("rain_today")}
         </div>
         <div data-key="rain_rate">
           <span class="label">Regenrate</span>${this._value("rain_rate")}
@@ -532,13 +615,10 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="wet-line" data-key="rain_wet">
         ${this._wetBadge()}<span class="wet-description"
-          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span
-        >
+          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span>
       </div>
       ${this._reading("rain_wet").status === "stale"
-        ? html`<span class="status-note stale"
-            >Feuchtigkeitsstatus veraltet</span
-          >`
+        ? html`<span class="status-note stale">Feuchtigkeitsstatus veraltet</span>`
         : nothing}
     </button>`;
   }
@@ -713,10 +793,14 @@ export class EcowittWeatherCard extends LitElement {
     const extras = [...new Set(this._config.extra_entities ?? [])];
     const diagnostic = [...new Set(this._config.diagnostic_entities ?? [])];
     return html`<p class="detail-caption">
-        Zusätzliche WN31/WH31-Kanäle sowie Batterie- und Signalquellen nur nach
-        Zuordnung. Eine allgemeine Online-Anzeige wird aus diesen Werten nicht
-        abgeleitet.
+        Jeder Gerätestatus basiert ausschließlich auf explizit ausgewählten
+        Home-Assistant-Entitäten. Batterien in Volt sind keine Prozentanzeige;
+        ohne echten Verbindungsstatus wird kein „Online“ behauptet.
       </p>
+      <h3>Geräte · Batterien, Empfang und Verbindung</h3>
+      ${(this._config.device_status || []).length
+        ? (this._config.device_status || []).map((device) => this._deviceDetail(device))
+        : html`<p class="empty">Geräte und Statussensoren im grafischen Editor auswählen.</p>`}
       <h3>Zusätzliche Kanäle · WN31 / WH31</h3>
       ${extras.length
         ? extras.map((id) => this._sensorRow(id))
@@ -735,6 +819,23 @@ export class EcowittWeatherCard extends LitElement {
           ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label)
           : nothing,
       )} `;
+  }
+
+  private _deviceDetail(device: DeviceStatusConfig) {
+    const indicators = deviceIndicators(this.hass, device);
+    return html`<section class="device-detail">
+      <h4>${device.role} · ${device.name || "Ecowitt-Sensor"}</h4>
+      <div class="device-detail-summary">
+        <span>${this._batteryGlyph(indicators.battery.percent)}
+          Batterie: ${indicators.battery.label}</span>
+        <span>${icon("signal")} Signal: ${indicators.signal.label}</span>
+        <span class="status-connection ${indicators.connection.state}">
+          <i aria-hidden="true"></i>Verbindung: ${indicators.connection.label}</span>
+      </div>
+      ${[device.battery, device.signal, device.connection].filter(
+        (id): id is string => Boolean(id),
+      ).map((id) => this._sensorRow(id))}
+    </section>`;
   }
   private _sensorRow(id: string, label?: string) {
     const entity = this.hass?.states[id];

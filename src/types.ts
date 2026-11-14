@@ -38,7 +38,20 @@ export type MetricKey =
   | "rain_event"
   | "pressure"
   | "uv"
-  | "solar";
+  | "solar"
+  | "solar_lux"
+  | "vpd";
+export type DeviceRole = "WS90" | "WH40" | "WN32" | "WN31" | "GW3000";
+export interface DeviceStatusConfig {
+  /** Actual device registry identifier; several WN31/WH31 devices are supported. */
+  device_id: string;
+  role: DeviceRole;
+  name?: string;
+  show_on_main?: boolean;
+  battery?: string;
+  signal?: string;
+  connection?: string;
+}
 export interface CardConfig {
   type: string;
   title?: string;
@@ -50,6 +63,11 @@ export interface CardConfig {
   image_target_y?: number;
   entities?: Partial<Record<MetricKey, string>>;
   extra_entities?: string[];
+  /** Per-device status selections; no values are inferred or fabricated. */
+  device_status?: DeviceStatusConfig[];
+  /** Automatic uses the parent HA theme. */
+  theme_mode?: "auto" | "light" | "dark";
+  weather_animation?: boolean;
   diagnostic_entities?: string[];
   history_hours?: number;
   stale_after_minutes?: number;
@@ -85,12 +103,6 @@ export const METRICS: {
     label: "Mittlere Richtung · 10 Minuten",
     group: "Wind",
     unit: "°",
-  },
-  {
-    key: "wind_speed_avg",
-    label: "Mittlere Geschwindigkeit · 10 Minuten",
-    group: "Wind",
-    deviceClass: "wind_speed",
   },
   {
     key: "wind_gust_max",
@@ -149,6 +161,17 @@ export const METRICS: {
     label: "Temperatur Tagesmaximum",
     group: "Außenklima",
     deviceClass: "temperature",
+  },
+  {
+    key: "vpd",
+    label: "Dampfdruckdefizit · WS90",
+    group: "Außenklima",
+  },
+  {
+    key: "solar_lux",
+    label: "Solare Beleuchtungsstärke · WS90",
+    group: "Druck & Sonne",
+    deviceClass: "illuminance",
   },
   {
     key: "pressure",

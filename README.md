@@ -54,3 +54,15 @@ Die Gradangabe bezeichnet die meteorologische **Herkunft**. Ein Wind aus 292° k
 Weitere Dokumentation: [Konfiguration](docs/CONFIGURATION.md), [Produktspezifikation](SPEC.md), [Umsetzungsphasen](docs/CODEX_IMPLEMENTATION.md) und [Agentenanweisungen](AGENTS.md).
 
 Lizenz: MIT.
+
+
+## Visuelle Erweiterungen (nächster PR)
+
+- Dezent beschrifteter Kompassring mit 0°–315° in 45°-Schritten zusätzlich zu N/O/S/W.
+- WS90-Batterie, Signalqualität und expliziter Verbindungsstatus auf der Hauptkarte; weitere Geräte im Detail und optional im Header. Batterien in Volt werden **nicht** in Prozentwerte umgerechnet.
+- Komfortabler Sensor-Editor mit Gerätegruppen, Suche und Checkboxen statt Strg-Mehrfachauswahl.
+- Animierter Regen bei positiver WH40-Regenrate; echte Sonnen-/Wolkenschätzung aus WS90-Globalstrahlung und Sonnenstand, mit klarer Kennzeichnung der Unsicherheit. Keine Wetter-API oder Cloud.
+- Zusätzliche WS90-Entitäten für Lux und Dampfdruckdefizit. Theme: automatisch, hell oder dunkel.
+- Verbesserte Medienbild-Einrichtung mit Beispiel `media-source://media_source/local/ecowitt/Wohnhaus.png` und optionaler Auswahl im HA-Medienbrowser.
+
+Diese Änderungen werden ausschließlich nach Tests und PR-Review als neue Patch-Version veröffentlicht. Private Grundstücksgrafiken, Originalfotos und die vom Nutzer bereitgestellten Wetteranimationsbeispiele werden nicht im öffentlichen Repository gespeichert.

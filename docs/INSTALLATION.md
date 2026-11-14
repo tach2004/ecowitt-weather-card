@@ -63,3 +63,16 @@ Im Editor einen HA-relativen Bildpfad, eine URL derselben HA-Herkunft oder eine 
 **`/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt.** Bei extern erreichbarem HA kann eine Bild-URL ohne Anmeldung abrufbar sein. Für sensible Immobilienbilder eine authentisierte HA-Media-Lösung prüfen und den Zugriff auch ohne Anmeldung testen. Nicht jede Media-Source-ID ist direkt als Browserbild verwendbar; Unterstützung und Berechtigungen müssen an der tatsächlichen Instanz geprüft werden. Keine Sicherheitsgarantie. Details: [PRIVATE_IMAGES.md](PRIVATE_IMAGES.md).
 
 Alle Konfigurationsfelder stehen in [CONFIGURATION.md](CONFIGURATION.md).
+
+
+## Neue Anzeigeoptionen und private Bilder
+
+Die Hauptkarte unterstützt bei Auswahl entsprechender HA-Quellen WS90-Batterie, Empfang und Verbindungsstatus. Im Editor werden Zusatzsensoren nach Geräten aufgelistet und per Checkbox ausgewählt; die bisherige Strg-Mehrfachauswahl entfällt. Das Theme ist unter „Darstellung, Wetteranimation und Theme“ auf `Automatisch`, `Hell` oder `Dunkel` einstellbar.
+
+**Privates Hintergrundbild:** Lege bei dir den Ordner `/media/ecowitt/` an und speichere dort `Wohnhaus.png`. Trage dann im Karteneditor ein:
+
+```text
+media-source://media_source/local/ecowitt/Wohnhaus.png
+```
+
+Alternativ kannst du den internen Medienbrowser im Karteneditor ausprobieren. Er listet lokale Medien über die HA-Media-API, soweit dein Benutzer zugriffsberechtigt ist. Keine private Datei in das öffentliche GitHub-Repository, in Actions-Assets oder in einen GitHub-PR hochladen. `/config/www` und der daraus abgeleitete Pfad `/local/` sind für sensible Immobilienbilder nicht empfehlenswert, da sie nicht automatisch geschützt sind.
