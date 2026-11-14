@@ -385,6 +385,9 @@ test("public screenshots use synthetic fixtures and generic illustration only", 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 1100 });
   await ready(page);
+  await setStatusDevices(page, 3);
+  await update(page, "rain_rate", 0, "mm/h");
+  await setSky(page, 45, 700);
   await page.screenshot({
     path: "docs/screenshots/desktop.png",
     fullPage: true,
@@ -549,12 +552,10 @@ test("calibrated arrow target remains inside the circular image", async ({
     });
     await win.card.updateComplete;
   });
-  const geometry = await page
-    .locator(".target")
-    .evaluate((el) => ({
-      x: Number(el.getAttribute("cx")),
-      y: Number(el.getAttribute("cy")),
-    }));
+  const geometry = await page.locator(".target").evaluate((el) => ({
+    x: Number(el.getAttribute("cx")),
+    y: Number(el.getAttribute("cy")),
+  }));
   expect(Math.hypot(geometry.x - 50, geometry.y - 50)).toBeLessThanOrEqual(
     40.01,
   );
@@ -668,28 +669,45 @@ test("rendered polygon travels from N/E/S/W and WNW into the target", async ({
   }
 });
 
-test("320px summary contains long German labels with a wider fallback font", async ({ page }) => {
+test("320px summary contains long German labels with a wider fallback font", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 320, height: 874 });
   for (const view of ["panel", "sections"]) {
     await ready(page, `/?view=${view}`);
     await page.locator("ecowitt-weather-card").evaluate((card) => {
       // A real 16px monospace fallback exposes intrinsic grid minimums that can
       // differ between the local machine and GitHub's installed system fonts.
-      (card as HTMLElement).style.setProperty("--paper-font-body1_-_font-family", "monospace");
+      (card as HTMLElement).style.setProperty(
+        "--paper-font-body1_-_font-family",
+        "monospace",
+      );
     });
     const summary = page.locator(".mobile-summary");
-    await expect(summary.locator(".label").nth(1)).toContainText("Feuchtigkeitsstatus");
+    await expect(summary.locator(".label").nth(1)).toContainText(
+      "Feuchtigkeitsstatus",
+    );
     const layout = await summary.evaluate((element) => {
       const root = element.closest("ha-card")!.getBoundingClientRect();
       const nodes = [element, ...element.querySelectorAll("button, span")];
       return {
         font: getComputedStyle(element).fontFamily,
         pageOverflow: document.documentElement.scrollWidth > innerWidth,
-        outside: nodes.filter((node) => {
-          const rect = node.getBoundingClientRect();
-          return rect.width > 0 && (rect.left < root.left - 1 || rect.right > root.right + 1);
-        }).map((node) => node.className),
-        overflowing: nodes.filter((node) => node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1).map((node) => node.className),
+        outside: nodes
+          .filter((node) => {
+            const rect = node.getBoundingClientRect();
+            return (
+              rect.width > 0 &&
+              (rect.left < root.left - 1 || rect.right > root.right + 1)
+            );
+          })
+          .map((node) => node.className),
+        overflowing: nodes
+          .filter(
+            (node) =>
+              node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 1,
+          )
+          .map((node) => node.className),
       };
     });
     expect(layout.font).toContain("monospace");
@@ -699,18 +717,33 @@ test("320px summary contains long German labels with a wider fallback font", asy
   }
 });
 
-test("compass degrees and actual WH40 rain animation, never just wet Piezo", async ({ page }) => {
+test("measured WH40 rain is visualized while wet Piezo remains a separate status", async ({
+  page,
+}) => {
   await ready(page);
-  await expect(page.locator(".degree-ring text")).toHaveCount(8);
-  await expect(page.locator(".degree-ring")).toContainText("315°");
   await expect(page.locator(".rain-atmosphere i")).toHaveCount(14);
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "rain",
+  );
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "on");
   await expect(page.locator(".rain-atmosphere")).toHaveCount(0);
-  await expect(page.locator(".sky-banner")).toContainText("Oberfläche nass");
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "unknown",
+  );
+  await expect(page.locator(".sky-banner")).toContainText(
+    "Wetter nicht bestimmbar",
+  );
+  await expect(page.locator(".wet-badge:visible").first()).toContainText(
+    "NASS",
+  );
 });
 
-test("source-grounded device status shows battery percent, raw dBm and real connectivity", async ({ page }) => {
+test("source-grounded device status shows battery percent, raw dBm and real connectivity", async ({
+  page,
+}) => {
   await ready(page);
   await page.evaluate(async () => {
     const win = window as DemoWindow;
@@ -722,18 +755,29 @@ test("source-grounded device status shows battery percent, raw dBm and real conn
     ] as const;
     for (const [id, state, unit, deviceClass] of items)
       win.hass.states[id] = {
-        entity_id: id, state, last_updated: now, last_changed: now,
-        attributes: { friendly_name: id, unit_of_measurement: unit, device_class: deviceClass },
+        entity_id: id,
+        state,
+        last_updated: now,
+        last_changed: now,
+        attributes: {
+          friendly_name: id,
+          unit_of_measurement: unit,
+          device_class: deviceClass,
+        },
       };
     win.setDemoConfig({
       ...win.demoConfig,
-      device_status: [{
-        device_id: "demo-ws90", role: "WS90", name: "Test WS90",
-        show_on_main: true,
-        battery: "sensor.test_ws90_battery",
-        signal: "sensor.test_ws90_signal",
-        connection: "binary_sensor.test_ws90_connected",
-      }],
+      device_status: [
+        {
+          device_id: "demo-ws90",
+          role: "WS90",
+          name: "Test WS90",
+          show_on_main: true,
+          battery: "sensor.test_ws90_battery",
+          signal: "sensor.test_ws90_signal",
+          connection: "binary_sensor.test_ws90_connected",
+        },
+      ],
     });
     await win.card.updateComplete;
   });
@@ -742,31 +786,917 @@ test("source-grounded device status shows battery percent, raw dBm and real conn
   await expect(badge).toContainText("64 %");
   await expect(badge).toContainText("-68 dBm");
   await expect(badge).toContainText("Verbunden");
+  const signalPath = await badge
+    .locator('[data-icon="signal"] path')
+    .getAttribute("d");
+  expect(signalPath).not.toBe(
+    await page.locator('[data-icon="sun"] path').first().getAttribute("d"),
+  );
+  expect(signalPath).toContain("M4 20");
   await page.locator(".device-chip").click();
   await expect(page.getByRole("dialog")).toContainText("Test WS90");
 });
 
-test("new editor uses checkbox lists and persists theme preferences", async ({ page }) => {
+test("device editor uses one checklist and preserves legacy config while saving new device extras", async ({
+  page,
+}) => {
   await ready(page, "/?editor=1");
   const editor = page.locator("ecowitt-weather-card-editor");
-  await editor.locator("summary").filter({ hasText: "Darstellung, Wetteranimation" }).click();
+  await editor
+    .locator("summary")
+    .filter({ hasText: "Darstellung, Wetteranimation" })
+    .click();
   await editor.getByLabel("Farbschema").selectOption("dark");
-  await expect.poll(() =>
-    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.theme_mode)
-  ).toBe("dark");
-  await editor.locator("summary").filter({ hasText: "Zusatzsensoren & Diagnosen" }).click();
-  const list = editor.locator(".checkbox-list").first();
-  await expect(list.locator('select[multiple]')).toHaveCount(0);
-  const existing = list.locator(".check-row").filter({ hasText: "Beispiel Zusatzkanal WN31" })
-    .locator('input[type="checkbox"]').first();
-  await expect(existing).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as DemoWindow).lastEditorConfig?.theme_mode),
+    )
+    .toBe("dark");
+  const initial = await page.evaluate(
+    () => (window as DemoWindow).lastEditorConfig,
+  );
+  expect(initial.extra_entities).toEqual(["sensor.demo_extra"]);
+  expect(initial.diagnostic_entities).toEqual(["sensor.demo_battery"]);
+  await editor
+    .locator("summary")
+    .filter({ hasText: "Zusatzsensoren & Diagnosen" })
+    .click();
+  const device = editor.locator('.device-config[data-device-id="demo-wn31"]');
+  await device.locator("summary").click();
+  await expect(editor.locator("select[multiple]")).toHaveCount(0);
+  const existing = device
+    .locator(".check-row")
+    .filter({ hasText: "Beispiel Zusatzkanal WN31" })
+    .locator('input[type="checkbox"]');
+  await expect(existing).toBeChecked();
   await existing.uncheck();
-  await expect.poll(() =>
-    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.extra_entities?.length)
-  ).toBe(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as DemoWindow).lastEditorConfig?.extra_entities?.length,
+      ),
+    )
+    .toBe(0);
   await existing.check();
-  await expect.poll(() =>
-    page.evaluate(() => (window as DemoWindow).lastEditorConfig?.extra_entities?.length)
-  ).toBe(1);
-  expect(await editor.getByLabel(/Bildpfad|Bildquelle/).count()).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as DemoWindow).lastEditorConfig?.device_status?.find(
+            (d: any) => d.device_id === "demo-wn31",
+          )?.extra_entities,
+      ),
+    )
+    .toEqual(["sensor.demo_extra"]);
+  expect(
+    await page.evaluate(
+      () => (window as DemoWindow).lastEditorConfig?.diagnostic_entities,
+    ),
+  ).toEqual(["sensor.demo_battery"]);
+  const saved = await page.evaluate(
+    () => (window as DemoWindow).lastEditorConfig,
+  );
+  await page.evaluate(async (config) => {
+    const win = window as DemoWindow;
+    win.editor.setConfig(config);
+    await win.editor.updateComplete;
+  }, saved);
+  await expect(existing).toBeChecked();
+  await page.locator('[data-detail="sensors"]:visible').first().click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .locator('.sensor-row[data-entity-id="sensor.demo_extra"]'),
+  ).toHaveCount(1);
+});
+
+async function setSky(
+  page: Page,
+  elevation: number,
+  solar: number,
+  unit = "W/m²",
+  state = "above_horizon",
+) {
+  await page.evaluate(
+    async ({ elevation, solar, unit, state }) => {
+      const win = window as DemoWindow;
+      const now = new Date().toISOString();
+      win.hass.states["sun.sun"] = {
+        entity_id: "sun.sun",
+        state,
+        last_updated: now,
+        last_changed: now,
+        attributes: { elevation },
+      };
+      win.updateDemo("solar", solar, unit);
+      win.card.hass = { ...win.hass };
+      await win.card.updateComplete;
+    },
+    { elevation, solar, unit, state },
+  );
+}
+
+for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
+  test(`compass labels stay outside the circle without overlap or clipping at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 874 ? 402 : 874 });
+    await ready(page);
+    await expect(page.locator(".degree-ring text")).toHaveCount(8);
+    const results = await page.locator(".site").evaluate((site) => {
+      const circle = site.getBoundingClientRect();
+      const card = site.closest("ha-card")!.getBoundingClientRect();
+      const cx = (circle.left + circle.right) / 2,
+        cy = (circle.top + circle.bottom) / 2;
+      const radius = circle.width / 2;
+      const cardinals = [...site.querySelectorAll(".cardinal")].map((node) =>
+        node.getBoundingClientRect(),
+      );
+      const overlap = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right &&
+        a.right > b.left &&
+        a.top < b.bottom &&
+        a.bottom > b.top;
+      return [...site.querySelectorAll(".degree-ring text")].map((node) => {
+        const box = node.getBoundingClientRect();
+        const nearestX = Math.max(box.left, Math.min(cx, box.right));
+        const nearestY = Math.max(box.top, Math.min(cy, box.bottom));
+        return {
+          label: node.textContent,
+          outsideCircle: Math.hypot(nearestX - cx, nearestY - cy) > radius,
+          overlapsCardinal: cardinals.some((cardinal) =>
+            overlap(box, cardinal),
+          ),
+          clipped:
+            box.left < card.left ||
+            box.right > card.right ||
+            box.top < card.top ||
+            box.bottom > card.bottom,
+          color: getComputedStyle(node).fill,
+          stroke: getComputedStyle(node).stroke,
+          textHeight: box.height,
+          cardinalHeight: cardinals[0].height,
+        };
+      });
+    });
+    for (const result of results) {
+      expect(result.outsideCircle, result.label || "degree").toBe(true);
+      expect(result.overlapsCardinal, result.label || "degree").toBe(false);
+      expect(result.clipped, result.label || "degree").toBe(false);
+      expect(result.color).not.toBe("rgb(255, 255, 255)");
+      expect(result.stroke).toBe("none");
+      expect(result.textHeight).toBeLessThan(result.cardinalHeight / 2);
+    }
+    await noOverflow(page);
+  });
+}
+
+test("wet surface coexists with estimated sun and clouds, with measured rain taking priority", async ({
+  page,
+}) => {
+  await ready(page);
+  await update(page, "rain_rate", 0, "mm/h");
+  await update(page, "rain_wet", "on");
+  await setSky(page, 45, 700);
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "sunny",
+  );
+  await expect(page.locator(".sun-disc")).toHaveCount(1);
+  await expect(page.locator(".sky-banner")).toContainText("geschätzt");
+  await expect(page.locator(".wet-badge:visible").first()).toContainText(
+    "NASS",
+  );
+  await expect(page.locator(".rain-sun-decoration")).toHaveCount(1);
+  await setSky(page, 15, 150);
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "partlycloudy",
+  );
+  await expect(page.locator(".sun-disc")).toHaveCount(1);
+  await expect(page.locator(".cloud-one")).toHaveCount(1);
+  await setSky(page, 45, 30);
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "cloudy",
+  );
+  await expect(page.locator(".sun-disc")).toHaveCount(0);
+  await expect(page.locator(".cloud-one")).toHaveCount(1);
+  await update(page, "rain_rate", 0.8, "mm/h");
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "rain",
+  );
+  await expect(page.locator(".sky-drop")).toHaveCount(1);
+  await expect(page.locator(".rain-atmosphere i")).toHaveCount(14);
+});
+
+test("night and incomplete local observations have honest independent moisture status", async ({
+  page,
+}) => {
+  await ready(page);
+  await update(page, "rain_rate", 0, "mm/h");
+  await update(page, "rain_wet", "off");
+  await setSky(page, -10, 0, "W/m²", "below_horizon");
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "night",
+  );
+  await expect(page.locator(".moon-disc")).toHaveCount(1);
+  await expect(page.locator(".wet-badge:visible").first()).toContainText(
+    "TROCKEN",
+  );
+  await setSky(page, 45, 0.7, "kW/m²");
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "sunny",
+  );
+  await update(page, "solar", "unavailable");
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "unknown",
+  );
+  await expect(page.locator(".sky-banner")).toContainText(
+    "Wetter nicht bestimmbar",
+  );
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    delete win.hass.states["sun.sun"];
+    win.card.hass = { ...win.hass };
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".sky-banner")).toHaveAttribute(
+    "data-weather",
+    "unknown",
+  );
+  await expect(page.locator(".sky-banner")).toContainText(
+    /Sonnenstatus|Sonnenstand/,
+  );
+});
+
+test("weather animation preferences leave wind transitions intact and keep static rain accents", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({ ...win.demoConfig, weather_animation: false });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".rain-atmosphere")).not.toHaveClass(/animated/);
+  await expect(page.locator(".rain-atmosphere i").first()).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+  await expect(page.locator(".flow-current")).toHaveCSS(
+    "transition-duration",
+    "1.1s",
+  );
+  const drop = await page
+    .locator(".rain-atmosphere i")
+    .first()
+    .evaluate((el) => ({
+      y: el.getBoundingClientRect().top,
+      panelTop: el.closest(".rain")!.getBoundingClientRect().top,
+      panelBottom: el.closest(".rain")!.getBoundingClientRect().bottom,
+    }));
+  expect(drop.y).toBeGreaterThan(drop.panelTop);
+  expect(drop.y).toBeLessThan(drop.panelBottom);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({ ...win.demoConfig, weather_animation: true });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".rain-atmosphere i").first()).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+  await expect(page.locator(".flow-current")).toHaveCSS(
+    "transition-duration",
+    "0s",
+  );
+});
+
+for (const hostTheme of ["light", "dark"])
+  for (const mode of ["auto", "light", "dark"]) {
+    test(`theme ${mode} honors its scope inside a ${hostTheme} HA theme`, async ({
+      page,
+    }) => {
+      await ready(page, hostTheme === "light" ? "/?theme=light" : "/");
+      await page.evaluate(async (mode) => {
+        const win = window as DemoWindow;
+        win.setDemoConfig({ ...win.demoConfig, theme_mode: mode });
+        await win.card.updateComplete;
+      }, mode);
+      const expected =
+        mode === "auto"
+          ? hostTheme === "light"
+            ? "rgb(16, 38, 55)"
+            : "rgb(238, 244, 250)"
+          : mode === "light"
+            ? "rgb(23, 43, 62)"
+            : "rgb(237, 245, 252)";
+      await expect(page.locator("ha-card")).toHaveCSS("color", expected);
+      await page.locator('[data-detail="pressure"]:visible').first().click();
+      await expect(page.getByRole("dialog")).toHaveCSS("color", expected);
+      const background = await page
+        .getByRole("dialog")
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(background).not.toBe("rgba(0, 0, 0, 0)");
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      if (mode === "auto") {
+        await page.evaluate(() => document.body.classList.toggle("light"));
+        await expect(page.locator("ha-card")).toHaveCSS(
+          "color",
+          hostTheme === "light" ? "rgb(238, 244, 250)" : "rgb(16, 38, 55)",
+        );
+      }
+    });
+  }
+
+for (const view of ["panel", "sections"])
+  for (const portrait of [true, false])
+    for (const theme of ["light", "dark"]) {
+      test(`${view} iPhone ${portrait ? "portrait" : "landscape"} ${theme}: every detail opens, scrolls and closes`, async ({
+        page,
+      }) => {
+        const width = portrait ? 402 : 874,
+          height = portrait ? 874 : 402;
+        await page.setViewportSize({ width, height });
+        const errors: string[] = [];
+        page.on("pageerror", (error) => errors.push(error.message));
+        await ready(
+          page,
+          `/?view=${view}&theme=${theme === "light" ? "dark" : "light"}`,
+        );
+        await page.evaluate(async (theme) => {
+          const win = window as DemoWindow;
+          win.setDemoConfig({ ...win.demoConfig, theme_mode: theme });
+          await win.card.updateComplete;
+        }, theme);
+        for (const detail of [
+          "wind",
+          "rain",
+          "temperature",
+          "pressure",
+          "sun",
+          "sensors",
+        ]) {
+          const opener = page
+            .locator(`[data-detail="${detail}"]:visible`)
+            .first();
+          await opener.click();
+          const dialog = page.getByRole("dialog");
+          await expect(dialog).toBeVisible();
+          await expect(dialog.locator("h2")).not.toBeEmpty();
+          const bounds = await dialog.evaluate((el) => ({
+            top: el.getBoundingClientRect().top,
+            bottom: el.getBoundingClientRect().bottom,
+            left: el.getBoundingClientRect().left,
+            right: el.getBoundingClientRect().right,
+            width: el.clientWidth,
+            scrollWidth: el.scrollWidth,
+            height: el.clientHeight,
+            scrollHeight: el.scrollHeight,
+          }));
+          expect(bounds.top).toBeGreaterThanOrEqual(-1);
+          expect(bounds.bottom).toBeLessThanOrEqual(height + 1);
+          expect(bounds.left).toBeGreaterThanOrEqual(-1);
+          expect(bounds.right).toBeLessThanOrEqual(width + 1);
+          expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.width + 1);
+          await page.keyboard.press("Tab");
+          expect(
+            await dialog.evaluate((el) =>
+              el.contains((el.getRootNode() as ShadowRoot).activeElement),
+            ),
+          ).toBe(true);
+          if (bounds.scrollHeight > bounds.height + 2) {
+            await dialog.hover();
+            await page.mouse.wheel(0, 600);
+            await expect
+              .poll(() => dialog.evaluate((el) => el.scrollTop))
+              .toBeGreaterThan(0);
+          }
+          const close = dialog.getByRole("button", { name: "Schließen" });
+          await expect(close).toBeVisible();
+          await close.click();
+          await expect(dialog).not.toBeVisible();
+          await expect(opener).toBeFocused();
+        }
+        expect(errors).toEqual([]);
+      });
+    }
+
+test("UV Index sources render while incompatible UV and signal units stay neutral", async ({
+  page,
+}) => {
+  await ready(page);
+  await update(page, "uv", 4.2, "UV Index");
+  await expect(page.locator('[data-key="uv"]').first()).toContainText("4,2");
+  await expect(page.locator('[data-key="uv"]').first()).not.toContainText(
+    "Quelle prüfen",
+  );
+  await update(page, "uv", 4.2, "W/m²");
+  await expect(page.locator('[data-key="uv"]').first()).toContainText(
+    "Quelle prüfen",
+  );
+  await update(page, "uv", "unavailable", "UV Index");
+  await expect(page.locator('[data-key="uv"]').first()).toContainText(
+    "Nicht verfügbar",
+  );
+});
+
+test("changing or clearing image config cannot restore a stale resolved image", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({
+      ...win.demoConfig,
+      site_image: "/demo/generic-image.svg",
+    });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site-image")).toHaveCount(1);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({ ...win.demoConfig, site_image: "" });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site-image")).toHaveCount(0);
+  await expect(page.locator(".demo-plan")).toHaveCount(1);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    let resolveMedia!: (value: { url: string }) => void;
+    win.hass = {
+      ...win.hass,
+      callWS: () =>
+        new Promise((resolve) => {
+          resolveMedia = resolve;
+        }),
+    };
+    win.setDemoConfig({
+      ...win.demoConfig,
+      site_image: "media-source://media_source/local/delayed.svg",
+    });
+    await win.card.updateComplete;
+    win.setDemoConfig({ ...win.demoConfig, site_image: "" });
+    resolveMedia({ url: "/demo/generic-image.svg" });
+    await Promise.resolve();
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site-image")).toHaveCount(0);
+  await expect(page.locator(".demo-plan")).toHaveCount(1);
+});
+
+test("unrelated config changes retain an already resolved local media image", async ({
+  page,
+}) => {
+  await ready(page);
+  const calls = await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    let calls = 0;
+    win.hass = {
+      ...win.hass,
+      callWS: async () => {
+        calls++;
+        return { url: "/demo/generic-image.svg" };
+      },
+    };
+    const config = {
+      ...win.demoConfig,
+      site_image: "media-source://media_source/local/generic.svg",
+    };
+    win.setDemoConfig(config);
+    await win.card.updateComplete;
+    await Promise.resolve();
+    await win.card.updateComplete;
+    win.setDemoConfig({ ...config, title: "Neuer Titel" });
+    await win.card.updateComplete;
+    return calls;
+  });
+  expect(calls).toBe(1);
+  await expect(page.locator(".site-image")).toHaveCount(1);
+});
+
+test("cancelled pending detail opens do not resurrect a dialog or request history", async ({
+  page,
+}) => {
+  for (const action of ["config", "cancel", "disconnect"]) {
+    await ready(page);
+    await page.evaluate(async (action) => {
+      const win = window as DemoWindow;
+      const card = win.card;
+      card.shadowRoot.querySelector('[data-detail="wind"]').click();
+      if (action === "config")
+        card.setConfig({
+          ...win.demoConfig,
+          title: "Konfiguration gewechselt",
+        });
+      else if (action === "cancel")
+        card.shadowRoot
+          .querySelector("dialog")
+          .dispatchEvent(new Event("cancel", { cancelable: true }));
+      else {
+        card.remove();
+        document.querySelector("main")!.append(card);
+      }
+      await card.updateComplete;
+      await Promise.resolve();
+      await card.updateComplete;
+    }, action);
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    expect(
+      await page.evaluate(() => (window as DemoWindow).historyRequests.length),
+    ).toBe(0);
+  }
+});
+
+async function setStatusDevices(page: Page, count: number, longNames = false) {
+  await page.evaluate(
+    async ({ count, longNames }) => {
+      const win = window as DemoWindow;
+      const now = new Date().toISOString();
+      const roles = ["WS90", "WH40", "WN31"];
+      const devices = roles.slice(0, count).map((role, index) => {
+        const base = `sensor.demo_status_${index}`;
+        for (const [suffix, state, unit, device_class] of [
+          ["battery", "72", "%", "battery"],
+          ["signal", "-61", "dBm", "signal_strength"],
+        ] as const) {
+          const id = base + "_" + suffix;
+          win.hass.states[id] = {
+            entity_id: id,
+            state,
+            last_updated: now,
+            attributes: { unit_of_measurement: unit, device_class },
+          };
+        }
+        const connection = `binary_sensor.demo_status_${index}_connection`;
+        win.hass.states[connection] = {
+          entity_id: connection,
+          state: "on",
+          last_updated: now,
+          attributes: { device_class: "connectivity" },
+        };
+        return {
+          device_id: `demo-status-${index}`,
+          role,
+          name: longNames
+            ? `${role} · Zusätzliche lokale Messstation mit langer Beschriftung`
+            : role,
+          show_on_main: true,
+          battery: base + "_battery",
+          signal: base + "_signal",
+          connection,
+        };
+      });
+      win.setDemoConfig({
+        ...win.demoConfig,
+        title: longNames
+          ? "Lokale Wetterstation mit längerer Überschrift"
+          : "Wetterstation (Ecowitt)",
+        device_status: devices,
+      });
+      await win.card.updateComplete;
+    },
+    { count, longNames },
+  );
+}
+
+for (const width of [320, 402, 874, 1440])
+  for (const count of [1, 3])
+    for (const theme of ["light", "dark"]) {
+      test(`${width}px ${theme}: ${count} device statuses fit below the title on phones and side by side on desktop`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({
+          width,
+          height: width === 874 ? 402 : 874,
+        });
+        await ready(page, theme === "light" ? "/?theme=light" : "/");
+        await setStatusDevices(page, count, width < 901);
+        await expect(page.locator(".device-chip")).toHaveCount(count);
+        const boxes = await page
+          .locator("ecowitt-weather-card")
+          .evaluate((host) => {
+            const root = host.shadowRoot!;
+            const title = root
+              .querySelector("header > div:nth-child(2)")!
+              .getBoundingClientRect();
+            const card = root.querySelector("ha-card")!.getBoundingClientRect();
+            const statuses = [
+              ...root.querySelectorAll(".header-devices .device-chip"),
+            ].map((el) => {
+              const r = el.getBoundingClientRect();
+              return {
+                left: r.left,
+                right: r.right,
+                top: r.top,
+                bottom: r.bottom,
+                width: el.clientWidth,
+                scrollWidth: el.scrollWidth,
+              };
+            });
+            return {
+              title: {
+                left: title.left,
+                right: title.right,
+                top: title.top,
+                bottom: title.bottom,
+              },
+              card: { left: card.left, right: card.right },
+              statuses,
+            };
+          });
+        for (const status of boxes.statuses) {
+          expect(status.left).toBeGreaterThanOrEqual(boxes.card.left);
+          expect(status.right).toBeLessThanOrEqual(boxes.card.right);
+          expect(status.scrollWidth).toBeLessThanOrEqual(status.width + 1);
+          const overlaps =
+            boxes.title.left < status.right &&
+            boxes.title.right > status.left &&
+            boxes.title.top < status.bottom &&
+            boxes.title.bottom > status.top;
+          expect(overlaps).toBe(false);
+          if (width < 901)
+            expect(status.top).toBeGreaterThanOrEqual(boxes.title.bottom);
+        }
+        for (let i = 1; i < boxes.statuses.length; i++) {
+          if (width < 901)
+            expect(boxes.statuses[i].top).toBeGreaterThanOrEqual(
+              boxes.statuses[i - 1].bottom + 4,
+            );
+          else {
+            expect(boxes.statuses[i].top).toBeCloseTo(boxes.statuses[0].top, 0);
+            expect(boxes.statuses[i].left).toBeGreaterThan(
+              boxes.statuses[i - 1].right,
+            );
+          }
+        }
+        await noOverflow(page);
+      });
+    }
+
+test("device status layout follows a narrow card inside a desktop viewport", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.locator("main").evaluate((el) => {
+    el.style.width = "402px";
+  });
+  await setStatusDevices(page, 3, true);
+  const boxes = await page.locator(".device-chip").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }),
+  );
+  expect(boxes[1].top).toBeGreaterThan(boxes[0].bottom);
+  expect(boxes[2].top).toBeGreaterThan(boxes[1].bottom);
+  await noOverflow(page);
+});
+
+test("GW3000A and WH90 registry variants select only suggestion filters and preserve assigned sources", async ({
+  page,
+}) => {
+  await ready(page, "/?editor=1");
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const original = win.hass.callWS;
+    win.editor._registryState = "idle";
+    win.editor.hass = {
+      ...win.hass,
+      callWS: async (message: any) => {
+        if (message.type === "config/device_registry/list")
+          return [
+            { id: "demo-ws90", name: "Beispielstation", model: "wh90" },
+            { id: "demo-wh40", name: "Beispielregenmesser", model: "wh40" },
+            { id: "demo-gw3000", name: "Beispielgateway", model: "GW3000A" },
+            { id: "demo-wn31", name: "Beispielkanal", model: "wh31" },
+          ];
+        return original(message);
+      },
+    };
+    await win.editor.updateComplete;
+  });
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await expect(editor.getByLabel("Gerät GW3000", { exact: true })).toHaveValue(
+    "demo-gw3000",
+  );
+  await expect(editor.getByLabel("Gerät WS90", { exact: true })).toHaveValue(
+    "demo-ws90",
+  );
+  await expect(editor.getByLabel("Gerät WN32", { exact: true })).toHaveValue(
+    "",
+  );
+  const before = await page.evaluate(
+    () => (window as DemoWindow).editor._config.entities,
+  );
+  await editor.getByLabel("Gerät GW3000", { exact: true }).selectOption("");
+  expect(
+    await page.evaluate(() => (window as DemoWindow).editor._config.entities),
+  ).toEqual(before);
+  expect(
+    await page.evaluate(() => (window as DemoWindow).lastEditorConfig),
+  ).toBeUndefined();
+});
+
+test("legacy device sources remain readable once even if selected in several old and new fields", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({
+      ...win.demoConfig,
+      entities: {
+        ...win.demoConfig.entities,
+        temperature: "sensor.demo_extra",
+      },
+      extra_entities: ["sensor.demo_extra", "sensor.demo_missing_extra"],
+      diagnostic_entities: ["sensor.demo_extra", "sensor.demo_missing_extra"],
+      device_status: [
+        {
+          device_id: "demo-wn31",
+          role: "WN31",
+          name: "Beispielkanal",
+          extra_entities: ["sensor.demo_extra"],
+        },
+      ],
+    });
+    await win.card.updateComplete;
+  });
+  await page.locator('[data-detail="sensors"]:visible').first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".device-detail")).toContainText("Beispielkanal");
+  await expect(
+    dialog.locator('.sensor-row[data-entity-id="sensor.demo_extra"]'),
+  ).toHaveCount(1);
+  await expect(
+    dialog.locator('.sensor-row[data-entity-id="sensor.demo_missing_extra"]'),
+  ).toHaveCount(1);
+  await expect(
+    dialog.locator('.sensor-row[data-entity-id="sensor.demo_missing_extra"]'),
+  ).toContainText("Nicht verfügbar");
+});
+
+test("native HA media metadata supports expandable folders and images without filename extensions", async ({
+  page,
+}) => {
+  await ready(page, "/?editor=1");
+  await page.evaluate(() => {
+    const win = window as DemoWindow;
+    const original = win.hass.callWS;
+    win.editor.hass = {
+      ...win.hass,
+      callWS: async (message: any) => {
+        if (message.type === "media_source/browse_media")
+          return message.media_content_id.endsWith("/folder")
+            ? {
+                children: [
+                  {
+                    title: "Generisches Bild ohne Dateiendung",
+                    media_class: "image",
+                    media_content_type: "image/svg+xml",
+                    media_content_id:
+                      "media-source://media_source/local/folder/image",
+                  },
+                ],
+              }
+            : {
+                children: [
+                  {
+                    title: "Generischer Ordner",
+                    can_expand: true,
+                    media_content_id:
+                      "media-source://media_source/local/folder",
+                  },
+                ],
+              };
+        return original(message);
+      },
+    };
+  });
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await editor
+    .locator("summary")
+    .filter({ hasText: "Private Bildquelle" })
+    .click();
+  await editor
+    .getByRole("button", { name: "Bild aus Home Assistant Medien auswählen …" })
+    .click();
+  await editor.getByRole("button", { name: "📁 Generischer Ordner" }).click();
+  await editor
+    .getByRole("button", { name: "🖼️ Generisches Bild ohne Dateiendung" })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as DemoWindow).lastEditorConfig?.site_image),
+    )
+    .toBe("media-source://media_source/local/folder/image");
+});
+
+test("six main metrics form three complete rows on iPhone portrait", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  const boxes = await page.locator(".metrics .metric").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, width: r.width };
+    }),
+  );
+  expect(boxes).toHaveLength(6);
+  for (let row = 0; row < 3; row++) {
+    const [left, right] = boxes.slice(row * 2, row * 2 + 2);
+    expect(left.top).toBeCloseTo(right.top, 0);
+    expect(right.left).toBeGreaterThan(left.right);
+    expect(left.width).toBeCloseTo(right.width, 0);
+    if (row > 0) expect(left.top).toBeGreaterThan(boxes[(row - 1) * 2].top);
+  }
+});
+
+test("iPhone touch emulation can tap stacked device statuses and weather details in both orientations", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 3,
+  });
+  try {
+    const page = await context.newPage();
+    for (const viewport of [
+      { width: 402, height: 874 },
+      { width: 874, height: 402 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await ready(page);
+      await setStatusDevices(page, 3);
+      await page.locator(".device-chip").nth(1).tap();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(page.getByRole("dialog")).toContainText("WH40");
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Schließen" })
+        .tap();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      for (const detail of ["wind", "rain", "sun"]) {
+        await page.locator(`[data-detail="${detail}"]:visible`).first().tap();
+        await expect(page.getByRole("dialog")).toBeVisible();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Schließen" })
+          .tap();
+        await expect(page.getByRole("dialog")).not.toBeVisible();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("320px metrics contain long German labels with wider fallback fonts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 874 });
+  await ready(page);
+  for (const font of ["monospace", "Arial"]) {
+    await page.locator("ecowitt-weather-card").evaluate((el, font) => {
+      (el as HTMLElement).style.setProperty(
+        "--paper-font-body1_-_font-family",
+        font,
+      );
+    }, font);
+    await noOverflow(page);
+    const contents = await page.locator(".metric").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const metric = node.getBoundingClientRect();
+        const content = node.querySelector("div")!.getBoundingClientRect();
+        const label = node.querySelector(".label")!.getBoundingClientRect();
+        return {
+          left: metric.left,
+          right: metric.right,
+          contentLeft: content.left,
+          contentRight: content.right,
+          labelLeft: label.left,
+          labelRight: label.right,
+        };
+      }),
+    );
+    for (const content of contents) {
+      expect(content.contentLeft).toBeGreaterThanOrEqual(content.left);
+      expect(content.contentRight).toBeLessThanOrEqual(content.right);
+      expect(content.labelLeft).toBeGreaterThanOrEqual(content.left);
+      expect(content.labelRight).toBeLessThanOrEqual(content.right);
+    }
+  }
 });

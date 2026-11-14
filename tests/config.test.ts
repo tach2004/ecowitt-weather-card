@@ -107,3 +107,72 @@ test("config normalization preserves grid placement and does not mutate input YA
   result.entities!.temperature = "sensor.changed";
   assert.equal(input.entities.temperature, "sensor.fixture");
 });
+
+test("device supplemental measurements normalize without dropping v0.1.2 legacy selections", () => {
+  const input = {
+    entities: {
+      pressure: "sensor.fixture_pressure",
+      wind_speed_avg: "sensor.fixture_mean_speed",
+    },
+    extra_entities: ["sensor.fixture_legacy_extra", "sensor.fixture_missing"],
+    diagnostic_entities: [
+      "sensor.fixture_legacy_status",
+      "sensor.fixture_missing",
+    ],
+    device_status: [
+      {
+        device_id: " fixture-device ",
+        role: "GW3000",
+        show_on_main: true,
+        battery: "sensor.fixture_battery",
+        signal: "sensor.fixture_rssi",
+        extra_entities: [
+          " sensor.fixture_temperature ",
+          "sensor.fixture_temperature",
+          null,
+          {},
+          "sensor.fixture_missing",
+        ],
+      },
+    ],
+  };
+  const before = structuredClone(input);
+  const normalized = normalizeConfig(input);
+  assert.deepEqual(normalized.extra_entities, input.extra_entities);
+  assert.deepEqual(normalized.diagnostic_entities, input.diagnostic_entities);
+  assert.deepEqual(normalized.entities, input.entities);
+  assert.deepEqual(normalized.device_status?.[0]?.extra_entities, [
+    "sensor.fixture_temperature",
+    "sensor.fixture_missing",
+  ]);
+  assert.equal(
+    normalized.device_status?.[0]?.battery,
+    "sensor.fixture_battery",
+  );
+  assert.equal(normalized.device_status?.[0]?.device_id, "fixture-device");
+  assert.deepEqual(input, before);
+  assert.deepEqual(normalizeConfig(normalized), normalized);
+});
+
+test("malformed per-device supplemental fields cannot crash the editor or erase legacy sources", () => {
+  const config = normalizeConfig({
+    extra_entities: ["sensor.fixture_kept"],
+    diagnostic_entities: ["sensor.fixture_battery"],
+    device_status: [
+      {
+        device_id: "fixture",
+        role: "WN31",
+        extra_entities: { entity_id: "sensor.fixture_untyped" },
+      },
+    ],
+  });
+  assert.equal(config.device_status?.[0]?.extra_entities, undefined);
+  assert.deepEqual(config.extra_entities, ["sensor.fixture_kept"]);
+  assert.deepEqual(config.diagnostic_entities, ["sensor.fixture_battery"]);
+});
+
+test("untyped theme values are rejected without coercing YAML objects", () => {
+  for (const theme_mode of [{ toString: null }, [], true, 42])
+    assert.equal(normalizeConfig({ theme_mode }).theme_mode, "auto");
+  assert.equal(normalizeConfig({ theme_mode: "light" }).theme_mode, "light");
+});

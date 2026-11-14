@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   directionLabel,
+  entityFreshness,
+  isUnitValid,
+  numericState,
   flowBearing,
   getReading,
   getWetStatus,
@@ -34,14 +37,23 @@ function reading(
   unit: string,
   config: Partial<CardConfig> = {},
 ) {
+  const id = key === "rain_wet" ? "binary_sensor.fixture" : "sensor.fixture";
   const hass: HomeAssistant = {
-    states: { "sensor.fixture": entity(state, unit) },
+    states: {
+      [id]: entity(state, unit, {
+        entity_id: id,
+        attributes: {
+          unit_of_measurement: unit,
+          ...(key === "rain_wet" ? { device_class: "moisture" } : {}),
+        },
+      }),
+    },
   };
   return getReading(
     hass,
     {
       type: "custom:ecowitt-weather-card",
-      entities: { [key]: "sensor.fixture" },
+      entities: { [key]: id },
       ...config,
     },
     key,
@@ -81,11 +93,16 @@ test("north crossings animate along a short accumulated rotation in either direc
   assert.equal(normalizeDegrees(720), 0);
   assert.equal(directionLabel(NaN), "—");
 });
+const wetEntity = (state: string): HassEntity =>
+  entity(state, "", {
+    entity_id: "binary_sensor.fixture",
+    attributes: { device_class: "moisture" },
+  });
 test("only binary WS90 on/off establishes NASS/TROCKEN; unavailable remains neutral", () => {
-  assert.equal(getWetStatus(entity("on")), "wet");
-  assert.equal(getWetStatus(entity("off")), "dry");
+  assert.equal(getWetStatus(wetEntity("on")), "wet");
+  assert.equal(getWetStatus(wetEntity("off")), "dry");
   for (const state of ["unknown", "unavailable", "", "0", "false", "wet"])
-    assert.equal(getWetStatus(entity(state)), "unavailable");
+    assert.equal(getWetStatus(wetEntity(state)), "unavailable");
   assert.equal(getWetStatus(), "unavailable");
   assert.equal(reading("rain_wet", "on", "").text, "NASS");
   assert.equal(reading("rain_wet", "off", "").text, "TROCKEN");
@@ -95,7 +112,7 @@ test("WH40 accumulated rain does not affect independent dry piezo state", () => 
   const hass: HomeAssistant = {
     states: {
       "sensor.fixture": entity("3.2", "mm"),
-      "binary_sensor.fixture": entity("off"),
+      "binary_sensor.fixture": wetEntity("off"),
     },
   };
   const config: CardConfig = {
@@ -226,18 +243,165 @@ test("direction availability is independent from calm wind speed; missing timest
   );
   const stalePiezo: HomeAssistant = {
     states: {
-      "sensor.fixture": entity("on", "", {
+      "binary_sensor.fixture": {
+        ...wetEntity("on"),
         last_updated: "2026-11-13T18:00:00Z",
-      }),
+      },
     },
   };
   const piezoConfig: CardConfig = {
     type: "custom:ecowitt-weather-card",
-    entities: { rain_wet: "sensor.fixture" },
+    entities: { rain_wet: "binary_sensor.fixture" },
     stale_after_minutes: 60,
   };
   assert.equal(
     getReading(stalePiezo, piezoConfig, "rain_wet", now).status,
     "stale",
   );
+});
+
+test("Ecowitt UV Index aliases remain dimensionless and preserve the actual source unit", () => {
+  for (const unit of [
+    "UV Index",
+    "UV index",
+    "uv INDEX",
+    "UVI",
+    "UV",
+    "index",
+    "",
+  ]) {
+    assert.equal(isUnitValid("uv", unit), true, unit);
+    const result = reading("uv", "2.1", unit);
+    assert.equal(result.status, "ok", unit);
+    assert.equal(result.value, 2.1);
+    assert.equal(result.unit, unit);
+  }
+  for (const unit of [
+    "W/m²",
+    "kW/m²",
+    "lx",
+    "%",
+    "mW/cm²",
+    "UV radiation",
+    "°C",
+  ])
+    assert.equal(reading("uv", "2.1", unit).status, "invalid", unit);
+  for (const value of ["unknown", "unavailable"])
+    assert.equal(reading("uv", value, "UV Index").status, "unavailable");
+  for (const value of ["-0.1", "NaN", "Infinity", "0x10", "0b10"])
+    assert.equal(reading("uv", value, "UV Index").status, "invalid", value);
+  assert.equal(reading("uv", "0", "UV Index").value, 0);
+});
+test("numeric HA states allow decimal scientific notation but not JavaScript literals", () => {
+  for (const [state, value] of [
+    ["1.2e3", 1200],
+    ["-.2", -0.2],
+    [" +8. ", 8],
+  ] as const)
+    assert.equal(numericState(state), value);
+  for (const state of [
+    "0x10",
+    "0o10",
+    "0b10",
+    "1_000",
+    "Infinity",
+    " ",
+    "true",
+  ])
+    assert.equal(numericState(state), null, state);
+});
+test("Piezo wetness rejects unrelated domains and incompatible binary classes", () => {
+  assert.equal(getWetStatus(entity("on")), "unavailable");
+  for (const dc of ["connectivity", "battery", "problem"])
+    assert.equal(
+      getWetStatus({ ...wetEntity("on"), attributes: { device_class: dc } }),
+      "unavailable",
+      dc,
+    );
+  assert.equal(getWetStatus({ ...wetEntity("on"), attributes: {} }), "wet");
+});
+test("last_reported keeps unchanged HA states current; old, missing and future telemetry stays explicit", () => {
+  const current = entity("8", "km/h", {
+    last_updated: "2026-11-13T18:00:00Z",
+    last_reported: "2026-11-13T19:59:00Z",
+  });
+  assert.equal(
+    entityFreshness(current, { now, staleAfterMinutes: 5 }).status,
+    "current",
+  );
+  assert.equal(
+    entityFreshness(
+      { ...current, last_reported: undefined },
+      { now, staleAfterMinutes: 5 },
+    ).status,
+    "stale",
+  );
+  assert.equal(
+    entityFreshness(
+      { ...current, last_reported: "invalid" },
+      { now, staleAfterMinutes: 5 },
+    ).status,
+    "stale",
+  );
+  assert.equal(
+    entityFreshness(
+      { ...current, last_updated: undefined, last_reported: undefined },
+      { now },
+    ).status,
+    "unknown",
+  );
+  const future = { ...current, last_reported: "2026-11-14T20:00:00Z" };
+  assert.equal(entityFreshness(future, { now }).status, "invalid");
+  const config: CardConfig = {
+    type: "custom:ecowitt-weather-card",
+    entities: { wind_speed: "sensor.fixture" },
+    stale_after_minutes: 5,
+  };
+  assert.equal(
+    getReading(
+      { states: { "sensor.fixture": current } },
+      config,
+      "wind_speed",
+      now,
+    ).status,
+    "ok",
+  );
+  assert.equal(
+    getReading(
+      { states: { "sensor.fixture": future } },
+      config,
+      "wind_speed",
+      now,
+    ).value,
+    null,
+  );
+  const missingTime = {
+    ...current,
+    last_updated: undefined,
+    last_reported: undefined,
+  };
+  assert.equal(
+    getReading(
+      { states: { "sensor.fixture": missingTime } },
+      config,
+      "wind_speed",
+      now,
+    ).status,
+    "stale",
+  );
+});
+test("new PR4 illuminance and VPD values keep units and reject negative or incompatible data", () => {
+  for (const [key, unit] of [
+    ["solar_lux", "lx"],
+    ["solar_lux", "lux"],
+    ["solar_lux", "klx"],
+    ["vpd", "kPa"],
+    ["vpd", "hPa"],
+    ["vpd", "Pa"],
+  ] as const) {
+    assert.equal(reading(key, "1.2", unit).status, "ok");
+    assert.equal(reading(key, "-1", unit).status, "invalid");
+  }
+  assert.equal(reading("solar_lux", "500", "W/m²").status, "invalid");
+  assert.equal(reading("vpd", "2", "%").status, "invalid");
 });

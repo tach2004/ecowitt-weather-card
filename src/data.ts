@@ -52,6 +52,13 @@ export function directionLabel(value: number): string {
 
 /** Only HA's binary on/off states establish wet/dry. Amount or rate is unrelated. */
 export function getWetStatus(entity?: HassEntity): WetStatus {
+  if (
+    typeof entity?.entity_id !== "string" ||
+    !entity.entity_id.startsWith("binary_sensor.") ||
+    (entity.attributes.device_class &&
+      entity.attributes.device_class !== "moisture")
+  )
+    return "unavailable";
   if (entity?.state === "on") return "wet";
   if (entity?.state === "off") return "dry";
   return "unavailable";
@@ -83,8 +90,12 @@ const precipitationRate = new Set([
 const solar = new Set(["W/m²", "W/m2", "kW/m²", "kW/m2"]);
 const illuminance = new Set(["lx", "lux", "klx"]);
 const vpdUnits = new Set(["kPa", "hPa", "Pa"]);
+// Ecowitt Local emits "UV Index". UVI is dimensionless; case changes do not
+// change that meaning, while irradiance/illuminance units remain incompatible.
+const uvUnits = new Set(["", "uv", "uvi", "uv index", "index"]);
 
 export function isUnitValid(key: MetricKey, unit: string): boolean {
+  if (typeof unit !== "string") return false;
   if (key === "rain_wet") return true;
   if (key === "solar_lux") return illuminance.has(unit);
   if (key === "vpd") return vpdUnits.has(unit);
@@ -103,16 +114,18 @@ export function isUnitValid(key: MetricKey, unit: string): boolean {
     return temperature.has(unit);
   if (key === "humidity") return unit === "%";
   if (key === "pressure") return pressure.has(unit);
-  if (key === "uv")
-    return ["", "UV", "UVI", "UV index", "index"].includes(unit);
+  if (key === "uv") return uvUnits.has(unit.trim().toLowerCase());
   if (key === "solar") return solar.has(unit);
   if (key === "rain_rate") return precipitationRate.has(unit);
   return precipitation.has(unit);
 }
 
 export function numericState(state: string): number | null {
-  if (typeof state !== "string" || state.trim() === "") return null;
-  const value = Number(state);
+  if (typeof state !== "string") return null;
+  const text = state.trim();
+  // HA numeric states are decimal numbers, not JavaScript hex/binary literals.
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+  const value = Number(text);
   return Number.isFinite(value) ? value : null;
 }
 
@@ -157,7 +170,8 @@ export function getReading(
 ): Reading {
   const id = config.entities?.[key];
   const entity = id ? hass?.states[id] : undefined;
-  const unit = entity?.attributes.unit_of_measurement ?? "";
+  const rawUnit = entity?.attributes.unit_of_measurement;
+  const unit = typeof rawUnit === "string" ? rawUnit : "";
   if (!entity)
     return {
       value: null,
@@ -177,7 +191,7 @@ export function getReading(
         value: null,
         text: "UNAVAILABLE",
         status: "unavailable",
-        note: "WS90-Feuchtigkeitsstatus ist nicht verfügbar oder nicht on/off",
+        note: "WS90-Feuchtigkeitsquelle prüfen: binärer Feuchtesensor mit on/off erforderlich",
       };
     return withAge(
       {
@@ -208,7 +222,10 @@ export function getReading(
       status: "invalid",
       note: "Kein gültiger Messwert für diese Messgröße",
     };
-  if (!isUnitValid(key, unit))
+  if (
+    (rawUnit != null && typeof rawUnit !== "string") ||
+    !isUnitValid(key, unit)
+  )
     return {
       ...base,
       value: null,
@@ -228,19 +245,81 @@ export function getReading(
   );
 }
 
-function withAge(reading: Reading, config: CardConfig, now: number): Reading {
-  const minutes = config.stale_after_minutes ?? 0;
-  const updated = Date.parse(reading.entity?.last_updated ?? "");
+export interface FreshnessOptions {
+  staleAfterMinutes?: number;
+  now?: number;
+}
+export interface EntityFreshness {
+  status: "current" | "stale" | "invalid" | "unknown";
+  timestamp?: number;
+  note?: string;
+}
+
+/** Last reported refresh can be newer than the last *changed* HA state.
+ * Missing timestamps never establish freshness. One minute of clock skew is
+ * tolerated; a further future timestamp is invalid even with aging disabled.
+ */
+export function entityFreshness(
+  entity: HassEntity | undefined,
+  options: FreshnessOptions = {},
+): EntityFreshness {
+  const now = Number.isFinite(options.now) ? options.now! : Date.now();
+  const timestamps = [entity?.last_reported, entity?.last_updated].flatMap(
+    (value) => {
+      if (typeof value !== "string") return [];
+      const timestamp = Date.parse(value);
+      return Number.isFinite(timestamp) ? [timestamp] : [];
+    },
+  );
+  if (!timestamps.length)
+    return {
+      status: "unknown",
+      note: "Kein gültiger HA-Aktualisierungszeitpunkt verfügbar",
+    };
+  const timestamp = Math.max(...timestamps);
+  if (timestamp > now + 60_000)
+    return {
+      status: "invalid",
+      timestamp,
+      note: "HA-Aktualisierungszeitpunkt liegt in der Zukunft; Uhrzeit prüfen",
+    };
+  const minutes = options.staleAfterMinutes;
   if (
+    typeof minutes === "number" &&
+    Number.isFinite(minutes) &&
     minutes > 0 &&
-    Number.isFinite(updated) &&
-    now - updated > minutes * 60_000
+    now - timestamp > minutes * 60_000
+  )
+    return {
+      status: "stale",
+      timestamp,
+      note: `Seit mehr als ${minutes} Minuten nicht aktualisiert`,
+    };
+  return { status: "current", timestamp };
+}
+
+function withAge(reading: Reading, config: CardConfig, now: number): Reading {
+  const age = entityFreshness(reading.entity, {
+    staleAfterMinutes: config.stale_after_minutes,
+    now,
+  });
+  if (age.status === "invalid")
+    return {
+      ...reading,
+      value: null,
+      text: "—",
+      status: "invalid",
+      note: age.note,
+    };
+  if (
+    age.status === "stale" ||
+    (age.status === "unknown" && (config.stale_after_minutes ?? 0) > 0)
   ) {
     return {
       ...reading,
       status: "stale",
-      note: `Seit mehr als ${minutes} Minuten nicht aktualisiert`,
+      note: age.note,
     };
   }
-  return reading;
+  return age.status === "unknown" ? { ...reading, note: age.note } : reading;
 }

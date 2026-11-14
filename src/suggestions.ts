@@ -24,14 +24,30 @@ export const DEVICE_ROLES: DeviceRole[] = [
   "GW3000",
 ];
 
+/** Match registry model aliases first; a user label must not override a known model. */
 export function roleForDevice(device: RegistryDevice): DeviceRole | undefined {
-  const normalized = (" " + [device.model, device.name, device.name_by_user]
-    .filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ") + " ");
-  for (const role of DEVICE_ROLES) {
-    if (normalized.includes(" " + role.toLowerCase() + " ") ||
-      (role === "WN31" && normalized.includes(" wh31 "))) return role;
-  }
-  return undefined;
+  const rolesIn = (text: string): DeviceRole[] => {
+    const tokens = text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+    return DEVICE_ROLES.filter((role) =>
+      tokens.some((token) => {
+        if (role === "WS90") return token === "ws90" || token === "wh90";
+        if (role === "WN31") return token === "wn31" || token === "wh31";
+        if (role === "WN32") return token === "wn32" || token === "wh32";
+        if (role === "GW3000") return /^gw3000[a-z]?$/.test(token);
+        return token === "wh40";
+      }),
+    );
+  };
+  const modelRoles = rolesIn(device.model || "");
+  if (modelRoles.length)
+    return modelRoles.length === 1 ? modelRoles[0] : undefined;
+  const nameRoles = rolesIn(
+    [device.name, device.name_by_user].filter(Boolean).join(" "),
+  );
+  return nameRoles.length === 1 ? nameRoles[0] : undefined;
 }
 export function deviceLabel(device: RegistryDevice): string {
   return [device.name_by_user || device.name || device.id, device.model]
@@ -43,13 +59,7 @@ export function uniqueRoleDevices(
 ): Partial<Record<DeviceRole, string>> {
   const result: Partial<Record<DeviceRole, string>> = {};
   for (const role of DEVICE_ROLES) {
-    const pattern =
-      role === "WN31" ? /\b(?:wn31|wh31)\b/i : new RegExp(`\\b${role}\\b`, "i");
-    const matches = devices.filter((device) =>
-      pattern.test(
-        `${device.name_by_user || ""} ${device.name || ""} ${device.model || ""}`,
-      ),
-    );
+    const matches = devices.filter((device) => roleForDevice(device) === role);
     if (matches.length === 1) result[role] = matches[0].id;
   }
   return result;
@@ -244,11 +254,23 @@ function matchesMetric(
     );
   if (key === "solar_lux")
     return (
-      (dc === "illuminance" || /(?:lux|beleuchtungsstärke|illuminance|lichtstärke)/.test(name)) &&
-      !/(?:max|minimum|daily|average)/.test(name)
+      (dc === "illuminance" ||
+        /(?:lux|beleuchtungsstärke|illuminance|lichtstärke)/.test(name)) &&
+      !maximum &&
+      !minimum &&
+      !average &&
+      !daily &&
+      !longerPeriod
     );
   if (key === "vpd")
-    return /(?:vpd|dampfdruckdefizit|vapor.pressure.deficit)/.test(name);
+    return (
+      /(?:vpd|dampfdruckdefizit|vapor.pressure.deficit)/.test(name) &&
+      !maximum &&
+      !minimum &&
+      !average &&
+      !daily &&
+      !longerPeriod
+    );
   if (key === "solar")
     return (
       (dc === "irradiance" || /(?:solar|strahlung|irradiance)/.test(name)) &&

@@ -22,7 +22,7 @@ const definitions={
  feels_like:[18.1,'°C','Gefühlte Temperatur','temperature'],dew_point:[14.4,'°C','Taupunkt','temperature'],temperature_min:[12.7,'°C','Tagesminimum','temperature'],temperature_max:[20.3,'°C','Tagesmaximum','temperature'],
  wind_speed:[8,'km/h','Windgeschwindigkeit WS90','wind_speed'],wind_gust:[12.4,'km/h','Windböe WS90','wind_speed'],wind_direction:[292,'°','Windrichtung WS90'],wind_direction_avg:[315,'°','Windrichtung 10 min'],wind_speed_avg:[6.1,'km/h','Windgeschwindigkeit 10 min','wind_speed'],wind_gust_max:[18.6,'km/h','Tagesmaximalböe','wind_speed'],
  rain_today:[3.2,'mm','Regen heute WH40','precipitation'],rain_rate:[0.8,'mm/h','Regenrate WH40','precipitation_intensity'],rain_wet:['on',undefined,'Piezo Feuchtigkeitsstatus WS90','moisture'],rain_24h:[4.7,'mm','Regen letzte 24h WH40','precipitation'],rain_week:[12.8,'mm','Regen Woche WH40','precipitation'],rain_month:[37.1,'mm','Regen Monat WH40','precipitation'],rain_year:[582.4,'mm','Regen Jahr WH40','precipitation'],rain_event:[3.2,'mm','Regenereignis WH40','precipitation'],
- pressure:[1012,'hPa','Relativer Luftdruck GW3000','atmospheric_pressure'],uv:[2.1,'','UV-Index WS90'],solar:[287,'W/m²','Solarstrahlung WS90','irradiance'],
+ pressure:[1012,'hPa','Relativer Luftdruck GW3000','atmospheric_pressure'],uv:[2.1,'UV Index','UV-Index WS90'],solar:[287,'W/m²','Solarstrahlung WS90','irradiance'],solar_lux:[25000,'lx','Beleuchtungsstärke WS90','illuminance'],vpd:[0.8,'kPa','Dampfdruckdefizit WS90'],
  extra:[21.4,'°C','Beispiel Zusatzkanal WN31','temperature'],battery:[86,'%','Beispiel Batterie WH40','battery']
 };
 const idFor=key=>(key==='rain_wet'?'binary_sensor.':'sensor.')+'demo_'+key;

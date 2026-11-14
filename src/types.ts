@@ -8,6 +8,8 @@ export interface HassEntity {
   };
   last_changed?: string;
   last_updated?: string;
+  /** Optional HA telemetry timestamp; unchanged values can still be freshly reported. */
+  last_reported?: string;
 }
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
@@ -51,6 +53,8 @@ export interface DeviceStatusConfig {
   battery?: string;
   signal?: string;
   connection?: string;
+  /** Optional measurements displayed with this device in sensor details. */
+  extra_entities?: string[];
 }
 export interface CardConfig {
   type: string;

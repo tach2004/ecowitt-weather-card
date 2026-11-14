@@ -7,6 +7,7 @@ import {
   unwrapDegrees,
   directionLabel,
   flowBearing,
+  entityFreshness,
   type Reading,
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
@@ -93,12 +94,14 @@ const paths: Record<string, string> = {
   pressure:
     "M3 19a10 10 0 1 1 18 0 M12 13l4-5 M6 13h1 M12 5v1 M18 13h-1 M8 8l1 1",
   sun: "M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1 1 M18 18l1 1 M5 19l1-1 M18 6l1-1 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0",
+  signal: "M4 20v-3 M9 20v-7 M14 20V9 M19 20V4",
+  unknown: "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01",
   station:
     "M12 12v9 M7 21h10 M8 8a6 6 0 0 0 0 8 M16 8a6 6 0 0 1 0 8 M5 5a10 10 0 0 0 0 14 M19 5a10 10 0 0 1 0 14 M11 10h2v2h-2z",
   sensors: "M4 6h16 M4 12h16 M4 18h16 M8 4v4 M16 10v4 M10 16v4",
 };
 const icon = (name: string) =>
-  svg`<svg class="icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${paths[name] ?? paths.sun}/></svg>`;
+  svg`<svg class="icon" data-icon=${name} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${paths[name] ?? paths.unknown}/></svg>`;
 
 export class EcowittWeatherCard extends LitElement {
   static properties = {
@@ -136,7 +139,15 @@ export class EcowittWeatherCard extends LitElement {
     this._config = normalizeConfig(config);
     this._rotation = undefined;
     this._averageRotation = undefined;
-    this._imageSource = "";
+    const source =
+      this._config.site_image ?? this._config.background_image ?? "";
+    if (source !== this._imageSource) {
+      // A cleared/replaced source must also invalidate an in-flight media response.
+      this._imageRequest++;
+      this._imageUrl = "";
+      this._imageError = "";
+      this._imageNeedsHass = false;
+    }
     this._historyRequest++;
     this._detail = undefined;
     this._dialog()?.close();
@@ -154,16 +165,9 @@ export class EcowittWeatherCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this._ageTimer);
-    this._historyRequest++;
+    this._closeDetail();
     this._imageRequest++;
     this._imageSource = "";
-    this._dialog()?.close();
-  }
-  /** A dialog must be opened after Lit commits its DOM, especially on short mobile landscapes. */
-  protected updated(_changes: PropertyValues) {
-    const dialog = this._dialog();
-    if (this._detail && dialog?.isConnected && !dialog.open)
-      dialog.showModal();
   }
   protected willUpdate(_changes: PropertyValues) {
     const current = this._reading("wind_direction").value;
@@ -364,10 +368,14 @@ export class EcowittWeatherCard extends LitElement {
       this._reading("solar"),
       this._reading("rain_rate"),
       this._reading("rain_wet"),
+      { staleAfterMinutes: this._config.stale_after_minutes },
     );
   }
   private _batteryGlyph(percent?: number) {
-    const width = percent === undefined ? 0 : Math.min(14, Math.max(0, 14 * percent / 100));
+    const width =
+      percent === undefined
+        ? 0
+        : Math.min(14, Math.max(0, (14 * percent) / 100));
     return svg`<svg viewBox="0 0 24 16" class="battery-glyph" aria-hidden="true">
       <rect x="1" y="2" width="19" height="12" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.5" />
       <rect x="21" y="5" width="2" height="6" rx="1" fill="currentColor" />
@@ -375,49 +383,90 @@ export class EcowittWeatherCard extends LitElement {
     </svg>`;
   }
   private _deviceChip(device: DeviceStatusConfig, compact = true) {
-    const indicator = deviceIndicators(this.hass, device);
-    return html`<button type="button" class="device-chip ${compact ? "compact" : "full"}"
-      title=${"Batterie: " + indicator.battery.label + ", Signal: " +
-        indicator.signal.label + ", Verbindung: " + indicator.connection.label}
-      @click=${() => this._openDetail("sensors")}>
-      <strong>${device.role}</strong>
-      <span class="status-battery ${indicator.battery.percent !== undefined && indicator.battery.percent < 20 ? "low" : ""}">
+    const indicator = deviceIndicators(this.hass, device, {
+      staleAfterMinutes: this._config.stale_after_minutes,
+    });
+    return html`<button
+      type="button"
+      class="device-chip ${compact ? "compact" : "full"}"
+      title=${"Batterie: " +
+      indicator.battery.label +
+      ", Signal: " +
+      indicator.signal.label +
+      ", Verbindung: " +
+      indicator.connection.label}
+      @click=${() => this._openDetail("sensors")}
+    >
+      <strong title=${device.name || device.role}
+        >${device.name || device.role}</strong
+      >
+      <span
+        title=${indicator.battery.detail}
+        class="status-battery ${indicator.battery.percent !== undefined &&
+        indicator.battery.percent < 20
+          ? "low"
+          : ""}"
+      >
         ${this._batteryGlyph(indicator.battery.percent)}
         ${indicator.battery.label}
       </span>
-      <span class="status-signal">${icon("signal")}${indicator.signal.label}</span>
-      <span class="status-connection ${indicator.connection.state}">
+      <span title=${indicator.signal.detail} class="status-signal"
+        >${icon("signal")}${indicator.signal.label}</span
+      >
+      <span
+        title=${indicator.connection.detail}
+        class="status-connection ${indicator.connection.state}"
+      >
         <i aria-hidden="true"></i>${indicator.connection.label}
       </span>
     </button>`;
   }
   private _headerDevices() {
-    const selected = (this._config.device_status || []).filter((device) => device.show_on_main);
+    const selected = (this._config.device_status || []).filter(
+      (device) => device.show_on_main,
+    );
     return html`<div class="header-devices" aria-label="Gerätestatus">
       ${selected.length
         ? selected.map((device) => this._deviceChip(device))
-        : html`<button type="button" class="device-placeholder"
-            @click=${() => this._openDetail("sensors")} title="WS90-Gerätestatus im Karteneditor zuordnen">
+        : html`<button
+            type="button"
+            class="device-placeholder"
+            @click=${() => this._openDetail("sensors")}
+            title="WS90-Gerätestatus im Karteneditor zuordnen"
+          >
             WS90 · Status zuordnen
           </button>`}
     </div>`;
   }
   private _sky() {
     const sky = this._observation();
-    if (sky.kind === "unknown") return nothing;
     const animated = this._config.weather_animation !== false;
-    return html`<div class="sky-banner" role="status" title=${sky.note}>
-      <div class="sky-art ${sky.kind} ${animated ? "animated" : ""}" aria-hidden="true">
+    return html`<div
+      class="sky-banner"
+      data-weather=${sky.kind}
+      role="status"
+      title=${sky.note}
+    >
+      <div
+        class="sky-art ${sky.kind} ${animated ? "animated" : ""}"
+        aria-hidden="true"
+      >
         ${sky.kind === "sunny" || sky.kind === "partlycloudy"
-          ? html`<i class="sun-disc"></i>` : nothing}
+          ? html`<i class="sun-disc"></i>`
+          : nothing}
         ${sky.kind === "night" ? html`<i class="moon-disc"></i>` : nothing}
-        ${["cloudy","partlycloudy","rain"].includes(sky.kind)
-          ? html`<i class="cloud-one"></i><i class="cloud-two"></i>` : nothing}
+        ${["cloudy", "partlycloudy", "rain"].includes(sky.kind)
+          ? html`<i class="cloud-one"></i><i class="cloud-two"></i>`
+          : nothing}
         ${sky.kind === "rain" ? html`<i class="sky-drop"></i>` : nothing}
-        ${sky.kind === "wet" ? html`<i class="wet-dot"></i>` : nothing}
+        ${sky.kind === "unknown" ? icon("unknown") : nothing}
       </div>
       <span>${sky.label}</span>
-      ${sky.estimated ? html`<small>Lokale Schätzung · WS90 + Sonnenstand</small>` : nothing}
+      <small
+        >${sky.estimated
+          ? "Lokale Schätzung · WS90 + Sonnenstand"
+          : sky.note}</small
+      >
     </div>`;
   }
   private _setup() {
@@ -507,12 +556,20 @@ export class EcowittWeatherCard extends LitElement {
             : nothing}
           <circle class="target" cx=${targetX} cy=${targetY} r="1" />
         </svg>
-        <svg class="degree-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <svg class="degree-ring" viewBox="-12 -12 124 124" aria-hidden="true">
           ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
             const theta = (bearing * Math.PI) / 180;
-            const x = 50 + Math.sin(theta) * 42;
-            const y = 50 - Math.cos(theta) * 42;
-            return svg`<text x=${x} y=${y} text-anchor="middle" dominant-baseline="middle">${bearing}°</text>`;
+            const cardinalPositions: Record<number, [number, number]> = {
+              0: [62, -5],
+              90: [105, 62],
+              180: [38, 105],
+              270: [-5, 38],
+            };
+            const [x, y] = cardinalPositions[bearing] ?? [
+              50 + Math.sin(theta) * 58,
+              50 - Math.cos(theta) * 58,
+            ];
+            return svg`<text data-degrees=${bearing} x=${x} y=${y} text-anchor="middle" dominant-baseline="middle">${bearing}°</text>`;
           })}
         </svg>
         <span class="cardinal north">N</span><span class="cardinal east">O</span
@@ -596,10 +653,26 @@ export class EcowittWeatherCard extends LitElement {
       aria-label="Regendetails öffnen"
       @click=${() => this._openDetail("rain")}
     >
-      ${["sunny", "partlycloudy"].includes(sky.kind) ? html`<span class="rain-sun-decoration ${animated ? "animated" : ""}" aria-hidden="true"></span>` : nothing}
-      ${raining ? html`<span class="rain-atmosphere ${animated ? "animated" : ""}" aria-hidden="true">
-        ${Array.from({length: 14}, (_, i) => html`<i style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}></i>`)}
-      </span>` : nothing}
+      ${["sunny", "partlycloudy"].includes(sky.kind)
+        ? html`<span
+            class="rain-sun-decoration ${animated ? "animated" : ""}"
+            aria-hidden="true"
+          ></span>`
+        : nothing}
+      ${raining
+        ? html`<span
+            class="rain-atmosphere ${animated ? "animated" : ""}"
+            aria-hidden="true"
+          >
+            ${Array.from(
+              { length: 14 },
+              (_, i) =>
+                html`<i
+                  style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}
+                ></i>`,
+            )}
+          </span>`
+        : nothing}
       <div class="panel-heading">
         ${icon("rain")}
         <h2>Regen</h2>
@@ -607,7 +680,9 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="duo">
         <div data-key="rain_today">
-          <span class="label">Heute · Kalendertag</span>${this._value("rain_today")}
+          <span class="label">Heute · Kalendertag</span>${this._value(
+            "rain_today",
+          )}
         </div>
         <div data-key="rain_rate">
           <span class="label">Regenrate</span>${this._value("rain_rate")}
@@ -615,10 +690,13 @@ export class EcowittWeatherCard extends LitElement {
       </div>
       <div class="wet-line" data-key="rain_wet">
         ${this._wetBadge()}<span class="wet-description"
-          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span>
+          >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span
+        >
       </div>
       ${this._reading("rain_wet").status === "stale"
-        ? html`<span class="status-note stale">Feuchtigkeitsstatus veraltet</span>`
+        ? html`<span class="status-note stale"
+            >Feuchtigkeitsstatus veraltet</span
+          >`
         : nothing}
     </button>`;
   }
@@ -654,8 +732,15 @@ export class EcowittWeatherCard extends LitElement {
     this._loading = detail !== "sensors";
     const request = ++this._historyRequest;
     await this.updateComplete;
+    if (
+      request !== this._historyRequest ||
+      this._detail !== detail ||
+      !this.isConnected
+    )
+      return;
     const dialog = this._dialog();
-    if (dialog && !dialog.open) dialog.showModal();
+    if (!dialog?.isConnected) return;
+    if (!dialog.open) dialog.showModal();
     if (detail === "sensors") return;
     const keys = graphKeys[detail];
     const ids = keys.flatMap((key) =>
@@ -779,7 +864,8 @@ export class EcowittWeatherCard extends LitElement {
     const r = this._reading(key);
     const id = this._config.entities?.[key];
     return html`<div class="detail-reading" data-key=${key}>
-      <span class="label">${METRICS.find((m) => m.key === key)!.label}</span
+      <span class="label"
+        >${METRICS.find((m) => m.key === key)?.label ?? key}</span
       >${this._value(key)}${r.note
         ? html`<span class="status-note">${r.note}</span>`
         : nothing}${id
@@ -790,61 +876,99 @@ export class EcowittWeatherCard extends LitElement {
     </div>`;
   }
   private _sensorDetails() {
-    const extras = [...new Set(this._config.extra_entities ?? [])];
-    const diagnostic = [...new Set(this._config.diagnostic_entities ?? [])];
+    // One raw source row per entity, even when an older config lists it again.
+    const seen = new Set<string>();
+    const take = (ids: string[]) =>
+      ids.filter((id) => {
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+    const devices = this._config.device_status ?? [];
+    const deviceDetails = devices.map((device) =>
+      this._deviceDetail(device, take),
+    );
+    const extras = take(this._config.extra_entities ?? []);
+    const diagnostic = take(this._config.diagnostic_entities ?? []);
+    const weatherSources = Object.entries(this._config.entities ?? {}).filter(
+      ([, id]) => id && take([id]).length,
+    );
     return html`<p class="detail-caption">
         Jeder Gerätestatus basiert ausschließlich auf explizit ausgewählten
         Home-Assistant-Entitäten. Batterien in Volt sind keine Prozentanzeige;
         ohne echten Verbindungsstatus wird kein „Online“ behauptet.
       </p>
       <h3>Geräte · Batterien, Empfang und Verbindung</h3>
-      ${(this._config.device_status || []).length
-        ? (this._config.device_status || []).map((device) => this._deviceDetail(device))
-        : html`<p class="empty">Geräte und Statussensoren im grafischen Editor auswählen.</p>`}
-      <h3>Zusätzliche Kanäle · WN31 / WH31</h3>
+      ${devices.length
+        ? deviceDetails
+        : html`<p class="empty">
+            Geräte und Statussensoren im grafischen Editor auswählen.
+          </p>`}
+      <h3>Weitere gespeicherte Zusatzsensoren</h3>
       ${extras.length
         ? extras.map((id) => this._sensorRow(id))
         : html`<p class="empty">
             Zusatzsensoren im visuellen Karteneditor auswählen.
           </p>`}
-      <h3>Sensor-Diagnosen</h3>
+      <h3>Weitere gespeicherte Diagnosen</h3>
       ${diagnostic.length
         ? diagnostic.map((id) => this._sensorRow(id))
         : html`<p class="empty">
             Batterie-/Signalentitäten im Karteneditor auswählen.
           </p>`}
       <h3>Zugeordnete Wetterquellen</h3>
-      ${Object.entries(this._config.entities ?? {}).map(([key, id]) =>
+      ${weatherSources.map(([key, id]) =>
         id
           ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label)
           : nothing,
       )} `;
   }
 
-  private _deviceDetail(device: DeviceStatusConfig) {
-    const indicators = deviceIndicators(this.hass, device);
+  private _deviceDetail(
+    device: DeviceStatusConfig,
+    take: (ids: string[]) => string[],
+  ) {
+    const indicators = deviceIndicators(this.hass, device, {
+      staleAfterMinutes: this._config.stale_after_minutes,
+    });
+    const sourceIds = take(
+      [
+        device.battery,
+        device.signal,
+        device.connection,
+        ...(device.extra_entities ?? []),
+      ].filter((id): id is string => Boolean(id)),
+    );
     return html`<section class="device-detail">
       <h4>${device.role} · ${device.name || "Ecowitt-Sensor"}</h4>
       <div class="device-detail-summary">
-        <span>${this._batteryGlyph(indicators.battery.percent)}
-          Batterie: ${indicators.battery.label}</span>
-        <span>${icon("signal")} Signal: ${indicators.signal.label}</span>
-        <span class="status-connection ${indicators.connection.state}">
-          <i aria-hidden="true"></i>Verbindung: ${indicators.connection.label}</span>
+        <span title=${indicators.battery.detail}
+          >${this._batteryGlyph(indicators.battery.percent)} Batterie:
+          ${indicators.battery.label}</span
+        >
+        <span title=${indicators.signal.detail}
+          >${icon("signal")} Signal: ${indicators.signal.label}</span
+        >
+        <span
+          title=${indicators.connection.detail}
+          class="status-connection ${indicators.connection.state}"
+        >
+          <i aria-hidden="true"></i>Verbindung:
+          ${indicators.connection.label}</span
+        >
       </div>
-      ${[device.battery, device.signal, device.connection].filter(
-        (id): id is string => Boolean(id),
-      ).map((id) => this._sensorRow(id))}
+      ${sourceIds.map((id) => this._sensorRow(id))}
     </section>`;
   }
   private _sensorRow(id: string, label?: string) {
     const entity = this.hass?.states[id];
-    const updated = entity?.last_updated ? new Date(entity.last_updated) : null;
+    const timestamp = entityFreshness(entity).timestamp;
+    const updated = timestamp !== undefined ? new Date(timestamp) : null;
     const time =
       updated && Number.isFinite(updated.getTime())
         ? updated.toLocaleString("de-DE")
         : "Kein Aktualisierungszeitpunkt verfügbar";
-    return html`<div class="sensor-row">
+    return html`<div class="sensor-row" data-entity-id=${id}>
       <span class="label"
         >${label || entity?.attributes.friendly_name || id}</span
       ><strong
