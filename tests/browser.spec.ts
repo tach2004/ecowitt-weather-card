@@ -779,5 +779,5 @@ test("new editor uses checkbox lists and persists theme preferences", async ({ p
   await expect.poll(() =>
     page.evaluate(() => (window as DemoWindow).lastEditorConfig?.extra_entities?.length)
   ).toBe(1);
-  await expect(editor.getByLabel(/Bildpfad|Bildquelle/).count()).resolves.toBeGreaterThan(0);
+  expect(await editor.getByLabel(/Bildpfad|Bildquelle/).count()).toBeGreaterThan(0);
 });
