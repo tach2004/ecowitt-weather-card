@@ -368,6 +368,18 @@ test("light theme, reduced motion and iPhone landscape remain usable", async ({
     duration.split(",").every((part) => parseFloat(part) === 0),
   ).toBeTruthy();
   await page.locator('[data-detail="temperature"]:visible').first().click();
+  const diagnostic = await page.evaluate(() => {
+    const card = (window as DemoWindow).card;
+    const dialog = card.shadowRoot?.querySelector("dialog");
+    return {
+      detail: card._detail, dialogPresent: !!dialog,
+      open: dialog?.open, rect: dialog?.getBoundingClientRect().toJSON(),
+      buttons: [...card.shadowRoot.querySelectorAll('[data-detail="temperature"]')].map(
+        (el: Element) => ({visible: !!el.getBoundingClientRect().width, tag: el.tagName})
+      ),
+    };
+  });
+  console.log("TEMP_DIALOG_DIAGNOSTIC", JSON.stringify(diagnostic));
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /Schließen/ }),
