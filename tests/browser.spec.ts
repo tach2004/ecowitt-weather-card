@@ -902,7 +902,7 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
   }) => {
     await page.setViewportSize({ width, height: width === 874 ? 402 : 874 });
     await ready(page);
-    await expect(page.locator(".degree-ring text")).toHaveCount(8);
+    await expect(page.locator(".degree-ring [data-degrees]")).toHaveCount(8);
     const results = await page.locator(".site").evaluate((site) => {
       const circle = site.getBoundingClientRect();
       const card = site.closest("ha-card")!.getBoundingClientRect();
@@ -917,7 +917,7 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
         a.right > b.left &&
         a.top < b.bottom &&
         a.bottom > b.top;
-      return [...site.querySelectorAll(".degree-ring text")].map((node) => {
+      return [...site.querySelectorAll(".degree-ring [data-degrees]")].map((node) => {
         const box = node.getBoundingClientRect();
         const nearestX = Math.max(box.left, Math.min(cx, box.right));
         const nearestY = Math.max(box.top, Math.min(cy, box.bottom));
@@ -932,7 +932,7 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
             box.right > card.right ||
             box.top < card.top ||
             box.bottom > card.bottom,
-          color: getComputedStyle(node).fill,
+          color: getComputedStyle(node).color,
           stroke: getComputedStyle(node).stroke,
           textHeight: box.height,
           cardinalHeight: cardinals[0].height,
@@ -1173,12 +1173,12 @@ for (const view of ["panel", "sections"])
               el.contains((el.getRootNode() as ShadowRoot).activeElement),
             ),
           ).toBe(true);
-          if (bounds.scrollHeight > bounds.height + 2) {
-            await dialog.hover();
+          const scroller = dialog.locator(".detail-content");
+          const canScroll = await scroller.evaluate(el => el.scrollHeight > el.clientHeight + 2);
+          if (canScroll) {
+            await scroller.hover();
             await page.mouse.wheel(0, 600);
-            await expect
-              .poll(() => dialog.evaluate((el) => el.scrollTop))
-              .toBeGreaterThan(0);
+            await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
           }
           const close = dialog.getByRole("button", { name: "Schließen" });
           await expect(close).toBeVisible();
@@ -1195,7 +1195,7 @@ test("UV Index sources render while incompatible UV and signal units stay neutra
 }) => {
   await ready(page);
   await update(page, "uv", 4.2, "UV Index");
-  await expect(page.locator('[data-key="uv"]').first()).toContainText("4,2");
+  await expect(page.locator('[data-key="uv"]').first().locator(".value")).toHaveText(/^4\s*UV Index$/);
   await expect(page.locator('[data-key="uv"]').first()).not.toContainText(
     "Quelle prüfen",
   );
@@ -1386,7 +1386,7 @@ for (const width of [320, 402, 874, 1440])
           .evaluate((host) => {
             const root = host.shadowRoot!;
             const title = root
-              .querySelector("header > div:nth-child(2)")!
+              .querySelector(".station-heading")!
               .getBoundingClientRect();
             const card = root.querySelector("ha-card")!.getBoundingClientRect();
             const statuses = [
@@ -1461,7 +1461,7 @@ test("device status layout follows a narrow card inside a desktop viewport", asy
   await noOverflow(page);
 });
 
-test("GW3000A and WH90 registry variants select only suggestion filters and preserve assigned sources", async ({
+test("GW3000A and WH90 registry variants preserve sources and persist explicit gateway selection", async ({
   page,
 }) => {
   await ready(page, "/?editor=1");
@@ -1502,8 +1502,8 @@ test("GW3000A and WH90 registry variants select only suggestion filters and pres
     await page.evaluate(() => (window as DemoWindow).editor._config.entities),
   ).toEqual(before);
   expect(
-    await page.evaluate(() => (window as DemoWindow).lastEditorConfig),
-  ).toBeUndefined();
+    await page.evaluate(() => (window as DemoWindow).lastEditorConfig?.device_roles?.GW3000),
+  ).toBe("");
 });
 
 test("legacy device sources remain readable once even if selected in several old and new fields", async ({
@@ -1699,4 +1699,193 @@ test("320px metrics contain long German labels with wider fallback fonts", async
       expect(content.labelRight).toBeLessThanOrEqual(content.right);
     }
   }
+});
+
+async function withNativeHaCard(page: Page) {
+  await page.addInitScript(() => {
+    if (customElements.get("ha-card")) return;
+    // Relevant host/slot behavior from Home Assistant's native ha-card.ts.
+    // This is a local component harness, not a complete HA/Safari installation.
+    customElements.define("ha-card", class extends HTMLElement {
+      header?: string;
+      constructor() {
+        super();
+        this.attachShadow({ mode: "open" }).innerHTML = `<style>
+          :host { display:block;position:relative;box-sizing:border-box;
+            background:var(--ha-card-background,var(--card-background-color,white));
+            border:var(--ha-card-border-width,1px) solid var(--ha-card-border-color,var(--divider-color,#e0e0e0));
+            border-radius:var(--ha-card-border-radius,12px);color:var(--primary-text-color);
+            transition:all .3s ease-out; }
+          ::slotted(.card-header) { display:block;padding:20px 16px 24px;font-size:24px; }
+          ::slotted(.card-content) { padding:16px; }
+          ::slotted(.card-actions) { border-top:1px solid var(--divider-color,#e8e8e8);padding:8px; }
+        </style><slot></slot>`;
+      }
+    });
+  });
+}
+
+test("native HA card keeps a full title and single-line device chips at real card widths", async ({ page }) => {
+  await withNativeHaCard(page);
+  for (const width of [320, 402, 874, 1024, 1440]) {
+    await page.setViewportSize({ width, height: width === 874 ? 402 : 874 });
+    await ready(page);
+    await setStatusDevices(page, 3, true);
+    await expect(page.locator("ha-card")).toHaveCSS("position", "relative");
+    await expect(page.locator(".device-chip > strong")).toHaveText(["WS90", "WH40", "WN31"]);
+    const layout = await page.locator(".station-header").evaluate(header => {
+      const root = header.getBoundingClientRect();
+      const heading = header.querySelector(".station-heading")!.getBoundingClientRect();
+      const title = header.querySelector("h1")!.getBoundingClientRect();
+      const font = parseFloat(getComputedStyle(header.querySelector("h1")!).fontSize);
+      const chips = [...header.querySelectorAll(".device-chip")].map(chip => {
+        const rect = chip.getBoundingClientRect();
+        const centers = [...chip.children].map(child => { const box = child.getBoundingClientRect(); return (box.top + box.bottom) / 2; });
+        return { left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,height:rect.height,centers,overflow:chip.scrollWidth-chip.clientWidth };
+      });
+      return { headerHeight:root.height,headingWidth:heading.width,titleBottom:title.bottom,titleHeight:title.height,font,chips };
+    });
+    expect(layout.headingWidth).toBeGreaterThanOrEqual(140);
+    expect(layout.titleHeight).toBeLessThan(layout.font * 5);
+    expect(layout.headerHeight).toBeLessThan(300);
+    for (const chip of layout.chips) {
+      expect(chip.height).toBeLessThanOrEqual(46);
+      expect(chip.overflow).toBeLessThanOrEqual(1);
+      expect(Math.max(...chip.centers)-Math.min(...chip.centers)).toBeLessThan(1);
+      if (width <= 900) expect(chip.top).toBeGreaterThan(layout.titleBottom);
+    }
+    if (width <= 900) for (let i=1;i<layout.chips.length;i++) expect(layout.chips[i].top).toBeGreaterThan(layout.chips[i-1].bottom);
+    else for (let i=1;i<layout.chips.length;i++) {
+      expect(layout.chips[i].top).toBeCloseTo(layout.chips[0].top,0);
+      expect(layout.chips[i].left).toBeGreaterThan(layout.chips[i-1].right);
+    }
+    await noOverflow(page);
+  }
+});
+
+test("header fallback stays mobile-safe when container-query rules are ignored", async ({ page }) => {
+  await withNativeHaCard(page);
+  await page.setViewportSize({ width:402,height:874 });
+  await ready(page);
+  await setStatusDevices(page,3,true);
+  await page.locator("ecowitt-weather-card").evaluate(card => {
+    const sheet = new CSSStyleSheet();
+    const rules = card.shadowRoot!.adoptedStyleSheets.flatMap(style => [...style.cssRules]);
+    sheet.replaceSync(rules.filter(rule => rule.constructor.name !== "CSSContainerRule").map(rule => rule.cssText).join("\n"));
+    card.shadowRoot!.adoptedStyleSheets = [sheet];
+  });
+  const heading = await page.locator(".station-heading").boundingBox();
+  expect(heading!.width).toBeGreaterThan(200);
+  const chips = await page.locator(".device-chip").evaluateAll(nodes => nodes.map(node => { const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom}; }));
+  expect(chips[0].top).toBeGreaterThan(heading!.y+heading!.height);
+  expect(chips[1].top).toBeGreaterThan(chips[0].bottom);
+  expect(chips[2].top).toBeGreaterThan(chips[1].bottom);
+});
+
+test("compass restores pre-PR5 circle size while degree labels follow exact cardinal axes", async ({ page }) => {
+  await withNativeHaCard(page);
+  for (const [width, expected] of [[402,324],[1440,564]]) {
+    await page.setViewportSize({ width,height:874 });
+    await ready(page);
+    const circle = await page.locator(".site").boundingBox();
+    expect(circle!.width).toBeCloseTo(expected,0);
+    const errors = await page.locator(".site").evaluate(site => {
+      const circle=site.getBoundingClientRect(),cx=(circle.left+circle.right)/2,cy=(circle.top+circle.bottom)/2;
+      return [...site.querySelectorAll<HTMLElement>(".degree-ring [data-degrees]")].map(label => {
+        const box=label.getBoundingClientRect(),x=(box.left+box.right)/2-cx,y=(box.top+box.bottom)/2-cy;
+        const actual=(Math.atan2(x,-y)*180/Math.PI+360)%360,expected=Number(label.dataset.degrees);
+        return Math.min(Math.abs(actual-expected),360-Math.abs(actual-expected));
+      });
+    });
+    expect(Math.max(...errors)).toBeLessThan(.05);
+    await expect(page.locator(".degree-ring [data-degrees]").first()).toHaveCSS("font-size","9px");
+  }
+});
+
+for (const portrait of [true,false]) for (const theme of ["light","dark"]) {
+  test(`native HA ${portrait ? "portrait" : "landscape"} ${theme}: every detail ends at its content and contains scrolling`, async ({ page }) => {
+    await withNativeHaCard(page);
+    await page.setViewportSize({ width:portrait?402:874,height:portrait?874:402 });
+    await ready(page,theme==="light"?"/?theme=light":"/");
+    for (const detail of ["wind","rain","temperature","pressure","sun","sensors"]) {
+      await page.locator(`[data-detail="${detail}"]:visible`).first().click();
+      const dialog=page.getByRole("dialog"),scroller=dialog.locator(".detail-content");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText("Recorder-Verlauf wird geladen …")).toHaveCount(0);
+      const end=await scroller.evaluate(el => {
+        el.scrollTop=el.scrollHeight;
+        const last=el.lastElementChild!.getBoundingClientRect(),box=el.getBoundingClientRect();
+        return { gap:box.bottom-last.bottom,max:el.scrollHeight-el.clientHeight,top:el.scrollTop,overflow:el.scrollWidth-el.clientWidth };
+      });
+      expect(end.top).toBeCloseTo(end.max,0);
+      expect(end.gap).toBeGreaterThanOrEqual(-1);
+      expect(end.gap).toBeLessThanOrEqual(21);
+      expect(end.overflow).toBeLessThanOrEqual(1);
+      const pageY=await page.evaluate(()=>window.scrollY);
+      await scroller.hover();
+      await page.mouse.wheel(0,900);
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      expect(await page.evaluate(()=>window.scrollY)).toBe(pageY);
+      await dialog.getByRole("button",{name:"Schließen"}).click();
+      await expect(dialog).not.toBeVisible();
+    }
+  });
+}
+
+test("wet status droplet permits its edge stroke outside the SVG viewport", async ({ page }) => {
+  await ready(page);
+  const icon=page.locator(".rain .wet-badge .icon");
+  await expect(icon).toHaveCSS("overflow","visible");
+  const edge=await icon.evaluate(node => {
+    const svg=node as SVGSVGElement,path=svg.querySelector("path")!;
+    const box=path.getBBox(),stroke=parseFloat(getComputedStyle(path).strokeWidth);
+    return box.y+box.height+stroke/2 > svg.viewBox.baseVal.height;
+  });
+  expect(edge).toBe(true);
+});
+
+test("manual alternate gateway persists across a recreated editor and delayed HA registry", async ({ page }) => {
+  await ready(page,"/?editor=1");
+  await page.evaluate(async () => {
+    const win=window as DemoWindow;
+    const original=win.hass.callWS;
+    const states={...win.hass.states,"sensor.demo_alternate_pressure":{entity_id:"sensor.demo_alternate_pressure",state:"1010",last_updated:new Date().toISOString(),attributes:{friendly_name:"Relativer Luftdruck · Alternativ",unit_of_measurement:"hPa",device_class:"atmospheric_pressure"}}};
+    win.hass={...win.hass,states,callWS:async (message:any)=>{
+      if(message.type==="config/device_registry/list") return [
+        {id:"demo-gw3000",name:"Automatisches Beispielgateway",model:"GW3000A"},
+        {id:"demo-alternate",name:"Manuelles Beispielgateway",model:"Gateway"},
+      ];
+      if(message.type==="config/entity_registry/list") return [
+        {entity_id:"sensor.demo_pressure",device_id:"demo-gw3000",disabled_by:null},
+        {entity_id:"sensor.demo_alternate_pressure",device_id:"demo-alternate",disabled_by:null},
+      ];
+      return original(message);
+    }};
+    win.editor._registryState="idle";
+    win.editor.hass=win.hass;
+    await win.editor.updateComplete;
+  });
+  const editor=page.locator("ecowitt-weather-card-editor");
+  await editor.getByLabel("Gerät GW3000",{exact:true}).selectOption("demo-alternate");
+  await expect.poll(()=>page.evaluate(()=>(window as DemoWindow).lastEditorConfig?.device_roles?.GW3000)).toBe("demo-alternate");
+  expect(await page.evaluate(()=>(window as DemoWindow).lastEditorConfig?.entities?.pressure)).toBe("sensor.demo_pressure");
+  await page.evaluate(async () => {
+    const win=window as DemoWindow,saved=win.lastEditorConfig;
+    const Editor=customElements.get("ecowitt-weather-card") as any;
+    const replacement=await Editor.getConfigElement();
+    const host=document.querySelector("#editor")!;
+    win.editor.remove();host.append(replacement);win.editor=replacement;
+    replacement.setConfig(saved);
+    const original=win.hass.callWS;
+    replacement.hass={...win.hass,callWS:async(message:any)=>{
+      await new Promise(resolve=>setTimeout(resolve,30));
+      return original(message);
+    }};
+    await replacement.updateComplete;
+  });
+  const recreated=page.locator("ecowitt-weather-card-editor");
+  await expect(recreated.getByLabel("Gerät GW3000",{exact:true})).toHaveValue("demo-alternate");
+  const pressure=recreated.locator('[data-metric="pressure"]');
+  await expect(pressure.locator(".suggestion")).toContainText("Relativer Luftdruck · Alternativ");
+  await expect(pressure.locator(".suggestion")).not.toContainText("Relativer Luftdruck GW3000");
 });

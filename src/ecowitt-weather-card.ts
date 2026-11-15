@@ -257,9 +257,9 @@ export class EcowittWeatherCard extends LitElement {
         !this.hass?.states[this._config.entities[key]!],
     );
     return html`<ha-card data-theme=${this._config.theme_mode || "auto"}>
-      <header>
+      <div class="station-header">
         <div class="station-icon">${icon("station")}</div>
-        <div>
+        <div class="station-heading">
           <h1>${this._config.title || "Wetterstation"}</h1>
           <p class="subtitle">
             ${this._config.subtitle || "Ecowitt · Wetter vor Ort"}
@@ -274,7 +274,7 @@ export class EcowittWeatherCard extends LitElement {
         >
           ${icon("sensors")}
         </button>
-      </header>
+      </div>
       ${hasEntities ? this._sky() : nothing}
       ${!hasEntities
         ? this._setup()
@@ -397,9 +397,7 @@ export class EcowittWeatherCard extends LitElement {
       indicator.connection.label}
       @click=${() => this._openDetail("sensors")}
     >
-      <strong title=${device.name || device.role}
-        >${device.name || device.role}</strong
-      >
+      <strong title=${device.name || device.role}>${device.role}</strong>
       <span
         title=${indicator.battery.detail}
         class="status-battery ${indicator.battery.percent !== undefined &&
@@ -408,16 +406,16 @@ export class EcowittWeatherCard extends LitElement {
           : ""}"
       >
         ${this._batteryGlyph(indicator.battery.percent)}
-        ${indicator.battery.label}
+        ${indicator.battery.state === "unknown" ? "—" : indicator.battery.label}
       </span>
       <span title=${indicator.signal.detail} class="status-signal"
-        >${icon("signal")}${indicator.signal.label}</span
+        >${icon("signal")}${indicator.signal.state === "unknown" ? "—" : indicator.signal.label}</span
       >
       <span
         title=${indicator.connection.detail}
         class="status-connection ${indicator.connection.state}"
       >
-        <i aria-hidden="true"></i>${indicator.connection.label}
+        <i aria-hidden="true"></i>${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}
       </span>
     </button>`;
   }
@@ -556,22 +554,14 @@ export class EcowittWeatherCard extends LitElement {
             : nothing}
           <circle class="target" cx=${targetX} cy=${targetY} r="1" />
         </svg>
-        <svg class="degree-ring" viewBox="-12 -12 124 124" aria-hidden="true">
+        <div class="degree-ring" aria-hidden="true">
           ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
             const theta = (bearing * Math.PI) / 180;
-            const cardinalPositions: Record<number, [number, number]> = {
-              0: [62, -5],
-              90: [105, 62],
-              180: [38, 105],
-              270: [-5, 38],
-            };
-            const [x, y] = cardinalPositions[bearing] ?? [
-              50 + Math.sin(theta) * 58,
-              50 - Math.cos(theta) * 58,
-            ];
-            return svg`<text data-degrees=${bearing} x=${x} y=${y} text-anchor="middle" dominant-baseline="middle">${bearing}°</text>`;
+            const sin = Math.round(Math.sin(theta)*1e6)/1e6;
+            const cos = Math.round(Math.cos(theta)*1e6)/1e6;
+            return html`<span data-degrees=${bearing} style=${`left:calc(${50+sin*50}% + ${sin} * var(--degree-offset));top:calc(${50-cos*50}% - ${cos} * var(--degree-offset))`}>${bearing}°</span>`;
           })}
-        </svg>
+        </div>
         <span class="cardinal north">N</span><span class="cardinal east">O</span
         ><span class="cardinal south">S</span
         ><span class="cardinal west">W</span>
@@ -839,14 +829,6 @@ export class EcowittWeatherCard extends LitElement {
                           Der Tagesmengen-Verlauf setzt sich am Tageswechsel
                           zurück. Daraus wird kein rollierender 24h-Wert
                           berechnet.
-                        </p>`
-                      : nothing}
-                    ${detail === "wind"
-                      ? html`<p class="notice">
-                          Eine 24h-Windrose ist in diesem Meilenstein noch nicht
-                          enthalten. Sie benötigt eine belastbare Verteilung aus
-                          zeitlich gepaarten Richtungs- und
-                          Geschwindigkeitsdaten.
                         </p>`
                       : nothing}
                     <button

@@ -176,3 +176,30 @@ test("untyped theme values are rejected without coercing YAML objects", () => {
     assert.equal(normalizeConfig({ theme_mode }).theme_mode, "auto");
   assert.equal(normalizeConfig({ theme_mode: "light" }).theme_mode, "light");
 });
+
+test('saved device-role choices survive normalization without requiring a live registry', () => {
+  const input = {
+    device_roles:{GW3000:' fixture-manual-gateway ',WS90:'fixture-wind',WN32:'',UNKNOWN:'fixture-unknown',WH40:42},
+    entities:{pressure:'sensor.fixture_pressure',temperature:'sensor.fixture_temperature'},
+    extra_entities:['sensor.fixture_legacy'],
+  };
+  const before=structuredClone(input);
+  const normalized=normalizeConfig(input);
+  assert.deepEqual(normalized.device_roles,{GW3000:'fixture-manual-gateway',WS90:'fixture-wind',WN32:''});
+  assert.deepEqual(normalized.entities,input.entities);
+  assert.deepEqual(normalized.extra_entities,input.extra_entities);
+  assert.deepEqual(normalizeConfig(normalized).device_roles,normalized.device_roles);
+  assert.deepEqual(input,before);
+  normalized.device_roles!.GW3000='fixture-other';
+  assert.equal(input.device_roles.GW3000,' fixture-manual-gateway ');
+});
+
+test('legacy cards and malformed device-role maps retain their existing sensor assignments', () => {
+  const entities={pressure:'sensor.fixture_selected_pressure'};
+  for (const device_roles of [undefined,null,[],42,'GW3000']) {
+    const normalized=normalizeConfig({device_roles,entities});
+    assert.equal(normalized.device_roles,undefined);
+    assert.deepEqual(normalized.entities,entities);
+  }
+  assert.deepEqual(normalizeConfig({device_roles:{GW3000:{id:'fixture'},WN32:'   '},entities}).device_roles,{WN32:''});
+});

@@ -405,3 +405,9 @@ test("new PR4 illuminance and VPD values keep units and reject negative or incom
   assert.equal(reading("solar_lux", "500", "W/m²").status, "invalid");
   assert.equal(reading("vpd", "2", "%").status, "invalid");
 });
+
+test('UV display rounds to a whole index without discarding source precision',()=>{
+  assert.equal(reading('uv','2.7','UV Index').text,'3');
+  assert.equal(reading('uv','2.7','UV Index').value,2.7);
+  assert.equal(reading('uv','0','UV Index').text,'0');
+});

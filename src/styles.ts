@@ -55,12 +55,20 @@ export const cardStyles = css`
     padding: 20px;
     box-shadow: var(--ha-card-box-shadow, 0 14px 50px #0002);
   }
-  header {
-    display: flex;
+  .station-header {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 44px;
     align-items: center;
     gap: 12px;
+    min-width: 0;
+    width: 100%;
     padding: 0 0 18px;
   }
+  .station-header > .station-icon { grid-column: 1; grid-row: 1; }
+  .station-heading { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
+  .station-heading h1 { overflow-wrap: break-word; word-break: normal; }
+  .station-header > .diagnostics { grid-column: 3; grid-row: 1; }
+
   .station-icon {
     width: 42px;
     height: 42px;
@@ -106,8 +114,8 @@ export const cardStyles = css`
   }
   .site-wrap {
     min-width: 0;
-    /* Reserve space for the external compass without changing image/flow axes. */
-    padding: clamp(24px, 7cqi, 56px);
+    padding: 14px;
+    --degree-offset: 24px;
   }
   .site {
     position: relative;
@@ -168,8 +176,9 @@ export const cardStyles = css`
   }
   .cardinal {
     position: absolute;
-    min-width: 33px;
-    height: 33px;
+    min-width: 25px;
+    width: 25px;
+    height: 25px;
     border: 1px solid #87b7d0;
     border-radius: 50%;
     display: grid;
@@ -180,22 +189,11 @@ export const cardStyles = css`
     font-size: 0.85rem;
     z-index: 1;
   }
-  .north {
-    top: -17px;
-    left: calc(50% - 16.5px);
-  }
-  .east {
-    right: -17px;
-    top: calc(50% - 16.5px);
-  }
-  .south {
-    bottom: -17px;
-    left: calc(50% - 16.5px);
-  }
-  .west {
-    left: -17px;
-    top: calc(50% - 16.5px);
-  }
+  .cardinal { transform: translate(-50%, -50%); }
+  .north { top: 0; left: 50%; }
+  .east { left: 100%; top: 50%; }
+  .south { top: 100%; left: 50%; }
+  .west { left: 0; top: 50%; }
   .legend {
     display: flex;
     flex-wrap: wrap;
@@ -540,15 +538,19 @@ export const cardStyles = css`
     width: min(760px, calc(100vw - 24px));
     max-height: calc(100dvh - 32px);
     box-shadow: 0 24px 100px #0007;
-    overflow: auto;
+    overflow: hidden;
+    height: fit-content;
+    min-height: 0;
+    overscroll-behavior: contain;
   }
+  dialog[open] { display: flex; flex-direction: column; }
   dialog::backdrop {
     background: #02101bb8;
     backdrop-filter: blur(5px);
   }
   .dialog-head {
-    position: sticky;
-    top: 0;
+    flex: 0 0 auto;
+    position: relative;
     z-index: 2;
     display: flex;
     justify-content: space-between;
@@ -568,8 +570,15 @@ export const cardStyles = css`
     font-size: 1.5rem;
   }
   .detail-content {
+    flex: 0 1 auto;
+    min-height: 0;
     padding: 20px;
+    overflow: auto;
+    overscroll-behavior: contain;
   }
+  .detail-content > :last-child { margin-bottom: 0; }
+  .wet-badge .icon { flex-shrink: 0; overflow: visible; }
+
   .detail-caption {
     font-size: 0.8rem;
     color: var(--muted);
@@ -816,9 +825,7 @@ export const cardStyles = css`
     .metrics {
       padding: 22px 4px;
     }
-    header {
-      padding-bottom: 24px;
-    }
+    .station-header { padding-bottom: 24px; }
   }
   @container weather (max-width:359px) {
     ha-card {
@@ -881,21 +888,17 @@ export const cardStyles = css`
     --cyan: #007d98;
     color: #172b3e;
   }
-  header > div:nth-child(2) {
-    min-width: 0;
-    flex: 1;
-  }
   .header-devices {
-    margin-left: auto;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 6px;
     min-width: 0;
-    max-width: 65%;
+    width: 100%;
+    margin: 2px 0 0;
   }
-  .device-chip,
-  .device-placeholder {
+  .device-chip, .device-placeholder {
     color: inherit;
     background: var(--soft);
     border: 1px solid var(--line);
@@ -903,35 +906,26 @@ export const cardStyles = css`
     padding: 7px 10px;
     min-height: 44px;
     display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
     align-items: center;
-    flex-wrap: wrap;
-    font-size: 0.69rem;
-    line-height: 1.25;
+    justify-content: space-between;
     min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
+    width: 100%;
+    white-space: nowrap;
+    font-size: .69rem;
+    line-height: 1.25;
   }
-  .device-chip {
-    flex: 1 1 170px;
-  }
-  .device-chip > strong {
-    font-size: 0.78rem;
-    color: var(--cyan);
-  }
-  .device-placeholder {
-    color: var(--muted);
-  }
-  .status-battery,
-  .status-signal,
-  .status-connection {
+  .device-chip > strong { flex-shrink: 0; font-size: .78rem; color: var(--cyan); }
+  .device-placeholder { color: var(--muted); }
+  .status-battery, .status-signal, .status-connection {
     display: inline-flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    min-width: 0;
-    max-width: 100%;
-    flex-wrap: wrap;
   }
   .status-battery.low {
     color: var(--warning-color, #ecad5a);
@@ -1075,27 +1069,16 @@ export const cardStyles = css`
     border-radius: 4px 12px 12px 12px;
     transform: rotate(45deg);
   }
-  .degree-ring {
+  .degree-ring { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+  .degree-ring [data-degrees] {
     position: absolute;
-    width: 124%;
-    height: 124%;
-    inset: -12%;
-    overflow: visible;
-    z-index: 1;
-    pointer-events: none;
-  }
-  .degree-ring text {
-    font-size: 2px;
+    transform: translate(-50%, -50%);
+    color: var(--muted);
+    font-size: 9px;
     font-weight: 400;
-    fill: var(--muted);
-    opacity: 0.85;
-    letter-spacing: 0.03px;
-    stroke: none;
-  }
-  @container weather (max-width:519px) {
-    .degree-ring text {
-      font-size: 3.5px;
-    }
+    line-height: 1;
+    white-space: nowrap;
+    opacity: .85;
   }
   .rain-sun-decoration {
     position: absolute;
@@ -1211,43 +1194,27 @@ export const cardStyles = css`
     align-items: center;
     gap: 6px;
   }
+  @container weather (min-width:760px) {
+    .site-wrap { padding: 18px; }
+  }
   @container weather (max-width:900px) {
-    header {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 44px;
-    }
-    .station-icon {
-      grid-column: 1;
-      grid-row: 1;
-    }
-    header > div:nth-child(2) {
-      grid-column: 2;
-      grid-row: 1;
-      overflow-wrap: anywhere;
-    }
-    .header-devices {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      width: 100%;
-      max-width: 100%;
-      margin: 2px 0 0;
-      justify-content: stretch;
-    }
-    .diagnostics {
-      grid-column: 3;
-      grid-row: 1;
-      margin-left: 0;
-    }
-    .device-chip {
-      width: 100%;
-      justify-content: space-between;
-    }
-    .sky-banner {
-      justify-content: flex-start;
-      margin-top: 0;
-    }
+    .sky-banner { justify-content: flex-start; margin-top: 0; }
+  }
+  @container weather (min-width:901px) {
+    .header-devices { display: flex; justify-content: flex-end; }
+    .device-chip, .device-placeholder { width: auto; flex: 0 0 auto; justify-content: flex-start; }
+  }
+  @container weather (min-width:1200px) {
+    .station-header { grid-template-columns: 42px minmax(180px, 1fr) max-content 44px; }
+    .header-devices { grid-column: 3; grid-row: 1; margin: 0; }
+    .station-header > .diagnostics { grid-column: 4; }
+  }
+  @container weather (max-width:359px) {
+    .site-wrap { --degree-offset: 18px; }
+    .north { top: 6px; }
+    .east { left: calc(100% - 6px); }
+    .south { top: calc(100% - 6px); }
+    .west { left: 6px; }
   }
   @container weather (min-width:760px) and (max-width:1099px) {
     .metrics {
