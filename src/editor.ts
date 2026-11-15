@@ -6,7 +6,7 @@ import {
   type HomeAssistant,
   type MetricKey,
 } from "./types";
-import { normalizeConfig } from "./config";
+import { normalizeConfig, sameConfig } from "./config";
 import {
   DEVICE_ROLES,
   candidateEntities,
@@ -18,10 +18,15 @@ import {
   type RegistryEntity,
 } from "./suggestions";
 
+const SENSOR_DOMAINS = ["sensor"];
+const BINARY_DOMAINS = ["binary_sensor"];
+const WEATHER_DOMAINS = ["weather"];
+
 export class EcowittWeatherCardEditor extends LitElement {
   static properties = {
     hass: { attribute: false },
     _config: { state: true },
+    _openGroups: { state: true },
     _devices: { state: true },
     _registry: { state: true },
     _roleDevices: { state: true },
@@ -36,6 +41,9 @@ export class EcowittWeatherCardEditor extends LitElement {
     type: "custom:ecowitt-weather-card",
     entities: {},
   };
+  private _openGroups = new Set(["Wind"]);
+  private _entityCacheStates?: HomeAssistant["states"];
+  private _entityCache: string[] = [];
   private _devices: RegistryDevice[] = [];
   private _registry: RegistryEntity[] = [];
   private _roleDevices: Partial<Record<DeviceRole, string>> = {};
@@ -53,7 +61,9 @@ export class EcowittWeatherCardEditor extends LitElement {
   private _mediaRequest = 0;
 
   setConfig(config: CardConfig): void {
-    this._config = normalizeConfig(config);
+    const normalized = normalizeConfig(config);
+    if (sameConfig(normalized, this._config)) return;
+    this._config = normalized;
     this._roleDevices = resolveDeviceRoles(
       this._devices,
       this._config.device_roles,
@@ -118,9 +128,13 @@ export class EcowittWeatherCardEditor extends LitElement {
     return (event.target as HTMLInputElement).value;
   }
   private _entities(): string[] {
-    return Object.keys(this.hass?.states || {})
-      .filter((id) => /^(sensor|binary_sensor)\./.test(id))
-      .sort();
+    if (this._entityCacheStates !== this.hass?.states) {
+      this._entityCacheStates = this.hass?.states;
+      this._entityCache = Object.keys(this.hass?.states || {})
+        .filter((id) => /^(sensor|binary_sensor)\./.test(id))
+        .sort();
+    }
+    return this._entityCache;
   }
   private _label(id: string): string {
     const name = this.hass?.states[id]?.attributes.friendly_name;
@@ -128,11 +142,11 @@ export class EcowittWeatherCardEditor extends LitElement {
   }
   private _picker(key: MetricKey, label: string) {
     const selected = this._config.entities?.[key] || "";
-    const available = this._entities();
+    const nativePicker = Boolean(customElements.get("ha-entity-picker"));
+    const available = nativePicker ? [] : this._entities();
     const suggestions = this.hass
       ? candidateEntities(key, this.hass, this._registry, this._roleDevices)
       : [];
-    const nativePicker = Boolean(customElements.get("ha-entity-picker"));
     return html`<div class="entity-field" data-metric=${key}>
       ${
         nativePicker
@@ -141,9 +155,8 @@ export class EcowittWeatherCardEditor extends LitElement {
               .label=${label}
               .value=${selected || undefined}
               .includeDomains=${
-                key === "rain_wet" ? ["binary_sensor"] : ["sensor"]
+                key === "rain_wet" ? BINARY_DOMAINS : SENSOR_DOMAINS
               }
-              .includeEntities=${available}
               .allowCustomEntity=${false}
               @value-changed=${(event: CustomEvent<{ value?: string }>) => {
                 event.stopPropagation();
@@ -218,6 +231,14 @@ export class EcowittWeatherCardEditor extends LitElement {
     </div>`;
   }
 
+  private _toggleGroup(group: string, event: Event) {
+    const open = (event.currentTarget as HTMLDetailsElement).open;
+    if (open === this._openGroups.has(group)) return;
+    const next = new Set(this._openGroups);
+    if (open) next.add(group);
+    else next.delete(group);
+    this._openGroups = next;
+  }
   private _weatherPicker() {
     const selected = this._config.weather_entity || "";
     const available = Object.keys(this.hass?.states || {})
@@ -234,8 +255,7 @@ export class EcowittWeatherCardEditor extends LitElement {
               .hass=${this.hass}
               .label=${"Optionale HA-Wetterquelle"}
               .value=${selected || undefined}
-              .includeDomains=${["weather"]}
-              .includeEntities=${available}
+              .includeDomains=${WEATHER_DOMAINS}
               .allowCustomEntity=${false}
               @value-changed=${(event: CustomEvent<{ value?: string }>) => {
                 event.stopPropagation();
@@ -815,8 +835,30 @@ export class EcowittWeatherCardEditor extends LitElement {
       </details>
       ${["Wind", "Regen", "Außenklima", "Druck & Sonne"].map(
         (group) =>
-          html`<details open>
+          html`<details
+            .open=${this._openGroups.has(group)}
+            @toggle=${(event: Event) => this._toggleGroup(group, event)}
+          >
             <summary>${group}</summary>
+            ${
+              group === "Wind"
+                ? html`<label
+                      >Bestätigter Mittelungszeitraum · Minuten (optional)<input
+                        type="number"
+                        min="1"
+                        max="1440"
+                        aria-label="Bestätigter Mittelungszeitraum"
+                        .value=${this._config.wind_average_period_minutes === undefined ? "" : String(this._config.wind_average_period_minutes)}
+                        @change=${(event: Event) => this._change({ wind_average_period_minutes: this._value(event).trim() ? Number(this._value(event)) : undefined })}
+                    /></label>
+                    <p class="hint">
+                      Die Karte übernimmt die mittlere Richtung aus der
+                      ausgewählten Entität. Ecowitt Local führt sowohl
+                      winddir_avg10m als auch „Wind Direction Avg“ (0x6D). Nur
+                      bei bestätigtem Quellzeitraum hier etwa 10 eintragen.
+                    </p>`
+                : nothing
+            }
             ${
               group === "Regen"
                 ? html`<p class="hint">
@@ -827,9 +869,13 @@ export class EcowittWeatherCardEditor extends LitElement {
                 : nothing
             }
             <div class="fields">
-              ${METRICS.filter((metric) => metric.group === group).map(
-                (metric) => this._picker(metric.key, metric.label),
-              )}
+              ${
+                this._openGroups.has(group)
+                  ? METRICS.filter((metric) => metric.group === group).map(
+                      (metric) => this._picker(metric.key, metric.label),
+                    )
+                  : nothing
+              }
             </div>
             ${
               group === "Wind" &&
@@ -853,10 +899,27 @@ export class EcowittWeatherCardEditor extends LitElement {
           </details>`,
       )}
 
-      <details>
+      <details
+        @toggle=${(event: Event) => this._toggleGroup("Darstellung", event)}
+      >
         <summary>Darstellung, Wetteranimation und Theme</summary>
-        ${this._weatherPicker()}
+        ${this._openGroups.has("Darstellung") ? this._weatherPicker() : nothing}
         <div class="fields">
+          <label
+            >Maximale Kartenbreite · ${this._config.max_width ?? 1380} px<input
+              type="range"
+              min="900"
+              max="3200"
+              step="10"
+              aria-label="Maximale Kartenbreite"
+              .value=${String(this._config.max_width ?? 1380)}
+              @input=${(event: Event) => this._change({ max_width: Number(this._value(event)) })}
+          /></label>
+          <p class="hint">
+            Obergrenze am Desktop. Auf dem Handy passt sich die Karte
+            automatisch dem verfügbaren Platz an. In Sections bleibt die Breite
+            der Sektion maßgeblich.
+          </p>
           <label
             >Farbschema
             <select
@@ -901,6 +964,22 @@ export class EcowittWeatherCardEditor extends LitElement {
             anzeigen</span
           ></label
         >
+        <label
+          >Kartentyp der Windrose<input
+            aria-label="Kartentyp der Windrose"
+            placeholder="custom:windrose-card"
+            .value=${this._config.windrose?.card_type ?? ""}
+            @change=${(event: Event) => this._change({ windrose: { ...this._config.windrose, card_type: this._value(event).trim() || undefined } })}
+        /></label>
+        <p class="hint">
+          Eigene YAML: Im Home-Assistant-Karteneditor „Code-Editor anzeigen“
+          öffnen. windrose ist ein Abschnitt der Ecowitt-Kartenkonfiguration,
+          keine separate Datei. Unter windrose.config steht die vollständige
+          native Windrosen-YAML; unter windrose.variants lassen sich benannte
+          Varianten mit eigener config und optional eigenem card_type anlegen.
+          Die Auswahl erscheint auf der Windrosen-Rückseite. Kein Dashboard-URL
+          erforderlich.
+        </p>
         <p class="hint">
           Benötigt die separat installierte HACS-Karte „Windrose Card“ von
           aukedejong und deren geladene Ressource. Die Ecowitt-Karte lädt kein

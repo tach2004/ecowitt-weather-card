@@ -424,3 +424,44 @@ test("HA source reports cannot silently invent measured local rain, snow or a co
     "unknown",
   );
 });
+
+test("local WH40 then WS90 rain always takes priority over an explicitly selected regional weather source", () => {
+  const regional: HassEntity = {
+    entity_id: "weather.demo_regional",
+    state: "sunny",
+    attributes: { friendly_name: "Regional forecast" },
+    last_updated: current,
+  };
+  const options = {
+    now,
+    conditionEntity: regional,
+    secondaryRainRate: reading(3, "mm/h"),
+  };
+  assert.equal(
+    observeWeather(
+      sun(),
+      reading(700),
+      reading(1, "mm/h"),
+      reading(0, ""),
+      options,
+    ).source,
+    "wh40",
+  );
+  assert.equal(
+    observeWeather(
+      sun(),
+      reading(700),
+      reading(0, "mm/h"),
+      reading(0, ""),
+      options,
+    ).source,
+    "ws90",
+  );
+  assert.equal(
+    observeWeather(sun(), reading(700), reading(0, "mm/h"), reading(1, ""), {
+      ...options,
+      secondaryRainRate: reading(0, "mm/h"),
+    }).kind,
+    "sunny",
+  );
+});

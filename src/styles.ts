@@ -3,6 +3,9 @@ export const cardStyles = css`
   :host {
     display: block;
     container: weather / inline-size;
+    max-width: var(--ecowitt-max-width, 1380px);
+    width: 100%;
+    margin-inline: auto;
     color: var(--primary-text-color, #edf5fc);
     --cyan: color-mix(
       in srgb,
@@ -40,7 +43,7 @@ export const cardStyles = css`
   }
   ha-card {
     display: block;
-    max-width: 1380px;
+    max-width: 100%;
     margin: auto;
     overflow: hidden;
     border: 1px solid var(--line);
@@ -730,7 +733,7 @@ export const cardStyles = css`
       padding: 24px;
     }
     .site-wrap {
-      max-width: 600px;
+      max-width: var(--ecowitt-site-max-width, 600px);
       width: 100%;
       justify-self: center;
     }

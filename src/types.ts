@@ -42,6 +42,7 @@ export type MetricKey =
   | "rain_year"
   | "rain_event"
   | "pressure"
+  | "pressure_absolute"
   | "uv"
   | "solar"
   | "solar_lux"
@@ -62,6 +63,8 @@ export interface DeviceStatusConfig {
 export interface CardConfig {
   type: string;
   title?: string;
+  max_width?: number;
+  wind_average_period_minutes?: number;
   subtitle?: string;
   site_image?: string;
   background_image?: string;
@@ -111,7 +114,7 @@ export const METRICS: {
   },
   {
     key: "wind_direction_avg",
-    label: "Mittlere Richtung · 10 Minuten",
+    label: "Mittlere Herkunftsrichtung · Zeitraum der Quelle",
     group: "Wind",
     unit: "°",
   },
@@ -192,6 +195,12 @@ export const METRICS: {
   {
     key: "pressure",
     label: "Relativer Luftdruck · GW3000",
+    group: "Druck & Sonne",
+    deviceClass: "atmospheric_pressure",
+  },
+  {
+    key: "pressure_absolute",
+    label: "Absoluter Luftdruck · GW3000",
     group: "Druck & Sonne",
     deviceClass: "atmospheric_pressure",
   },

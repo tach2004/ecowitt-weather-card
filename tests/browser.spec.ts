@@ -2056,6 +2056,7 @@ test("manual alternate gateway persists across a recreated editor and delayed HA
   await expect(
     recreated.getByLabel("Gerät GW3000", { exact: true }),
   ).toHaveValue("demo-alternate");
+  await recreated.getByText("Druck & Sonne", { exact: true }).click();
   const pressure = recreated.locator('[data-metric="pressure"]');
   await expect(pressure.locator(".suggestion")).toContainText(
     "Relativer Luftdruck · Alternativ",
@@ -2338,6 +2339,30 @@ test("installed real windrose flips into the dashboard, retains instance across 
     win.card.hass = win.hass;
     await win.card.updateComplete;
   });
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({
+      ...win.demoConfig,
+      windrose: {
+        config: { hide_windspeed_bar: false },
+        variants: [
+          {
+            title: "24 Stunden",
+            config: { data_period: { period_back: "-24h" } },
+          },
+          {
+            title: "Woche",
+            config: {
+              title: "Wochenwind",
+              data_period: { period_back: "-7d" },
+            },
+          },
+        ],
+      },
+    });
+    win.card.hass = win.hass;
+    await win.card.updateComplete;
+  });
   const initialURL = page.url();
   await page.locator(".site").click();
   const installed = page.locator("ecowitt-windrose-host windrose-card");
@@ -2350,6 +2375,8 @@ test("installed real windrose flips into the dashboard, retains instance across 
       .querySelector("ecowitt-windrose-host")
       .shadowRoot.querySelector("windrose-card");
   });
+  // Wait for the flip to finish before checking the projected SVG width.
+  await expect.poll(()=>installed.locator("svg").first().evaluate(el=>el.getBoundingClientRect().width)).toBeGreaterThan(200);
   const width = await installed
     .locator("svg")
     .first()
@@ -2376,6 +2403,25 @@ test("installed real windrose flips into the dashboard, retains instance across 
     ),
   ).toBe(true);
   expect(page.url()).toBe(initialURL);
+  await page.getByLabel("Windrosenvariante", { exact: true }).selectOption("1");
+  await expect
+    .poll(() =>
+      installed
+        .locator("ha-card")
+        .evaluate((el: any) => el.header ?? el.getAttribute("header")),
+    )
+    .toBe("Wochenwind");
+  await expect
+    .poll(() => page.evaluate(() => (window as any).roseRequests.length))
+    .toBe(4);
+  expect(
+    await page.evaluate(() => (window as any).installedRose.updateInterval),
+  ).toBeUndefined();
+  await page.evaluate(() => {
+    (window as any).installedRose = (window as DemoWindow).card.shadowRoot
+      .querySelector("ecowitt-windrose-host")
+      .shadowRoot.querySelector("windrose-card");
+  });
   await page.getByRole("button", { name: "Windgrafik", exact: true }).click();
   await expect(installed).toHaveCount(0);
   expect(
@@ -2383,4 +2429,149 @@ test("installed real windrose flips into the dashboard, retains instance across 
   ).toBeUndefined();
   await noOverflow(page);
   expect(errors).toEqual([]);
+});
+
+test("wind and climate panels retain large values in three columns and two wind rows on desktop and phone", async ({
+  page,
+}) => {
+  for (const width of [320, 402, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await ready(page);
+    const wind = page.locator(".panel.wind");
+    const positions = await wind
+      .locator(".trio > div")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect().y),
+      );
+    expect(new Set(positions).size).toBe(1);
+    expect(positions).toHaveLength(3);
+    await expect(wind.locator(".wind-minor")).toHaveCount(0);
+    await expect(wind.locator(".direction-pair > div")).toHaveCount(2);
+    await expect(wind.locator(".direction-compass").first()).toHaveCSS(
+      "color",
+      await wind
+        .locator(".panel-heading .icon")
+        .evaluate((el) => getComputedStyle(el).color),
+    );
+    await expect(page.locator(".climate .trio > div")).toHaveCount(3);
+    await expect(
+      page.locator('.climate [data-key="feels_like"]'),
+    ).toContainText("18,1");
+    await expect(wind).not.toContainText("10 Min.");
+    if (width < 760) {
+      await expect(
+        page.locator('.mobile-summary [data-key="temperature"]'),
+      ).toBeVisible();
+      await expect(
+        page.locator('.mobile-summary [data-key="rain_wet"]'),
+      ).toBeVisible();
+    }
+    await noOverflow(page);
+  }
+});
+
+test("maximum card width is a responsive ceiling and saves from the editor", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 2560, height: 1400 });
+  await ready(page, "/?editor=1");
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await editor
+    .getByText("Darstellung, Wetteranimation und Theme", { exact: true })
+    .click();
+  await editor
+    .getByLabel("Maximale Kartenbreite", { exact: true })
+    .evaluate((el) => {
+      (el as HTMLInputElement).value = "2100";
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as DemoWindow).lastEditorConfig?.max_width),
+    )
+    .toBe(2100);
+  await expect
+    .poll(() =>
+      page
+        .locator("ha-card")
+        .first()
+        .evaluate((el) => Math.round(el.getBoundingClientRect().width)),
+    )
+    .toBe(2100);
+  await page.setViewportSize({ width: 402, height: 874 });
+  expect(
+    (await page.locator("ha-card").first().boundingBox())!.width,
+  ).toBeLessThanOrEqual(394);
+  await noOverflow(page);
+});
+
+test("editor creates only opened sensor pickers and absolute pressure remains a distinct detail source", async ({
+  page,
+}) => {
+  await ready(page, "/?editor=1");
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await expect(editor.locator("ha-entity-picker")).toHaveCount(5);
+  await editor.getByText("Wind", { exact: true }).click();
+  await expect(editor.locator("ha-entity-picker")).toHaveCount(0);
+  await editor.getByText("Druck & Sonne", { exact: true }).click();
+  await expect(
+    editor.locator('[data-metric="pressure_absolute"] ha-entity-picker'),
+  ).toHaveCount(1);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      id = "sensor.demo_absolute_pressure";
+    win.hass.states[id] = {
+      entity_id: id,
+      state: "997.4",
+      attributes: {
+        friendly_name: "Absoluter Druck",
+        unit_of_measurement: "hPa",
+      },
+    };
+    win.editor.hass = { ...win.hass };
+    await win.editor.updateComplete;
+  });
+  await editor
+    .locator('[data-metric="pressure_absolute"] select')
+    .selectOption("sensor.demo_absolute_pressure");
+  await page.locator('.metric[data-key="pressure"]').click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator('[data-key="pressure_absolute"]')).toContainText(
+    "997,4",
+  );
+  await expect(dialog.locator('[data-key="pressure"]')).toContainText("1.012");
+});
+
+test("rain tile drops have colored visible strokes on light and dark themes with narrow animation layers", async ({
+  page,
+}) => {
+  for (const theme of ["light", "dark"]) {
+    await ready(page, theme === "light" ? "/?theme=light" : "/");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const drops = page.locator(".rain .scene-rain-drop");
+    await expect(drops.first()).toBeVisible();
+    const style = await drops.first().evaluate((el) => ({
+      background: getComputedStyle(el).backgroundImage,
+      width: el.getBoundingClientRect().width,
+      track: el.parentElement!.getBoundingClientRect().width,
+      opacity: getComputedStyle(el.closest(".weather-scene")!).opacity,
+    }));
+    expect(style.background).toContain("rgb");
+    expect(style.track).toBeLessThanOrEqual(4);
+    expect(Number(style.opacity)).toBeGreaterThan(0.9);
+    const before = await drops.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().y),
+    );
+    await page.waitForTimeout(200);
+    expect(
+      await drops.evaluateAll(
+        (nodes, before) =>
+          nodes.some(
+            (node, index) =>
+              Math.abs(node.getBoundingClientRect().y - before[index]) > 5,
+          ),
+        before,
+      ),
+    ).toBe(true);
+  }
 });

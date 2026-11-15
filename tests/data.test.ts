@@ -417,3 +417,8 @@ test("secondary piezo rate requires rate units and never accepts wetness or accu
   assert.equal(reading("rain_rate_secondary", "1", "mm").status, "invalid");
   assert.equal(reading("rain_rate_secondary", "on", "").status, "invalid");
 });
+
+test("relative and absolute pressure use independently assigned sources without derived conversion", () => {
+  assert.equal(reading("pressure_absolute", "997.4", "hPa").value, 997.4);
+  assert.equal(reading("pressure_absolute", "997.4", "°C").status, "invalid");
+});

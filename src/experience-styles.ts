@@ -1,6 +1,69 @@
 import { css } from "lit";
 
 export const experienceStyles = css`
+  .trio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .trio > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .trio > div + div {
+    border-left: 1px solid var(--line);
+    padding-left: 14px;
+  }
+  .direction-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .direction-pair > div {
+    min-width: 0;
+  }
+  .direction-pair > div + div {
+    border-left: 1px solid var(--line);
+    padding-left: 14px;
+  }
+  .direction-compass {
+    color: var(--cyan);
+    white-space: nowrap;
+  }
+  .rose-variant {
+    min-width: 0;
+    max-width: 65%;
+    min-height: 44px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: var(--soft);
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px;
+  }
+  @container weather (max-width:519px) {
+    .trio {
+      gap: 7px;
+    }
+    .trio > div + div {
+      padding-left: 7px;
+    }
+    .trio .unit {
+      display: block;
+      margin-left: 0;
+    }
+    .trio .label {
+      font-size: 0.72rem;
+      min-height: 2.7em;
+    }
+    .direction-pair .label {
+      min-height: 2.7em;
+    }
+  }
   .wind-stage {
     position: relative;
     width: 100%;

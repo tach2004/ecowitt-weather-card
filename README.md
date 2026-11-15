@@ -58,6 +58,8 @@ Lizenz: MIT.
 
 ## Darstellung und Datenquellen
 
+[Kartenbreite, eigene Windrosen-YAML/Varianten, Mittelungszeitraum und Leistungsgrenzen](docs/DASHBOARD_OPTIONS.md).
+
 - Dezent beschrifteter Kompassring mit 0°–315° in 45°-Schritten zusätzlich zu N/O/S/W.
 - WS90-Batterie, Signalqualität und expliziter Verbindungsstatus auf der Hauptkarte; weitere Geräte im Detail und optional im Header. Batterien in Volt werden **nicht** in Prozentwerte umgerechnet.
 - Komfortabler Sensor-Editor mit Gerätegruppen, Suche und Checkboxen statt Strg-Mehrfachauswahl.

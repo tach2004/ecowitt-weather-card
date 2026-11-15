@@ -221,3 +221,47 @@ test("automatic direction config rejects a source with incompatible units", () =
     /Windrichtungsquelle in Grad/,
   );
 });
+
+test("native custom type and complete variant options select exactly the requested installed element", async () => {
+  const { selectedWindrose, windroseElementName } =
+    await import("../src/windrose");
+  const options = {
+    config: { hide_windspeed_bar: false },
+    variants: [
+      {
+        title: "Tag",
+        config: {
+          type: "custom:forked-windrose",
+          data_period: { period_back: "-24h" },
+          buttons_config: {
+            buttons: [{ type: "period_selector", preset_period: "today" }],
+          },
+        },
+      },
+      { title: "Woche", config: { data_period: { period_back: "-7d" } } },
+    ],
+  };
+  const first = buildWindroseConfig(
+    selectedWindrose(options, 0),
+    entities,
+    hass,
+  );
+  assert.equal(first.type, "custom:forked-windrose");
+  assert.equal(first.hide_windspeed_bar, false);
+  assert.deepEqual(
+    first.buttons_config,
+    options.variants[0].config.buttons_config,
+  );
+  assert.equal(windroseElementName(first.type), "forked-windrose");
+  const second = buildWindroseConfig(
+    selectedWindrose(options, 1),
+    entities,
+    hass,
+  );
+  assert.equal(second.type, "custom:windrose-card");
+  assert.deepEqual(second.data_period, { period_back: "-7d" });
+  assert.throws(
+    () => windroseElementName("https://example.test/code.js"),
+    /Kartentyp/,
+  );
+});
