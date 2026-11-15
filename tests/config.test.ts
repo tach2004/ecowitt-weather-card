@@ -253,3 +253,35 @@ test("optional weather, secondary rain and native windrose config survive editor
     undefined,
   );
 });
+
+test("card width and source average period normalize independently of native windrose variants", () => {
+  const input = {
+    max_width: 2200,
+    wind_average_period_minutes: 10,
+    entities: { pressure_absolute: "sensor.demo_absolute" },
+    windrose: {
+      card_type: "custom:windrose-card",
+      config: { hide_windspeed_bar: false },
+      variants: [
+        { title: "Woche", config: { data_period: { period_back: "-7d" } } },
+        {
+          title: "Fork",
+          card_type: "custom:my-windrose",
+          config: { title: "Eigene Ansicht" },
+        },
+      ],
+    },
+  };
+  const result = normalizeConfig(input);
+  assert.equal(result.max_width, 2200);
+  assert.equal(result.wind_average_period_minutes, 10);
+  assert.equal(result.entities?.pressure_absolute, "sensor.demo_absolute");
+  assert.deepEqual(result.windrose?.variants, input.windrose.variants);
+  assert.notEqual(
+    result.windrose?.variants?.[0].config,
+    input.windrose.variants[0].config,
+  );
+  assert.equal(normalizeConfig({ max_width: 99999 }).max_width, 3200);
+  assert.equal(normalizeConfig({}).max_width, 1380);
+  assert.equal(normalizeConfig({}).wind_average_period_minutes, undefined);
+});

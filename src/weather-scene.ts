@@ -30,49 +30,59 @@ export function weatherScene(
         ? 10
         : 7;
   return html`<div
-    class="weather-scene weather-scene--${surface} weather-scene--${observation.kind} ${animated
-      ? "weather-scene--animated"
-      : "weather-scene--still"}"
+    class="weather-scene weather-scene--${surface} weather-scene--${observation.kind} ${
+      animated ? "weather-scene--animated" : "weather-scene--still"
+    }"
     data-scene-weather=${observation.kind}
     aria-hidden="true"
   >
     <span class="scene-atmosphere"></span>
-    ${sun
-      ? html`<span class="scene-corona"></span><span class="scene-sun"></span
-          ><span class="scene-sun-glint"></span>`
-      : nothing}
-    ${observation.kind === "night"
-      ? html`<span class="scene-night-haze"></span
-          ><span class="scene-moon"></span>`
-      : nothing}
-    ${observation.kind === "daylight"
-      ? html`<span class="scene-daylight"></span>`
-      : nothing}
-    ${clouds
-      ? html`<span class="scene-cloud scene-cloud--far"></span
-          ><span class="scene-cloud scene-cloud--near"></span>`
-      : nothing}
-    ${rain
-      ? html`<span class="scene-rain-sheen"></span>
-          ${Array.from(
-            { length: dropCount },
-            (_, index) =>
-              html`<span
-                class="scene-drop-track"
-                style=${`--x:${5 + ((index * 29) % 91)}%;--duration:${0.72 + (index % 7) * 0.11}s;--delay:${-((index * 0.173) % 2)}s;--rest-y:${12 + ((index * 17) % 70)}%;--drop-size:${12 + (index % 4) * 4}px`}
-                ><span class="scene-rain-drop"></span
-              ></span>`,
-          )}
-          ${Array.from(
-            { length: splashCount },
-            (_, index) =>
-              html`<span
-                class="scene-splash"
-                style=${`--x:${22 + ((index * 13) % 57)}%;--y:${72 + ((index * 7) % 14)}%;--duration:${1.12 + (index % 4) * 0.19}s;--delay:${-((index * 0.317) % 2)}s`}
-                ><span class="scene-splash-crown"></span
-              ></span>`,
-          )} `
-      : nothing}
+    ${
+      sun
+        ? html`<span class="scene-corona"></span><span class="scene-sun"></span
+            ><span class="scene-sun-glint"></span>`
+        : nothing
+    }
+    ${
+      observation.kind === "night"
+        ? html`<span class="scene-night-haze"></span
+            ><span class="scene-moon"></span>`
+        : nothing
+    }
+    ${
+      observation.kind === "daylight"
+        ? html`<span class="scene-daylight"></span>`
+        : nothing
+    }
+    ${
+      clouds
+        ? html`<span class="scene-cloud scene-cloud--far"></span
+            ><span class="scene-cloud scene-cloud--near"></span>`
+        : nothing
+    }
+    ${
+      rain
+        ? html`<span class="scene-rain-sheen"></span>
+            ${Array.from(
+              { length: dropCount },
+              (_, index) =>
+                html`<span
+                  class="scene-drop-track"
+                  style=${`--x:${5 + ((index * 29) % 91)}%;--duration:${0.72 + (index % 7) * 0.11}s;--delay:${-((index * 0.173) % 2)}s;--rest-y:${12 + ((index * 17) % 70)}%;--drop-size:${12 + (index % 4) * 4}px`}
+                  ><span class="scene-rain-drop"></span
+                ></span>`,
+            )}
+            ${Array.from(
+              { length: splashCount },
+              (_, index) =>
+                html`<span
+                  class="scene-splash"
+                  style=${`--x:${22 + ((index * 13) % 57)}%;--y:${72 + ((index * 7) % 14)}%;--duration:${1.12 + (index % 4) * 0.19}s;--delay:${-((index * 0.317) % 2)}s`}
+                  ><span class="scene-splash-crown"></span
+                ></span>`,
+            )} `
+        : nothing
+    }
   </div>`;
 }
 
@@ -236,13 +246,16 @@ export const weatherSceneStyles = css`
     background: radial-gradient(ellipse at 50% 85%, #64d8ff15, transparent 66%);
   }
   .scene-drop-track {
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    left: var(--x);
+    width: 3px;
     transform: translateY(var(--rest-y));
   }
   .scene-rain-drop {
     position: absolute;
     display: block;
-    left: var(--x);
+    left: 0;
     top: 0;
     width: 1.6px;
     height: var(--drop-size);
@@ -309,6 +322,17 @@ export const weatherSceneStyles = css`
   .weather-scene--animated .scene-splash {
     animation: weather-ground-splash var(--duration) ease-out var(--delay)
       infinite;
+  }
+  .weather-scene--tile.weather-scene--rain {
+    opacity: 0.95;
+  }
+  .weather-scene--tile .scene-rain-drop {
+    width: 2px;
+    background: linear-gradient(180deg, transparent, var(--cyan, #0086a5) 70%);
+    box-shadow: 0 0 2px #0086a530;
+  }
+  .weather-scene--tile .scene-splash {
+    border-color: var(--cyan, #0086a5);
   }
   .weather-scene--tile .scene-sun {
     left: auto;

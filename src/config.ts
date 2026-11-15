@@ -1,3 +1,4 @@
+import { normalizeWindroseOptions } from "./windrose";
 import {
   METRICS,
   type CardConfig,
@@ -87,6 +88,12 @@ export function normalizeConfig(value: unknown): CardConfig {
   return {
     type: "custom:ecowitt-weather-card",
     title: text(value.title),
+    max_width: bounded(value.max_width, 900, 3200) ?? 1380,
+    wind_average_period_minutes: bounded(
+      value.wind_average_period_minutes,
+      1,
+      1440,
+    ),
     subtitle: text(value.subtitle),
     site_image: text(value.site_image),
     background_image: text(value.background_image),
@@ -110,17 +117,20 @@ export function normalizeConfig(value: unknown): CardConfig {
     weather_entity: text(value.weather_entity)?.startsWith("weather.")
       ? text(value.weather_entity)
       : undefined,
-    windrose: {
-      enabled: !record(value.windrose) || value.windrose.enabled !== false,
-      config:
-        record(value.windrose) && record(value.windrose.config)
-          ? structuredClone(value.windrose.config)
-          : undefined,
-    },
+    windrose: normalizeWindroseOptions(value.windrose),
     history_hours: bounded(value.history_hours, 1, 168),
     stale_after_minutes: bounded(value.stale_after_minutes, 0, 10080),
     grid_options: record(value.grid_options)
       ? { ...value.grid_options }
       : undefined,
   };
+}
+
+/** HA may re-submit an unchanged preview config. Unserializable native configs are handled by their host. */
+export function sameConfig(a: CardConfig, b: CardConfig): boolean {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }

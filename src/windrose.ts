@@ -1,9 +1,14 @@
 import type { HomeAssistant, MetricKey } from "./types";
 
 /** Options for the separately installed HACS windrose-card, never a runtime download. */
-export interface WindroseOptions {
-  enabled?: boolean;
+export interface WindroseVariant {
+  title?: string;
+  card_type?: string;
   config?: Record<string, unknown>;
+}
+export interface WindroseOptions extends WindroseVariant {
+  enabled?: boolean;
+  variants?: WindroseVariant[];
 }
 export interface WindrosePreferences {
   reducedMotion?: boolean;
@@ -23,6 +28,48 @@ const speedUnits: Record<string, string> = {
 };
 const record = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+export function normalizeWindroseOptions(value: unknown): WindroseOptions {
+  const input = record(value) ? value : {};
+  const variant = (entry: Record<string, unknown>): WindroseVariant => {
+    const result: WindroseVariant = {};
+    if (typeof entry.title === "string") result.title = entry.title;
+    if (typeof entry.card_type === "string")
+      result.card_type = entry.card_type.trim();
+    if (record(entry.config)) result.config = structuredClone(entry.config);
+    return result;
+  };
+  return {
+    ...variant(input),
+    enabled: input.enabled !== false,
+    variants: Array.isArray(input.variants)
+      ? input.variants.filter(record).map(variant)
+      : undefined,
+  };
+}
+export function selectedWindrose(
+  options: WindroseOptions | undefined,
+  index = 0,
+): WindroseOptions | undefined {
+  const variant = options?.variants?.[index];
+  return variant
+    ? {
+        enabled: options?.enabled,
+        card_type: variant.card_type ?? options?.card_type,
+        config: { ...options?.config, ...variant.config },
+      }
+    : options;
+}
+export function windroseElementName(type: unknown): string {
+  if (
+    typeof type !== "string" ||
+    !/^custom:[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/.test(type)
+  )
+    throw new Error(
+      "Für die Windrose einen geladenen Kartentyp als custom:element-name angeben.",
+    );
+  return type.slice(7);
+}
 
 /** Clone because the upstream card is allowed to normalize its own config. */
 function cloneConfig(value: Record<string, unknown>): Record<string, unknown> {
@@ -45,6 +92,8 @@ export function buildWindroseConfig(
   if (options?.config !== undefined && !record(options.config))
     throw new Error("Die Windrosen-Konfiguration muss ein Objekt sein.");
   const supplied = cloneConfig(options?.config ?? {});
+  const type = options?.card_type ?? supplied.type ?? "custom:windrose-card";
+  windroseElementName(type);
   if (
     supplied.wind_direction_entity !== undefined &&
     !record(supplied.wind_direction_entity)
@@ -118,7 +167,7 @@ export function buildWindroseConfig(
     hide_windspeed_bar: true,
     ...supplied,
     // This wrapper embeds precisely the installed windrose-card, not another element.
-    type: "custom:windrose-card",
+    type,
     wind_direction_entity: direction,
     windspeed_entities: reduced
       ? speeds.map((source) => ({

@@ -3,6 +3,7 @@ import type { HomeAssistant } from "./types";
 import {
   buildWindroseConfig,
   windroseConfigKey,
+  windroseElementName,
   type WindroseEntities,
   type WindroseOptions,
 } from "./windrose";
@@ -35,14 +36,16 @@ export class EcowittWindroseHost extends LitElement {
 
   protected render() {
     return html`<div class="installed-card"></div>
-      ${this._message
-        ? html` <div class="setup" role="status">
-            <p>${this._message}</p>
-            <button type="button" @click=${() => this._sync()}>
-              Erneut prüfen
-            </button>
-          </div>`
-        : nothing}`;
+      ${
+        this._message
+          ? html` <div class="setup" role="status">
+              <p>${this._message}</p>
+              <button type="button" @click=${() => this._sync()}>
+                Erneut prüfen
+              </button>
+            </div>`
+          : nothing
+      }`;
   }
   protected updated(_changes: PropertyValues) {
     this._sync();
@@ -72,12 +75,6 @@ export class EcowittWindroseHost extends LitElement {
       this._message = "Home Assistant wird verbunden …";
       return;
     }
-    if (!customElements.get("windrose-card")) {
-      this._removeCard();
-      this._message =
-        "Die installierte Windrose-Karte ist noch nicht geladen. Die HACS-Ressource windrose-card.js prüfen und anschließend erneut versuchen.";
-      return;
-    }
     try {
       const config = buildWindroseConfig(
         this.options,
@@ -88,6 +85,12 @@ export class EcowittWindroseHost extends LitElement {
           animation: this.animation,
         },
       );
+      const tag = windroseElementName(config.type);
+      if (!customElements.get(tag)) {
+        this._removeCard();
+        this._message = `Die installierte Windrose-Karte (${tag}) ist noch nicht geladen. Die HACS-Ressource für diesen Kartentyp prüfen und erneut versuchen.`;
+        return;
+      }
       const key = windroseConfigKey(config);
       const container = this.renderRoot.querySelector(".installed-card");
       if (!container) return;
@@ -95,9 +98,7 @@ export class EcowittWindroseHost extends LitElement {
         // Upstream setConfig does not restart a changed polling interval itself.
         // A real config change gets a new element; state-only updates keep the old one.
         this._removeCard();
-        const card = document.createElement(
-          "windrose-card",
-        ) as InstalledWindrose;
+        const card = document.createElement(tag) as InstalledWindrose;
         if (typeof card.setConfig !== "function")
           throw new Error(
             "Die geladene Windrose-Karte unterstützt den Lovelace-Konfigurationsvertrag nicht.",
@@ -128,7 +129,7 @@ export class EcowittWindroseHost extends LitElement {
       min-width: 0;
       width: 100%;
     }
-    windrose-card {
+    .installed-card > * {
       display: block;
       width: 100%;
       min-width: 0;

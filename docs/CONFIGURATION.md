@@ -17,6 +17,8 @@ Ohne Sensorzuordnung zeigt die Karte die Einrichtung. Die Beispiele enthalten ab
 | --- | --- |
 | `type` | Immer `custom:ecowitt-weather-card` |
 | `title` | Eigener Kartentitel |
+| `max_width` | Maximale Kartenbreite 900–3200 CSS-Pixel, Standard 1380; Handy passt sich automatisch an |
+| `wind_average_period_minutes` | Optional bestätigter Quellzeitraum für die Mittelrichtungs-Beschriftung, keine Berechnung |
 | `subtitle` | Eigene Unterzeile |
 | `site_image` | Optionale HA-relative Bildquelle, URL derselben Herkunft oder `media-source://`-ID; leer = generische Grafik |
 | `background_image` | Alternativer Feldname für `site_image`; `site_image` hat Vorrang |
@@ -31,6 +33,8 @@ Ohne Sensorzuordnung zeigt die Karte die Einrichtung. Die Beispiele enthalten ab
 | `weather_animation` | Standard `true`; `false` lässt statische Wettereffekte sichtbar |
 | `weather_entity` | Optionale vorhandene `weather.*`-Quelle für aktuellen Himmelszustand, keine Vorhersageabfrage |
 | `windrose.enabled` | Standard `true`: installierte Windrose per Bild-Tap einbetten; `false` deaktiviert die Einbettung |
+| `windrose.card_type` | Geladener Custom-Card-Typ, Standard `custom:windrose-card`; Fork mit gleichem Typ über seine HA-Ressource laden |
+| `windrose.variants` | Benannte Ansichten mit eigener `config` und optionalem `card_type` |
 | `windrose.config` | Optionale native Windrosenkonfiguration; Standard nutzt ausgewählte Windquellen und letzte 24 h |
 | `history_hours` | Angefragtes Recorder-Zeitfenster: 1 bis 168 Stunden, Standard 24 |
 | `stale_after_minutes` | Aktualitätshinweis nach dieser Zeit seit letztem gültigen `last_reported`/`last_updated`; Standard 0 = aus, maximal 10080 Minuten. Diese Regel gilt auch für Wettereffekte. Ein alter Wert beweist keinen Offline-Status. |
@@ -49,7 +53,7 @@ Einheiten stammen aus den Sensorattributen. Die Karte gibt keinen °C-, km/h- od
 | `temperature_min`, `temperature_max` | Eigene Tagesminimum-/Maximumquellen haben Vorrang; ohne Zuordnung Recorder-Auswertung ab HA-Mitternacht |
 | `wind_speed`, `wind_gust` | Aktuelle Windgeschwindigkeit und Böen, WS90 |
 | `wind_direction` | Meteorologische Herkunft in Grad, WS90 |
-| `wind_direction_avg` | Mittlere Herkunftsrichtung der letzten 10 Minuten |
+| `wind_direction_avg` | Mittlere Herkunftsrichtung der ausgewählten Quelle; Zeitraum nicht pauschal angenommen |
 | `wind_speed_avg` | Historischer optionaler Key für mittlere Geschwindigkeit; bleibt gespeichert, wird aber nicht mehr auf der Hauptkarte oder im Editor angeboten |
 | `wind_gust_max` | Tagesmaximalböe |
 | `rain_today`, `rain_rate` | WH40-Kalendertag und aktuelle WH40-Regenrate |
@@ -59,6 +63,7 @@ Einheiten stammen aus den Sensorattributen. Die Karte gibt keinen °C-, km/h- od
 | `rain_week`, `rain_month`, `rain_year` | Zugeordnete Wochen-, Monats- und Jahressummen |
 | `rain_event` | Regenereignis aus einer vorhandenen Quellentität |
 | `pressure` | Relativer Luftdruck, GW3000 |
+| `pressure_absolute` | Absoluter Druck aus eigener GW3000-Quelle, nur in den Druckdetails |
 | `uv`, `solar` | UV-Index und Solarstrahlung, WS90 |
 
 Die mittlere Richtung ist keine Windrose. Eine Windrose benötigt eine echte Richtungs- und Geschwindigkeitsverteilung; sie wird in diesem Meilenstein nicht aus einem einzelnen Mittelwert erzeugt.
@@ -142,3 +147,5 @@ Der Editor kann das lokale HA-Medienverzeichnis über eine WebSocket-Abfrage dur
 Ein gelöschtes Bildfeld zeigt wieder die generische Grafik; eine noch ausstehende Antwort der alten Bildauflösung darf die frühere Quelle nicht erneut einsetzen. Geänderte Sensorauswahl allein lädt das unveränderte Hintergrundbild nicht neu.
 
 Den Zugriff auf das private Bild unbedingt ohne Anmeldung testen. HA-Media ist eine zu prüfende Möglichkeit, keine Sicherheitsgarantie. `/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt und wird für sensible Bilder nicht empfohlen.
+
+Karten-YAML für Forks und Varianten, Breitenregler und Leistungsgrenzen: [DASHBOARD_OPTIONS.md](DASHBOARD_OPTIONS.md).

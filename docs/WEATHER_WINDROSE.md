@@ -82,7 +82,7 @@ windrose:
       wind_direction_count: 16
 ```
 
-Die Upstream-Felder `wind_direction_entity` und `windspeed_entities` erlauben bei Bedarf andere tatsächlich vorhandene Quellen. Es werden keine festen Entity-IDs vorgeschrieben. `type` bleibt für die Einbettung `custom:windrose-card`. Für zusätzliche Upstream-Optionen wie Zeitwahl, Geschwindigkeitsklassen, Aktionen und Statistikdaten gilt die Dokumentation der installierten Windrose-Version.
+Die Upstream-Felder `wind_direction_entity` und `windspeed_entities` erlauben bei Bedarf andere tatsächlich vorhandene Quellen. Es werden keine festen Entity-IDs vorgeschrieben. Standardtyp ist `custom:windrose-card`; native `config.type` oder `windrose.card_type` können einen anderen bereits geladenen Custom-Card-Typ auswählen. Benannte Varianten stehen unter `windrose.variants`; siehe [DASHBOARD_OPTIONS.md](DASHBOARD_OPTIONS.md). Für zusätzliche Upstream-Optionen wie Zeitwahl, Geschwindigkeitsklassen, Aktionen und Statistikdaten gilt die Dokumentation der installierten Windrose-Version.
 
 Der Adapter bildet unterstützte Quellgeschwindigkeiten auf die nativen Einheiten der Windrose ab und verwendet standardmäßig dieselbe Ausgabeeinheit. Er erfindet keine Messpunkte, Recorder-Historie oder Statistik. Aufbewahrung, ausgeschlossene Entitäten, Statistikverfügbarkeit und die gewählte Messwert-Zuordnung begrenzen die Aussage der Windrose. Ein leerer oder kurzer Recorder-Zeitraum wird durch das Einbetten nicht vollständiger.
 

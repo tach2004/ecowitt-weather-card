@@ -10,6 +10,7 @@ import {
 } from "./daily-temperature";
 import type { RegistryDevice, RegistryEntity } from "./suggestions";
 import "./windrose-host";
+import { selectedWindrose } from "./windrose";
 import { sitePlan } from "./site-plan";
 import {
   getReading,
@@ -31,7 +32,7 @@ import {
   type HomeAssistant,
   type MetricKey,
 } from "./types";
-import { normalizeConfig } from "./config";
+import { normalizeConfig, sameConfig } from "./config";
 import { buildHistoryCharts } from "./chart";
 import "./editor";
 
@@ -72,7 +73,7 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "temperature_max",
     "vpd",
   ],
-  pressure: ["pressure"],
+  pressure: ["pressure", "pressure_absolute"],
   sun: ["uv", "solar", "solar_lux"],
   sensors: [],
 };
@@ -80,7 +81,7 @@ const graphKeys: Record<Detail, MetricKey[]> = {
   wind: ["wind_speed", "wind_gust"],
   rain: ["rain_rate", "rain_today"],
   temperature: ["temperature", "humidity"],
-  pressure: ["pressure"],
+  pressure: ["pressure", "pressure_absolute"],
   sun: ["uv", "solar"],
   sensors: [],
 };
@@ -125,6 +126,7 @@ export class EcowittWeatherCard extends LitElement {
     _imageError: { state: true },
     _flipped: { state: true },
     _roseActive: { state: true },
+    _roseVariant: { state: true },
     _roseHeight: { state: true },
     _reducedMotion: { state: true },
     _daily: { state: true },
@@ -152,6 +154,7 @@ export class EcowittWeatherCard extends LitElement {
   private _ageTimer?: ReturnType<typeof setInterval>;
   private _flipped = false;
   private _roseActive = false;
+  private _roseVariant = 0;
   private _roseHeight = 0;
   private _roseObserver?: ResizeObserver;
   private _observedBack?: Element;
@@ -177,7 +180,18 @@ export class EcowittWeatherCard extends LitElement {
     return { type: "custom:ecowitt-weather-card", entities: {} };
   }
   setConfig(config: CardConfig) {
-    this._config = normalizeConfig(config);
+    const normalized = normalizeConfig(config);
+    if (sameConfig(normalized, this._config)) return;
+    this._config = normalized;
+    this.style.setProperty(
+      "--ecowitt-max-width",
+      `${normalized.max_width ?? 1380}px`,
+    );
+    this.style.setProperty(
+      "--ecowitt-site-max-width",
+      `${(600 * (normalized.max_width ?? 1380)) / 1380}px`,
+    );
+    this._roseVariant = 0;
     this._rotation = undefined;
     this._averageRotation = undefined;
     const source =
@@ -379,7 +393,9 @@ export class EcowittWeatherCard extends LitElement {
               </div>
               <div class="main-layout">
                 ${this._site()}
-                <div class="weather">${this._wind()}${this._rain()}</div>
+                <div class="weather">
+                  ${this._climate()}${this._wind()}${this._rain()}
+                </div>
               </div>
               <div class="metrics">
                 ${this._metric(
@@ -695,7 +711,22 @@ export class EcowittWeatherCard extends LitElement {
             aria-hidden=${String(!this._flipped)}
           >
             <div class="wind-back-head">
-              <h3>Windrose</h3>
+              ${
+                this._config.windrose?.variants?.length
+                  ? html`<select
+                      class="rose-variant"
+                      aria-label="Windrosenvariante"
+                      .value=${String(this._roseVariant)}
+                      @change=${(event: Event) => {
+                        this._roseVariant = Number(
+                          (event.target as HTMLSelectElement).value,
+                        );
+                      }}
+                    >
+                      ${this._config.windrose.variants.map((variant, index) => html`<option value=${String(index)}>${variant.title || `Windrose ${index + 1}`}</option>`)}
+                    </select>`
+                  : html`<h3>Windrose</h3>`
+              }
               <button type="button" @click=${() => this._toggleRose(false)}>
                 Windgrafik
               </button>
@@ -703,7 +734,7 @@ export class EcowittWeatherCard extends LitElement {
             <ecowitt-windrose-host
               .hass=${this.hass}
               .entities=${this._config.entities}
-              .options=${this._config.windrose}
+              .options=${selectedWindrose(this._config.windrose, this._roseVariant)}
               .active=${this._roseActive}
               .reducedMotion=${this._reducedMotion}
               .animation=${this._config.weather_animation !== false}
@@ -712,7 +743,7 @@ export class EcowittWeatherCard extends LitElement {
         </div>
       </div>
       <div class="legend">
-        ${this._flipped ? html`<span>Richtungs- und Geschwindigkeitsverteilung</span>` : html`<span><i></i>Aktuelle Strömung zum Ziel</span><span><i class="average"></i>Ø 10 Min. Strömung</span>`}
+        ${this._flipped ? html`<span>Richtungs- und Geschwindigkeitsverteilung</span>` : html`<span><i></i>Aktuelle Strömung zum Ziel</span><span><i class="average"></i>Mittlere Strömung</span>`}
       </div>
       <div class="site-actions">
         ${this._config.windrose?.enabled !== false ? html`<button type="button" class="text-button rose-toggle" @click=${() => this._toggleRose()}>${this._flipped ? "Windgrafik anzeigen" : "Windrose öffnen ↻"}</button>` : nothing}
@@ -732,8 +763,50 @@ export class EcowittWeatherCard extends LitElement {
       </p>
     </section>`;
   }
+  private _climate() {
+    return html`<button
+      class="panel climate"
+      data-detail="temperature"
+      aria-label="Außenklimadetails öffnen"
+      @click=${() => this._openDetail("temperature")}
+    >
+      <div class="panel-heading">
+        ${icon("temperature")}
+        <h2>Außenklima</h2>
+        <span class="more">›</span>
+      </div>
+      <div class="trio">
+        ${(
+          [
+            ["temperature", "Temperatur"],
+            ["humidity", "Luftfeuchte"],
+            ["feels_like", "Gefühlt"],
+          ] as [MetricKey, string][]
+        ).map(
+          ([key, label]) =>
+            html`<div data-key=${key}>
+              <span class="label">${label}</span>${this._value(key)}
+            </div>`,
+        )}
+      </div>
+    </button>`;
+  }
+  private _direction(
+    key: "wind_direction" | "wind_direction_avg",
+    label: string,
+  ) {
+    const reading = this._reading(key);
+    return html`<div data-key=${key}>
+      <span class="label">${label}</span
+      ><span class="bearing"
+        >${reading.text}${reading.value !== null ? "°" : ""}<span
+          class="direction-compass"
+          >${reading.value !== null ? ` – ${directionLabel(reading.value)}` : ""}</span
+        ></span
+      >${this._status(reading)}
+    </div>`;
+  }
   private _wind() {
-    const direction = this._reading("wind_direction");
     return html`<button
       class="panel wind"
       data-detail="wind"
@@ -745,42 +818,20 @@ export class EcowittWeatherCard extends LitElement {
         <h2>Wind</h2>
         <span class="source-label">WS90</span><span class="more">›</span>
       </div>
-      <div class="duo">
+      <div class="trio">
         <div data-key="wind_speed">
           <span class="label">Aktuell</span>${this._value("wind_speed")}
         </div>
         <div data-key="wind_gust">
           <span class="label">Böen</span>${this._value("wind_gust")}
         </div>
-      </div>
-      <div class="wind-direction">
-        <div data-key="wind_direction">
-          <span class="label">Herkunftsrichtung</span
-          ><span class="bearing"
-            >${direction.text}${direction.value !== null ? "°" : ""}</span
-          >${this._status(direction)}
-        </div>
-        <div class="from">
-          Wind aus<br /><b
-            >${
-              direction.value === null ? "—" : directionLabel(direction.value)
-            }</b
-          >
-        </div>
-      </div>
-      <div class="wind-minor">
-        <div data-key="wind_direction_avg">
-          <span class="label">Ø 10 Min. Richtung</span>${this._value(
-            "wind_direction_avg",
-            true,
-          )}
-        </div>
         <div data-key="wind_gust_max">
-          <span class="label">Max. Böe heute</span>${this._value(
-            "wind_gust_max",
-            true,
-          )}
+          <span class="label">Max. Böe heute</span
+          >${this._value("wind_gust_max")}
         </div>
+      </div>
+      <div class="wind-direction direction-pair">
+        ${this._direction("wind_direction", "Herkunftsrichtung")}${this._direction("wind_direction_avg", this._config.wind_average_period_minutes ? `Ø ${this._config.wind_average_period_minutes} Min. Richtung` : "Mittlere Herkunftsrichtung")}
       </div>
     </button>`;
   }
@@ -993,7 +1044,7 @@ export class EcowittWeatherCard extends LitElement {
                               detail === "rain"
                                 ? "WH40-Mengen und WS90-Feuchtigkeit sind getrennte Messungen. Heute ist der Kalendertag; letzte 24 Stunden benötigt eine eigene gleitende Quelle."
                                 : detail === "wind"
-                                  ? "Richtungsangaben bezeichnen die meteorologische Herkunft. Strömungspfeile zeigen von dort zum Ziel. 10-Minuten-Mittel stammen aus den zugeordneten Quellen. Die Windrose öffnet sich beim Tippen auf die Windgrafik."
+                                  ? "Richtungsangaben bezeichnen die meteorologische Herkunft. Strömungspfeile zeigen von dort zum Ziel. Mittelrichtung und Mittelungszeitraum stammen aus der ausgewählten Quelle; die Karte berechnet keinen eigenen 10-Minuten-Mittelwert. Die Windrose öffnet sich beim Tippen auf die Windgrafik."
                                   : "Aktuelle Werte der ausgewählten Home-Assistant-Quellen; Verläufe stammen ausschließlich aus dem lokalen Recorder."
                             }
                           </p>

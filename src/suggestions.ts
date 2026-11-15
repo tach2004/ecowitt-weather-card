@@ -79,7 +79,7 @@ export function metricRole(
 ): DeviceRole {
   if (key === "rain_rate_secondary") return "WS90";
   if (key.startsWith("rain_")) return key === "rain_wet" ? "WS90" : "WH40";
-  if (key === "pressure") return "GW3000";
+  if (key === "pressure" || key === "pressure_absolute") return "GW3000";
   if (
     [
       "temperature",
@@ -244,10 +244,13 @@ function matchesMetric(
     return (
       dc === "humidity" && !maximum && !minimum && !average && !longerPeriod
     );
-  if (key === "pressure")
+  if (key === "pressure" || key === "pressure_absolute")
     return (
       ["atmospheric_pressure", "pressure"].includes(dc || "") &&
-      /(?:relative|relativ)/.test(name) &&
+      (key === "pressure_absolute"
+        ? /(?:absolute|absolut)/
+        : /(?:relative|relativ)/
+      ).test(name) &&
       !maximum &&
       !minimum &&
       !average &&

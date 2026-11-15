@@ -109,7 +109,8 @@ export function isUnitValid(key: MetricKey, unit: string): boolean {
   )
     return temperature.has(unit);
   if (key === "humidity") return unit === "%";
-  if (key === "pressure") return pressure.has(unit);
+  if (key === "pressure" || key === "pressure_absolute")
+    return pressure.has(unit);
   if (key === "uv") return uvUnits.has(unit.trim().toLowerCase());
   if (key === "solar") return solar.has(unit);
   if (key === "rain_rate" || key === "rain_rate_secondary")
@@ -137,7 +138,8 @@ function validRange(key: MetricKey, value: number): boolean {
     key === "solar_lux" ||
     key === "vpd" ||
     key === "uv" ||
-    key === "pressure"
+    key === "pressure" ||
+    key === "pressure_absolute"
   )
     return value >= 0;
   return true;
