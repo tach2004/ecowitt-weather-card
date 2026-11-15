@@ -4,7 +4,7 @@
 
 Unter **Darstellung, Wetteranimation und Theme → Maximale Kartenbreite** lässt sich die Obergrenze zwischen 900 und 3200 CSS-Pixeln einstellen. Standard ist die bisherige Breite 1380. Dasselbe Feld heißt im Karten-YAML `max_width`. Die Grafik kann mit der größeren Desktop-Karte wachsen; es wird kein CSS-Zoom benutzt. Auf dem Handy begrenzt weiterhin der verfügbare Platz die Karte, die Inhalte ordnen sich nach ihrer tatsächlichen Breite um. In Sections muss auch das HA-Grid genügend Breite bereitstellen.
 
-Über Wind stehen Temperatur, Luftfeuchte und gefühlte Temperatur in einem eigenen Außenklima-Kasten. Wind zeigt oben Aktuell, Böen und Tagesmaximalböe; darunter aktuelle und mittlere Herkunft einschließlich farbiger Himmelsrichtung. Die mobile Temperatur-/Nass-Zusammenfassung über der Windgrafik bleibt bestehen. Der absolute Druck ist separat unter **Druck & Sonne → Absoluter Luftdruck** auswählbar und erscheint in den Druckdetails. Er wird nicht aus relativem Druck errechnet.
+Über Wind stehen Temperatur, Luftfeuchte und gefühlte Temperatur in einem eigenen Außenklima-Kasten. Wind zeigt oben Aktuell, Böen und Tagesmaximalböe; darunter aktuelle und mittlere Herkunft einschließlich farbiger Himmelsrichtung. Die mobile Temperatur-/Nass-Zusammenfassung über der Windgrafik bleibt bestehen. Der absolute Druck ist separat unter **Druck & Sonne → Absoluter Luftdruck** auswählbar und erscheint als „Luftdruck absolut“ in der unteren Hauptleiste. Die Druckdetails zeigen zusätzlich den relativen Druck. Beide Werte bleiben getrennten Entitäten zugeordnet; es wird nichts ineinander umgerechnet.
 
 ## Wo gehört `windrose.config` hin?
 
