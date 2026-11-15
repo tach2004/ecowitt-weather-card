@@ -29,6 +29,18 @@ const deviceRoles = new Set<DeviceRole>([
   "WN31",
   "GW3000",
 ]);
+function savedDeviceRoles(
+  value: unknown,
+): Partial<Record<DeviceRole, string>> | undefined {
+  if (!record(value)) return undefined;
+  const result: Partial<Record<DeviceRole, string>> = {};
+  for (const role of deviceRoles) {
+    // A saved blank selection deliberately suppresses automatic suggestions.
+    // Registry availability is transient; never discard a saved device ID here.
+    if (typeof value[role] === "string") result[role] = value[role].trim();
+  }
+  return result;
+}
 function deviceStatus(value: unknown): DeviceStatusConfig[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const unique = new Set<string>();
@@ -82,6 +94,7 @@ export function normalizeConfig(value: unknown): CardConfig {
     image_target_x: bounded(value.image_target_x, 10, 90),
     image_target_y: bounded(value.image_target_y, 10, 90),
     entities,
+    device_roles: savedDeviceRoles(value.device_roles),
     extra_entities: ids(value.extra_entities),
     diagnostic_entities: ids(value.diagnostic_entities),
     device_status: deviceStatus(value.device_status),

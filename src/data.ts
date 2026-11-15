@@ -154,10 +154,11 @@ function format(value: number, key: MetricKey): string {
     "pressure",
     "solar",
     "solar_lux",
+    "uv",
   ].includes(key);
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: whole ? 0 : 1,
-    maximumFractionDigits: key.startsWith("wind_direction") ? 0 : 1,
+    maximumFractionDigits: key.startsWith("wind_direction") || key === "uv" ? 0 : 1,
   }).format(value);
 }
 

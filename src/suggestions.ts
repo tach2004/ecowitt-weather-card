@@ -65,6 +65,14 @@ export function uniqueRoleDevices(
   return result;
 }
 
+/** Saved user choices take priority even before the registry becomes available. */
+export function resolveDeviceRoles(
+  devices: RegistryDevice[],
+  saved: Partial<Record<DeviceRole, string>> = {},
+): Partial<Record<DeviceRole, string>> {
+  return { ...uniqueRoleDevices(devices), ...saved };
+}
+
 export function metricRole(
   key: MetricKey,
   selected: Partial<Record<DeviceRole, string>>,

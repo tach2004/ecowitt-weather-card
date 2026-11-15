@@ -12,7 +12,7 @@ import {
   candidateEntities,
   deviceLabel,
   roleForDevice,
-  uniqueRoleDevices,
+  resolveDeviceRoles,
   type DeviceRole,
   type RegistryDevice,
   type RegistryEntity,
@@ -54,6 +54,10 @@ export class EcowittWeatherCardEditor extends LitElement {
 
   setConfig(config: CardConfig): void {
     this._config = normalizeConfig(config);
+    this._roleDevices = resolveDeviceRoles(
+      this._devices,
+      this._config.device_roles,
+    );
   }
   protected updated(changed: PropertyValues): void {
     if (
@@ -78,7 +82,7 @@ export class EcowittWeatherCardEditor extends LitElement {
         deviceLabel(a).localeCompare(deviceLabel(b)),
       );
       this._registry = entities;
-      this._roleDevices = uniqueRoleDevices(devices);
+      this._roleDevices = resolveDeviceRoles(devices, this._config.device_roles);
       this._registryState = "ready";
     } catch {
       this._registryState = "unavailable";
@@ -100,6 +104,12 @@ export class EcowittWeatherCardEditor extends LitElement {
     if (value) entities[key] = value;
     else delete entities[key];
     this._change({ entities });
+  }
+  private _setDeviceRole(role: DeviceRole, value: string): void {
+    if (value && !this._devices.some((device) => device.id === value)) return;
+    const device_roles = { ...this._config.device_roles, [role]: value };
+    this._roleDevices = resolveDeviceRoles(this._devices, device_roles);
+    this._change({ device_roles });
   }
   private _value(event: Event): string {
     return (event.target as HTMLInputElement).value;
@@ -664,12 +674,13 @@ export class EcowittWeatherCardEditor extends LitElement {
       <details open class="device-assistant">
         <summary>Geräte auswählen · Vorschläge prüfen</summary>
         <p class="hint">
-          Diese Geräteauswahl filtert nur vorübergehend die Sensorvorschläge und
-          wird nicht gespeichert. Sie ersetzt keine vorhandene Sensorzuordnung.
-          Erst ein bewusstes „übernehmen“ oder eine manuelle Sensorauswahl wird
-          gespeichert. WN32 ist optional; ohne WN32 werden passende WS90-Quellen
-          vorgeschlagen. Dauerhafte Gerätestatus-Einstellungen stehen weiter
-          unten.
+          Eine geänderte Geräteauswahl wird mit der Karte gespeichert und beim
+          nächsten Öffnen wiederhergestellt. Sie steuert passende
+          Sensorvorschläge und ersetzt keine vorhandene Sensorzuordnung. Erst
+          „übernehmen“ oder eine manuelle Sensorauswahl ändert eine Messquelle.
+          WN32 ist optional; ohne WN32 werden passende WS90-Quellen vorgeschlagen.
+          Zum Abschluss im Home-Assistant-Karteneditor „Speichern“ wählen.
+          Batterie-, Signal- und Verbindungsquellen stehen weiter unten.
         </p>
         ${this._registryState === "loading"
           ? html`<p role="status">Geräteregister wird geladen …</p>`
@@ -680,7 +691,7 @@ export class EcowittWeatherCardEditor extends LitElement {
               Feldern aus.
             </p>`
           : nothing}
-        ${this._devices.length
+        ${this._devices.length || Object.keys(this._config.device_roles || {}).length
           ? html`<div class="fields">
               ${DEVICE_ROLES.filter((role) => role !== "WN31").map(
                 (role) =>
@@ -688,14 +699,16 @@ export class EcowittWeatherCardEditor extends LitElement {
                     >${role === "WN32" ? "WN32 · optional" : role}<select
                       aria-label=${`Gerät ${role}`}
                       .value=${this._roleDevices[role] || ""}
-                      @change=${(event: Event) => {
-                        this._roleDevices = {
-                          ...this._roleDevices,
-                          [role]: this._value(event) || undefined,
-                        };
-                      }}
+                      @change=${(event: Event) =>
+                        this._setDeviceRole(role, this._value(event))}
                     >
                       <option value="">Kein Gerät ausgewählt</option>
+                      ${this._roleDevices[role] &&
+                      !this._devices.some((device) => device.id === this._roleDevices[role])
+                        ? html`<option value=${this._roleDevices[role]!} .selected=${true}>
+                            Gespeicherte Auswahl · Gerät derzeit nicht verfügbar
+                          </option>`
+                        : nothing}
                       ${this._devices.map(
                         (device) =>
                           html`<option

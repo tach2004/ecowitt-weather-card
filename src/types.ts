@@ -66,6 +66,8 @@ export interface CardConfig {
   image_target_x?: number;
   image_target_y?: number;
   entities?: Partial<Record<MetricKey, string>>;
+  /** Saved registry-device choices for sensor suggestions; empty string disables a role. */
+  device_roles?: Partial<Record<DeviceRole, string>>;
   extra_entities?: string[];
   /** Per-device status selections; no values are inferred or fabricated. */
   device_status?: DeviceStatusConfig[];
