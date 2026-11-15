@@ -496,8 +496,8 @@ for (const view of ["panel", "sections"])
       await page.setViewportSize({ width, height: width === 402 ? 874 : 1050 });
       await ready(page, `/?view=${view}&theme=light`);
       await noOverflow(page);
-      await expect(page.locator('[data-key="pressure"]').first()).toContainText(
-        "1.012",
+      await expect(page.locator('.metric[data-key="pressure_absolute"]')).toContainText(
+        "998,6",
       );
       const contrast = await page
         .locator("ecowitt-weather-card")
@@ -2534,7 +2534,8 @@ test("editor creates only opened sensor pickers and absolute pressure remains a 
   await editor
     .locator('[data-metric="pressure_absolute"] select')
     .selectOption("sensor.demo_absolute_pressure");
-  await page.locator('.metric[data-key="pressure"]').click();
+  await expect(page.locator('.metric[data-key="pressure_absolute"]')).toContainText("997,4");
+  await page.locator('.metric[data-key="pressure_absolute"]').click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.locator('[data-key="pressure_absolute"]')).toContainText(
     "997,4",

@@ -117,3 +117,8 @@
 - Die Custom Card benötigt ein editierbares Feld `background_image` / `site_image` für eine nutzereigene Bildquelle aus Home Assistant. Bei fehlendem Bild generische, nicht personenbezogene Standardillustration verwenden.
 - Realistisches Grundstücksbild optional **außerhalb des Git-Repositories** auf der privaten HA-Instanz hinterlegen und dort als Bildquelle konfigurieren. `/config/www` bzw. `/local/` ist nicht notwendigerweise zugriffsgeschützt; dies muss vor Auswahl der Speicherstrategie klar dokumentiert und bei externer HA-Erreichbarkeit geprüft werden. Wenn möglich, HA-Authentisierung/Media-Verwaltung nutzen und das Zugriffskonzept testen.
 - Niemals private Bilder in Build-Artefakte einbetten, die mit HACS verteilt werden. Keine Bild-Upload-Funktion implementieren, die private Nutzerbilder unbemerkt an Dritte übermittelt.
+
+
+## Bestätigte Anpassung vom 15.11.2026 — Druckanzeige
+
+Die untere Kennzahlenleiste zeigt den **absoluten Luftdruck am Standort** aus `entities.pressure_absolute`. Der relative, auf Meereshöhe bezogene Druck aus `entities.pressure` bleibt in den Druckdetails verfügbar. Die beiden Quellzuordnungen bleiben getrennt; es wird nichts umgerechnet oder stillschweigend ersetzt. Diese Entscheidung ersetzt die frühere Vorgabe zum relativen Druck auf dem Hauptbildschirm.

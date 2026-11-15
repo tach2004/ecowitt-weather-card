@@ -62,8 +62,8 @@ Einheiten stammen aus den Sensorattributen. Die Karte gibt keinen °C-, km/h- od
 | `rain_24h` | Gleitende letzte 24 Stunden, wenn eine entsprechende Quelle existiert |
 | `rain_week`, `rain_month`, `rain_year` | Zugeordnete Wochen-, Monats- und Jahressummen |
 | `rain_event` | Regenereignis aus einer vorhandenen Quellentität |
-| `pressure` | Relativer Luftdruck, GW3000 |
-| `pressure_absolute` | Absoluter Druck aus eigener GW3000-Quelle, nur in den Druckdetails |
+| `pressure` | Relativer Luftdruck, GW3000, in den Druckdetails |
+| `pressure_absolute` | Absoluter Druck aus eigener GW3000-Quelle auf der Hauptleiste und in den Druckdetails |
 | `uv`, `solar` | UV-Index und Solarstrahlung, WS90 |
 
 Die mittlere Richtung ist keine Windrose. Eine Windrose benötigt eine echte Richtungs- und Geschwindigkeitsverteilung; sie wird in diesem Meilenstein nicht aus einem einzelnen Mittelwert erzeugt.

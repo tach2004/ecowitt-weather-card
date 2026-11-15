@@ -73,7 +73,7 @@ const detailKeys: Record<Detail, MetricKey[]> = {
     "temperature_max",
     "vpd",
   ],
-  pressure: ["pressure", "pressure_absolute"],
+  pressure: ["pressure_absolute", "pressure"],
   sun: ["uv", "solar", "solar_lux"],
   sensors: [],
 };
@@ -81,7 +81,7 @@ const graphKeys: Record<Detail, MetricKey[]> = {
   wind: ["wind_speed", "wind_gust"],
   rain: ["rain_rate", "rain_today"],
   temperature: ["temperature", "humidity"],
-  pressure: ["pressure", "pressure_absolute"],
+  pressure: ["pressure_absolute", "pressure"],
   sun: ["uv", "solar"],
   sensors: [],
 };
@@ -94,7 +94,7 @@ const required: MetricKey[] = [
   "rain_today",
   "rain_rate",
   "rain_wet",
-  "pressure",
+  "pressure_absolute",
   "uv",
   "solar",
 ];
@@ -413,8 +413,8 @@ export class EcowittWeatherCard extends LitElement {
                   "temperature",
                 )}
                 ${this._metric(
-                  "pressure",
-                  "Luftdruck",
+                  "pressure_absolute",
+                  "Luftdruck absolut",
                   "pressure",
                   "#b7a4ef",
                   "pressure",
