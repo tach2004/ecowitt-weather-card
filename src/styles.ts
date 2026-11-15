@@ -64,10 +64,24 @@ export const cardStyles = css`
     width: 100%;
     padding: 0 0 18px;
   }
-  .station-header > .station-icon { grid-column: 1; grid-row: 1; }
-  .station-heading { grid-column: 2; grid-row: 1; min-width: 0; width: 100%; }
-  .station-heading h1 { overflow-wrap: break-word; word-break: normal; }
-  .station-header > .diagnostics { grid-column: 3; grid-row: 1; }
+  .station-header > .station-icon {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .station-heading {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .station-heading h1 {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .station-header > .diagnostics {
+    grid-column: 3;
+    grid-row: 1;
+  }
 
   .station-icon {
     width: 42px;
@@ -146,6 +160,7 @@ export const cardStyles = css`
     transform-origin: center;
   }
   .wind-layer {
+    z-index: 2;
     position: absolute;
     inset: 0;
     width: 100%;
@@ -189,11 +204,26 @@ export const cardStyles = css`
     font-size: 0.85rem;
     z-index: 1;
   }
-  .cardinal { transform: translate(-50%, -50%); }
-  .north { top: 0; left: 50%; }
-  .east { left: 100%; top: 50%; }
-  .south { top: 100%; left: 50%; }
-  .west { left: 0; top: 50%; }
+  .cardinal {
+    z-index: 3;
+    transform: translate(-50%, -50%);
+  }
+  .north {
+    top: 0;
+    left: 50%;
+  }
+  .east {
+    left: 100%;
+    top: 50%;
+  }
+  .south {
+    top: 100%;
+    left: 50%;
+  }
+  .west {
+    left: 0;
+    top: 50%;
+  }
   .legend {
     display: flex;
     flex-wrap: wrap;
@@ -543,7 +573,10 @@ export const cardStyles = css`
     min-height: 0;
     overscroll-behavior: contain;
   }
-  dialog[open] { display: flex; flex-direction: column; }
+  dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
   dialog::backdrop {
     background: #02101bb8;
     backdrop-filter: blur(5px);
@@ -576,8 +609,13 @@ export const cardStyles = css`
     overflow: auto;
     overscroll-behavior: contain;
   }
-  .detail-content > :last-child { margin-bottom: 0; }
-  .wet-badge .icon { flex-shrink: 0; overflow: visible; }
+  .detail-content > :last-child {
+    margin-bottom: 0;
+  }
+  .wet-badge .icon {
+    flex-shrink: 0;
+    overflow: visible;
+  }
 
   .detail-caption {
     font-size: 0.8rem;
@@ -825,7 +863,9 @@ export const cardStyles = css`
     .metrics {
       padding: 22px 4px;
     }
-    .station-header { padding-bottom: 24px; }
+    .station-header {
+      padding-bottom: 24px;
+    }
   }
   @container weather (max-width:359px) {
     ha-card {
@@ -898,7 +938,8 @@ export const cardStyles = css`
     width: 100%;
     margin: 2px 0 0;
   }
-  .device-chip, .device-placeholder {
+  .device-chip,
+  .device-placeholder {
     color: inherit;
     background: var(--soft);
     border: 1px solid var(--line);
@@ -913,12 +954,20 @@ export const cardStyles = css`
     min-width: 0;
     width: 100%;
     white-space: nowrap;
-    font-size: .69rem;
+    font-size: 0.69rem;
     line-height: 1.25;
   }
-  .device-chip > strong { flex-shrink: 0; font-size: .78rem; color: var(--cyan); }
-  .device-placeholder { color: var(--muted); }
-  .status-battery, .status-signal, .status-connection {
+  .device-chip > strong {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: var(--cyan);
+  }
+  .device-placeholder {
+    color: var(--muted);
+  }
+  .status-battery,
+  .status-signal,
+  .status-connection {
     display: inline-flex;
     flex: 0 0 auto;
     flex-wrap: nowrap;
@@ -957,119 +1006,12 @@ export const cardStyles = css`
   .diagnostics {
     margin-left: 0;
   }
-  .sky-banner {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 7px;
-    font-size: 0.79rem;
-    color: var(--primary-text-color, #edf5fc);
-    margin: -6px 0 12px;
-    min-height: 36px;
-  }
-  .sky-banner small {
-    font-size: 0.66rem;
-    color: var(--muted);
-  }
-  .sky-art {
-    width: 44px;
-    height: 35px;
-    position: relative;
-    flex-shrink: 0;
-    --cloud-color: color-mix(
-      in srgb,
-      var(--primary-text-color, #edf5fc) 34%,
-      var(--surface) 66%
-    );
-  }
-  .sky-art i {
+  .degree-ring {
     position: absolute;
-    display: block;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
   }
-  .sky-art.unknown {
-    display: grid;
-    place-items: center;
-    color: var(--muted);
-  }
-  .sun-disc {
-    top: 5px;
-    left: 8px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle at 35% 35%,
-      #ffefb2,
-      #ffc945 65%,
-      #ffa729
-    );
-    box-shadow: 0 0 14px #ffcc5577;
-  }
-  .sky-art.animated .sun-disc {
-    animation: ecowitt-glow 4s ease-in-out infinite alternate;
-  }
-  .moon-disc {
-    top: 5px;
-    left: 13px;
-    width: 23px;
-    height: 23px;
-    border-radius: 50%;
-    box-shadow: inset -8px 3px 0 #f5d989;
-  }
-  .cloud-one,
-  .cloud-two {
-    width: 33px;
-    height: 13px;
-    border-radius: 14px;
-    background: var(--cloud-color);
-    left: 9px;
-    top: 17px;
-    box-shadow:
-      -6px 3px 0 var(--cloud-color),
-      0 1px 2px #0002;
-  }
-  .cloud-one::before,
-  .cloud-two::before {
-    content: "";
-    position: absolute;
-    width: 20px;
-    height: 19px;
-    border-radius: 50%;
-    left: 6px;
-    bottom: 4px;
-    background: inherit;
-  }
-  .cloud-two {
-    transform: scale(0.66);
-    left: 1px;
-    top: 11px;
-    opacity: 0.65;
-  }
-  .sky-art.animated .cloud-one {
-    animation: ecowitt-drift 6s ease-in-out infinite alternate;
-  }
-  .sky-drop {
-    left: 24px;
-    top: 29px;
-    width: 2px;
-    height: 7px;
-    border-radius: 2px;
-    background: #4fd6ef;
-  }
-  .sky-art.animated .sky-drop {
-    animation: ecowitt-drop 1.3s linear infinite;
-  }
-  .wet-dot {
-    width: 15px;
-    height: 20px;
-    left: 17px;
-    top: 6px;
-    background: #4acbef;
-    border-radius: 4px 12px 12px 12px;
-    transform: rotate(45deg);
-  }
-  .degree-ring { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
   .degree-ring [data-degrees] {
     position: absolute;
     transform: translate(-50%, -50%);
@@ -1078,87 +1020,23 @@ export const cardStyles = css`
     font-weight: 400;
     line-height: 1;
     white-space: nowrap;
-    opacity: .85;
-  }
-  .rain-sun-decoration {
-    position: absolute;
-    right: 30px;
-    top: 32px;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle at 35% 35%,
-      #fff1b5 0,
-      #ffd75a 60%,
-      #ffa322 100%
-    );
-    box-shadow:
-      0 0 22px #ffe07688,
-      0 0 65px #ffc24b3a;
-    opacity: 0.38;
-    pointer-events: none;
-  }
-  .rain-sun-decoration.animated {
-    animation: ecowitt-glow 5s ease-in-out infinite alternate;
+    opacity: 0.85;
   }
   .rain {
     position: relative;
     overflow: hidden;
   }
-  .rain > :not(.rain-atmosphere):not(.rain-sun-decoration) {
+  .rain > :not(.weather-scene) {
     position: relative;
+    z-index: 2;
+  }
+  .rain > .weather-scene {
+    position: absolute;
+    inset: 0;
     z-index: 1;
   }
   .rain.raining {
     border-color: color-mix(in srgb, var(--cyan) 55%, var(--line));
-  }
-  .rain-atmosphere {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.68;
-  }
-  .rain-atmosphere i {
-    display: block;
-    position: absolute;
-    top: -20px;
-    width: 2px;
-    height: 18px;
-    border-radius: 3px;
-    background: linear-gradient(to bottom, #64cfff00, #53ccee);
-    transform: rotate(12deg);
-    box-shadow: 0 0 3px #45b8e5;
-  }
-  .rain-atmosphere.animated i {
-    animation: ecowitt-fall 1.5s linear infinite;
-    animation-delay: calc(var(--drop) * -0.24s);
-  }
-  .rain-atmosphere:not(.animated) i {
-    top: calc(12% + var(--drop) * 9px);
-    opacity: 0.45;
-  }
-  @keyframes ecowitt-fall {
-    to {
-      transform: translate3d(-28px, 230px, 0) rotate(12deg);
-    }
-  }
-  @keyframes ecowitt-drop {
-    to {
-      transform: translateY(8px);
-      opacity: 0;
-    }
-  }
-  @keyframes ecowitt-drift {
-    to {
-      transform: translateX(5px);
-    }
-  }
-  @keyframes ecowitt-glow {
-    to {
-      filter: brightness(1.2);
-      transform: scale(1.05);
-    }
   }
   .wind-minor > div:last-child {
     grid-column: auto;
@@ -1195,26 +1073,51 @@ export const cardStyles = css`
     gap: 6px;
   }
   @container weather (min-width:760px) {
-    .site-wrap { padding: 18px; }
-  }
-  @container weather (max-width:900px) {
-    .sky-banner { justify-content: flex-start; margin-top: 0; }
+    .site-wrap {
+      padding: 18px;
+    }
   }
   @container weather (min-width:901px) {
-    .header-devices { display: flex; justify-content: flex-end; }
-    .device-chip, .device-placeholder { width: auto; flex: 0 0 auto; justify-content: flex-start; }
+    .header-devices {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .device-chip,
+    .device-placeholder {
+      width: auto;
+      flex: 0 0 auto;
+      justify-content: flex-start;
+    }
   }
   @container weather (min-width:1200px) {
-    .station-header { grid-template-columns: 42px minmax(180px, 1fr) max-content 44px; }
-    .header-devices { grid-column: 3; grid-row: 1; margin: 0; }
-    .station-header > .diagnostics { grid-column: 4; }
+    .station-header {
+      grid-template-columns: 42px minmax(180px, 1fr) max-content 44px;
+    }
+    .header-devices {
+      grid-column: 3;
+      grid-row: 1;
+      margin: 0;
+    }
+    .station-header > .diagnostics {
+      grid-column: 4;
+    }
   }
   @container weather (max-width:359px) {
-    .site-wrap { --degree-offset: 18px; }
-    .north { top: 6px; }
-    .east { left: calc(100% - 6px); }
-    .south { top: calc(100% - 6px); }
-    .west { left: 6px; }
+    .site-wrap {
+      --degree-offset: 18px;
+    }
+    .north {
+      top: 6px;
+    }
+    .east {
+      left: calc(100% - 6px);
+    }
+    .south {
+      top: calc(100% - 6px);
+    }
+    .west {
+      left: 6px;
+    }
   }
   @container weather (min-width:760px) and (max-width:1099px) {
     .metrics {
@@ -1235,18 +1138,6 @@ export const cardStyles = css`
     }
     .metric .value {
       font-size: 1.55rem;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .sky-art.animated *,
-    .rain-atmosphere.animated i,
-    .rain-sun-decoration.animated {
-      animation: none !important;
-    }
-    .rain-atmosphere i {
-      top: calc(12% + var(--drop) * 9px);
-      transform: rotate(12deg);
-      opacity: 0.45;
     }
   }
   @media (prefers-reduced-motion: reduce) {

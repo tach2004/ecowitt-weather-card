@@ -107,6 +107,16 @@ export function normalizeConfig(value: unknown): CardConfig {
       typeof value.weather_animation === "boolean"
         ? value.weather_animation
         : true,
+    weather_entity: text(value.weather_entity)?.startsWith("weather.")
+      ? text(value.weather_entity)
+      : undefined,
+    windrose: {
+      enabled: !record(value.windrose) || value.windrose.enabled !== false,
+      config:
+        record(value.windrose) && record(value.windrose.config)
+          ? structuredClone(value.windrose.config)
+          : undefined,
+    },
     history_hours: bounded(value.history_hours, 1, 168),
     stale_after_minutes: bounded(value.stale_after_minutes, 0, 10080),
     grid_options: record(value.grid_options)

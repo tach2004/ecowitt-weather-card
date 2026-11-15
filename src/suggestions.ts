@@ -77,6 +77,7 @@ export function metricRole(
   key: MetricKey,
   selected: Partial<Record<DeviceRole, string>>,
 ): DeviceRole {
+  if (key === "rain_rate_secondary") return "WS90";
   if (key.startsWith("rain_")) return key === "rain_wet" ? "WS90" : "WH40";
   if (key === "pressure") return "GW3000";
   if (
@@ -189,7 +190,7 @@ function matchesMetric(
       state.entity_id.startsWith("binary_sensor.") &&
       (dc === "moisture" || /(?:piezo|wet|nass|feucht|raining)/.test(name))
     );
-  if (key === "rain_rate")
+  if (key === "rain_rate" || key === "rain_rate_secondary")
     return (
       rain &&
       (dc === "precipitation_intensity" ||

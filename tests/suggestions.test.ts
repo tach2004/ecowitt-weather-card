@@ -340,43 +340,119 @@ test("current WS90 lux and VPD proposals reject extrema, averages and incompatib
   );
 });
 
-test('a saved manual gateway beats auto-detection before and after registry reload', async () => {
-  const {normalizeConfig}=await import('../src/config');
-  const {resolveDeviceRoles}=await import('../src/suggestions');
-  const devices=[
-    {id:'fixture-auto-gateway',model:'GW3000A'},
-    {id:'fixture-manual-gateway',name:'Alternate gateway',model:'Gateway'},
+test("a saved manual gateway beats auto-detection before and after registry reload", async () => {
+  const { normalizeConfig } = await import("../src/config");
+  const { resolveDeviceRoles } = await import("../src/suggestions");
+  const devices = [
+    { id: "fixture-auto-gateway", model: "GW3000A" },
+    {
+      id: "fixture-manual-gateway",
+      name: "Alternate gateway",
+      model: "Gateway",
+    },
   ];
-  const input={
-    device_roles:{GW3000:'fixture-manual-gateway'},
-    entities:{pressure:'sensor.fixture_existing_pressure'},
-    extra_entities:['sensor.fixture_legacy'],
+  const input = {
+    device_roles: { GW3000: "fixture-manual-gateway" },
+    entities: { pressure: "sensor.fixture_existing_pressure" },
+    extra_entities: ["sensor.fixture_legacy"],
   };
-  const original=structuredClone(input);
-  const saved=normalizeConfig(input);
-  assert.equal(resolveDeviceRoles([],saved.device_roles).GW3000,'fixture-manual-gateway');
-  const reloaded=resolveDeviceRoles(devices,normalizeConfig(saved).device_roles);
-  assert.equal(reloaded.GW3000,'fixture-manual-gateway');
-  const make=(entity_id:string):HassEntity=>({entity_id,state:'1012',attributes:{device_class:'atmospheric_pressure',unit_of_measurement:'hPa'}});
-  const hass:HomeAssistant={states:{
-    'sensor.fixture_auto_relative_pressure':make('sensor.fixture_auto_relative_pressure'),
-    'sensor.fixture_manual_relative_pressure':make('sensor.fixture_manual_relative_pressure'),
-  }};
-  const registry=[
-    {entity_id:'sensor.fixture_auto_relative_pressure',device_id:'fixture-auto-gateway'},
-    {entity_id:'sensor.fixture_manual_relative_pressure',device_id:'fixture-manual-gateway'},
+  const original = structuredClone(input);
+  const saved = normalizeConfig(input);
+  assert.equal(
+    resolveDeviceRoles([], saved.device_roles).GW3000,
+    "fixture-manual-gateway",
+  );
+  const reloaded = resolveDeviceRoles(
+    devices,
+    normalizeConfig(saved).device_roles,
+  );
+  assert.equal(reloaded.GW3000, "fixture-manual-gateway");
+  const make = (entity_id: string): HassEntity => ({
+    entity_id,
+    state: "1012",
+    attributes: {
+      device_class: "atmospheric_pressure",
+      unit_of_measurement: "hPa",
+    },
+  });
+  const hass: HomeAssistant = {
+    states: {
+      "sensor.fixture_auto_relative_pressure": make(
+        "sensor.fixture_auto_relative_pressure",
+      ),
+      "sensor.fixture_manual_relative_pressure": make(
+        "sensor.fixture_manual_relative_pressure",
+      ),
+    },
+  };
+  const registry = [
+    {
+      entity_id: "sensor.fixture_auto_relative_pressure",
+      device_id: "fixture-auto-gateway",
+    },
+    {
+      entity_id: "sensor.fixture_manual_relative_pressure",
+      device_id: "fixture-manual-gateway",
+    },
   ];
-  assert.deepEqual(candidateEntities('pressure',hass,registry,reloaded),['sensor.fixture_manual_relative_pressure']);
-  assert.deepEqual(saved.entities,input.entities);
-  assert.deepEqual(saved.extra_entities,input.extra_entities);
-  assert.deepEqual(input,original);
+  assert.deepEqual(candidateEntities("pressure", hass, registry, reloaded), [
+    "sensor.fixture_manual_relative_pressure",
+  ]);
+  assert.deepEqual(saved.entities, input.entities);
+  assert.deepEqual(saved.extra_entities, input.extra_entities);
+  assert.deepEqual(input, original);
 });
 
-test('explicit deselection remains empty across reload while legacy omitted roles keep auto-suggestions', async () => {
-  const {resolveDeviceRoles}=await import('../src/suggestions');
-  const devices=[{id:'fixture-gateway',model:'GW3000A'},{id:'fixture-optional-climate',model:'WN32'}];
-  assert.equal(resolveDeviceRoles(devices).GW3000,'fixture-gateway');
-  assert.equal(resolveDeviceRoles(devices,{GW3000:''}).GW3000,'');
-  assert.equal(resolveDeviceRoles(devices,{GW3000:''}).WN32,'fixture-optional-climate');
-  assert.equal(resolveDeviceRoles([], {GW3000:'fixture-temporarily-missing'}).GW3000,'fixture-temporarily-missing');
+test("explicit deselection remains empty across reload while legacy omitted roles keep auto-suggestions", async () => {
+  const { resolveDeviceRoles } = await import("../src/suggestions");
+  const devices = [
+    { id: "fixture-gateway", model: "GW3000A" },
+    { id: "fixture-optional-climate", model: "WN32" },
+  ];
+  assert.equal(resolveDeviceRoles(devices).GW3000, "fixture-gateway");
+  assert.equal(resolveDeviceRoles(devices, { GW3000: "" }).GW3000, "");
+  assert.equal(
+    resolveDeviceRoles(devices, { GW3000: "" }).WN32,
+    "fixture-optional-climate",
+  );
+  assert.equal(
+    resolveDeviceRoles([], { GW3000: "fixture-temporarily-missing" }).GW3000,
+    "fixture-temporarily-missing",
+  );
+});
+
+test("secondary rain-rate suggestions stay on the selected WS90 and exclude wetness and amounts", () => {
+  const ids = [
+    "sensor.demo_piezo_rate",
+    "sensor.demo_piezo_amount",
+    "sensor.demo_wh40_rate",
+    "binary_sensor.demo_piezo_wet",
+  ];
+  const hass: HomeAssistant = {
+    states: Object.fromEntries(
+      ids.map((id, i) => [
+        id,
+        {
+          entity_id: id,
+          state: i === 3 ? "on" : "1",
+          attributes: {
+            friendly_name: "Regen",
+            device_class: i === 3 ? "moisture" : "precipitation_intensity",
+            unit_of_measurement: i === 1 ? "mm" : i === 3 ? "" : "mm/h",
+          },
+        },
+      ]),
+    ),
+  };
+  const registry = ids.map((entity_id, i) => ({
+    entity_id,
+    device_id: i === 2 ? "wh40" : "ws90",
+  }));
+  assert.deepEqual(
+    candidateEntities("rain_rate_secondary", hass, registry, {
+      WS90: "ws90",
+      WH40: "wh40",
+    }),
+    ["sensor.demo_piezo_rate"],
+  );
 });

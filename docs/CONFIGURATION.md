@@ -26,8 +26,14 @@ Ohne Sensorzuordnung zeigt die Karte die Einrichtung. Die Beispiele enthalten ab
 | `extra_entities` | Kompatible bisherige Zusatzsensorliste; für neue Zuordnungen `device_status[].extra_entities` verwenden |
 | `diagnostic_entities` | Kompatible bisherige Diagnoseliste; im Geräteeditor weiter lesbar und bewusst abwählbar |
 | `device_status` | Dauerhafte Gerätebereiche mit Statusquellen und optionalen Zusatzmesswerten; siehe unten |
+| `device_roles` | Gespeicherte Registry-Geräteauswahl für Vorschläge; leerer Rolleneintrag deaktiviert die automatische Auswahl |
+| `theme_mode` | `auto` (HA-Theme), `light` oder `dark` |
+| `weather_animation` | Standard `true`; `false` lässt statische Wettereffekte sichtbar |
+| `weather_entity` | Optionale vorhandene `weather.*`-Quelle für aktuellen Himmelszustand, keine Vorhersageabfrage |
+| `windrose.enabled` | Standard `true`: installierte Windrose per Bild-Tap einbetten; `false` deaktiviert die Einbettung |
+| `windrose.config` | Optionale native Windrosenkonfiguration; Standard nutzt ausgewählte Windquellen und letzte 24 h |
 | `history_hours` | Angefragtes Recorder-Zeitfenster: 1 bis 168 Stunden, Standard 24 |
-| `stale_after_minutes` | Aktualitätshinweis nach dieser Zeit seit letztem gültigen `last_reported`/`last_updated`; Standard 0 = aus, maximal 10080 Minuten. Die Wetterabschätzung hat zusätzlich die unten beschriebene 30-Minuten-Grenze. Ein alter Wert beweist keinen Offline-Status. |
+| `stale_after_minutes` | Aktualitätshinweis nach dieser Zeit seit letztem gültigen `last_reported`/`last_updated`; Standard 0 = aus, maximal 10080 Minuten. Diese Regel gilt auch für Wettereffekte. Ein alter Wert beweist keinen Offline-Status. |
 | `grid_options` | Native Lovelace-Sections-Größe; in der Sections-Vorlage `columns: full` |
 
 Eigene Bilder werden mit `object-fit: cover` quadratisch zugeschnitten und rund maskiert. Die Zielkoordinaten gelten für diese sichtbare Fläche nach der Bildrotation; sie drehen das Bild nicht mit. Ein Haus außerhalb der sichtbaren Fläche benötigt einen passenden privaten Bildzuschnitt.
@@ -40,13 +46,14 @@ Einheiten stammen aus den Sensorattributen. Die Karte gibt keinen °C-, km/h- od
 | --- | --- |
 | `temperature`, `humidity` | Außenklima; WN32 bevorzugt, alternativ manuell WS90 |
 | `feels_like`, `dew_point` | Gefühlt und Taupunkt, optional |
-| `temperature_min`, `temperature_max` | Tagesminimum und Tagesmaximum aus eigenen Quellentitäten |
+| `temperature_min`, `temperature_max` | Eigene Tagesminimum-/Maximumquellen haben Vorrang; ohne Zuordnung Recorder-Auswertung ab HA-Mitternacht |
 | `wind_speed`, `wind_gust` | Aktuelle Windgeschwindigkeit und Böen, WS90 |
 | `wind_direction` | Meteorologische Herkunft in Grad, WS90 |
 | `wind_direction_avg` | Mittlere Herkunftsrichtung der letzten 10 Minuten |
 | `wind_speed_avg` | Historischer optionaler Key für mittlere Geschwindigkeit; bleibt gespeichert, wird aber nicht mehr auf der Hauptkarte oder im Editor angeboten |
 | `wind_gust_max` | Tagesmaximalböe |
 | `rain_today`, `rain_rate` | WH40-Kalendertag und aktuelle WH40-Regenrate |
+| `rain_rate_secondary` | Optionale echte WS90-Piezo-Regenrate als zweite Regenquelle, kein Feuchtigkeitsstatus |
 | `rain_wet` | Passender WS90-Piezo-Binärsensor für Feuchtigkeit; kein Niederschlagszähler |
 | `rain_24h` | Gleitende letzte 24 Stunden, wenn eine entsprechende Quelle existiert |
 | `rain_week`, `rain_month`, `rain_year` | Zugeordnete Wochen-, Monats- und Jahressummen |
@@ -71,21 +78,21 @@ Private Bilder außerhalb des Repositories verwalten. `/local/` bietet allein ke
 - `entities.vpd`: Dampfdruckdefizit in kPa, hPa oder Pa. Das ist ein eigener Quellwert, keine erfundene Berechnung.
 - `entities.wind_speed_avg`: bisheriger optionaler Key wird nur aus Gründen der Rückwärtskompatibilität behalten, aber in der Hauptkarte und im Editor **nicht mehr angeboten**. Die mittlere Windrichtung bleibt `entities.wind_direction_avg`.
 
-### Lokale Wetterabschätzung (keine Vorhersage)
+### Lokale Wetterdarstellung
 
-Die Wetterklassifizierung und der WS90-Piezo-Feuchtigkeitsstatus sind unabhängig. Eine Oberfläche kann **NASS** sein, während die Karte gleichzeitig Sonne, geschätzte Wolkenbedingungen oder Nacht zeigt. Nur eine gültige, aktuelle **positive WH40-Regenrate** begründet die Anzeige fallenden Regens und hat Vorrang vor der Himmelsabschätzung. Ohne verfügbare Regenrate kann eine begründete Himmelsabschätzung angezeigt werden; ihr Hinweis macht ausdrücklich keine Aussage über Niederschlag.
+Wettereffekte liegen direkt über dem unveränderten Bild und an der Regenkachel: Regen mit fallenden Tropfen und Bodenspritzern, Sonne, Wolken, Mond oder neutrales Tageslicht. Der kleine Wetterbanner oberhalb der Grafik entfällt. Der aufklappbare Hinweis unter der Grafik erklärt die tatsächlich verwendete Quelle und Grenzen.
 
-Für die grobe, ausdrücklich als **Schätzung** bezeichnete Sonnig/Teilbewölkt/Bewölkt-Anzeige vergleicht die Karte WS90-Globalstrahlung mit dem Haurwitz-Klarhimmelmodell bei der Sonnenhöhe aus `sun.sun`:
+Positive gültige **WH40-Regenrate**, andernfalls eine explizit zugeordnete echte **WS90-Regenrate** unter `entities.rain_rate_secondary`, löst lokalen Regen aus. Oberflächenstatus **NASS** ist davon unabhängig; eine Tagesmenge ist keine aktuelle Rate. Eine optionale vorhandene `weather_entity` liefert unterstützte aktuelle Himmelszustände, ohne Vorhersageabfrage. Ein Regenzustand dieser Quelle ohne positive lokale Rate wird als unbestätigt erklärt und erzeugt keine gemessene lokale Regenanimation.
 
-`Klarhimmelstrahlung = 1098 · sin(h) · exp(−0,059 / sin(h)) W/m²`
+Ohne zusätzliche Wetterquelle wird bei mindestens 12° Sonnenhöhe WS90-Globalstrahlung grob mit dem Haurwitz-Klarhimmelmodell verglichen: `1098 · sin(h) · exp(−0,059 / sin(h)) W/m²`. Verhältnis ab 0,78 = sonnig, ab 0,40 = teilweise bewölkt, darunter bewölkt; das bleibt eine **Schätzung**, keine gemessene Wolkenbedeckung. `kW/m²` wird mit 1000 multipliziert; Lux wird nicht umgerechnet. Bei tiefer Sonne erscheint neutrales Tageslicht statt einer unzuverlässigen Wolkeneinstufung. Astronomische Nacht sagt nichts über Bewölkung oder Niederschlag aus.
 
-`h` ist die Sonnenhöhe. Das Verhältnis gemessene Strahlung / Modellwert wird heuristisch klassifiziert: ab 0,78 „sonnig“, ab 0,40 „teilweise bewölkt“, darunter „bewölkt“. Diese Grenzen sind keine gemessene Wolkenbedeckung und keine empirische Kalibrierung für den eigenen Standort. Globalstrahlung in `kW/m²` wird vor dem Vergleich mit 1000 multipliziert; `W/m2` und `kW/m2` werden ebenfalls unterstützt. Lux wird nicht in Globalstrahlung umgerechnet.
+Die starre 30-Minuten-Grenze entfällt: `last_updated` misst Zustandsänderungen, keine gesicherte Telemetrie. `stale_after_minutes: 0` lässt unveränderte gültige Zustände verwendbar; eine explizite positive Altersgrenze sowie `unknown`/`unavailable` werden weiterhin beachtet. Ungültige und unplausible Zeitangaben werden abgewiesen. Verschattung, Dunst, Nebel und Sensorlage begrenzen die Schätzung; Temperatur, Feuchte und Druck können keinen eindeutigen Himmelszustand beweisen.
 
-Unter 12° Sonnenhöhe, bei widersprüchlichen Sonnenangaben, fehlender/ungültiger Strahlung oder ungeeigneten Aktualisierungszeitpunkten erscheint ein erklärender Status statt einer erfundenen Schätzung. Sonnenhöhe und Modell bleiben auf ihren gültigen Bereich beschränkt. Nachts genügt ein aktueller gültiger `below_horizon`-Status für die astronomische Nachtanzeige; daraus folgt weder ein klarer Himmel noch Niederschlagsfreiheit.
+`weather_animation: false` und reduzierte Bewegung lassen statische Wettereffekte sichtbar. Die Windrose wird nur bei geöffneter Rückseite aktiv gehalten und benötigt ihre separat geladene HACS-Ressource. Ohne Ressource erscheint ein Setup-Hinweis, kein Nachbau.
 
-Für die **Wetterabschätzung** gelten Sonnenstand, Strahlung und Regenrate höchstens 30 Minuten seit dem letzten gültigen HA-Melde-/Updatezeitpunkt als aktuell. Eine kleinere positive `stale_after_minutes`-Einstellung verkürzt diese Grenze. Die 30 Minuten sind eine konservative Darstellungsregel, keine physikalische Konstante oder Telemetriegarantie. Fehlende, ungültige oder unplausibel zukünftige Zeitangaben belegen keine aktuelle Beobachtung. Die allgemeine Kennzahlenanzeige bleibt bei `stale_after_minutes: 0` ohne Altersgrenze.
+Temperatur-Minimum und -Maximum ohne eigene Quellzuordnung werden beim Öffnen aus dem Recorder der ausgewählten Außentemperatur ab HA-Mitternacht ermittelt, einschließlich korrekter Sommer-/Winterzeittage. Explizite Min-/Max-Quellen haben Vorrang. Datenlücken und unvollständige Abdeckung werden benannt; ohne echte Daten werden keine Extremwerte erfunden.
 
-Verschattung, Dunst, Nebel, Sensorposition und Modellabweichungen können das Ergebnis verfälschen. Es werden keine Vorhersage, kein Schneefall, kein Hagel, kein Gewitter und keine wolkenfreie Nacht daraus abgeleitet. Die gesamte Auswertung verwendet ausschließlich lokale HA-Daten.
+Details, Quellenregeln, native Windrose-Konfiguration und Prüfgrenzen: [WEATHER_WINDROSE.md](WEATHER_WINDROSE.md).
 
 ### Gerätestatus pro Ecowitt-Gerät
 

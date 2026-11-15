@@ -162,11 +162,14 @@ test("W/m² and kW/m² are equivalent; lux, unrelated units and invalid solar nu
 });
 
 test("twilight and malformed solar elevations suppress sky inference without fabricating sunrise weather", () => {
-  for (const elevation of [0, 5, 11.999, -5]) {
-    const result = observe(sun("above_horizon", elevation));
-    assert.equal(result.kind, "unknown");
-    assert.match(result.note, /unter 12°/);
+  for (const elevation of [0, 5, 11.999]) {
+    const result = observe(sun("above_horizon", elevation), reading(900));
+    assert.equal(result.kind, "daylight");
+    assert.equal(result.estimated, false);
+    assert.equal(result.clearSkyRatio, undefined);
+    assert.match(result.note, /direkte Sonne wird nicht behauptet/);
   }
+  assert.equal(observe(sun("above_horizon", -5)).kind, "unknown");
   assert.notEqual(
     observe(sun("above_horizon", 12), reading(170)).kind,
     "unknown",
@@ -207,67 +210,217 @@ test("night is an astronomical status, independent of solar measurement or piezo
   );
   assert.equal(result.kind, "night");
   assert.equal(result.estimated, false);
-  assert.match(result.note, /kein Nachweis.*wolkenfreie.*niederschlagsfreie/);
+  assert.match(result.note, /wolkenfreie.*niederschlagsfreie/);
+  assert.match(result.note, /nicht abgeleitet/);
   const source = sun("below_horizon");
   delete source.attributes.elevation;
   assert.equal(observe(source).kind, "night");
 });
 
-test("weather inference enforces its 30-minute freshness cap even with general age hints disabled", () => {
-  const tooOld = new Date(now - 31 * 60_000).toISOString();
-  assert.equal(observe(sun("above_horizon", 45, tooOld)).kind, "unknown");
-  assert.equal(observe(sun("below_horizon", -20, tooOld)).kind, "unknown");
+test("unchanged HA states do not expire after an undocumented thirty-minute period", () => {
+  const unchanged = new Date(now - 3 * 3_600_000).toISOString();
+  const solar = reading(650, "W/m²", "ok", unchanged);
+  const rate = reading(1, "mm/h", "ok", unchanged);
   assert.equal(
-    observe(sun(), reading(650, "W/m²", "ok", tooOld)).kind,
-    "unknown",
-  );
-  assert.notEqual(
-    observe(sun(), reading(650), reading(1, "mm/h", "ok", tooOld)).kind,
-    "rain",
-  );
-  assert.equal(observe(sun(), reading(650), noRain(), dry, 0).kind, "sunny");
-  assert.equal(
-    observe(
-      sun(),
-      reading(650, "W/m²", "ok", new Date(now - 6 * 60_000).toISOString()),
-      noRain(),
-      dry,
-      5,
-    ).kind,
-    "unknown",
+    observe(sun("above_horizon", 45, unchanged), solar).kind,
+    "sunny",
   );
   assert.equal(
-    observe(sun(), reading(650, "W/m²", "ok", tooOld), noRain(), dry, 120).kind,
-    "unknown",
+    observe(sun("below_horizon", -20, unchanged), reading(0)).kind,
+    "night",
   );
+  assert.equal(observe(sun(), solar, rate).kind, "rain");
+  assert.equal(observe(sun(), solar, rate, dry, 0).kind, "rain");
+  assert.notEqual(observe(sun(), solar, rate, dry, 30).kind, "rain");
+  assert.equal(observe(sun(), solar, noRain(), dry, 120).kind, "unknown");
+  const sixMinutes = reading(
+    650,
+    "W/m²",
+    "ok",
+    new Date(now - 6 * 60_000).toISOString(),
+  );
+  assert.equal(observe(sun(), sixMinutes, noRain(), dry, 5).kind, "unknown");
 });
 
-test("future, missing and malformed report metadata never establish current weather; real last_reported can refresh an unchanged state", () => {
+test("explicit age policies and unavailable states remain authoritative; future metadata is always rejected", () => {
   const future = new Date(now + 120_000).toISOString();
-  for (const timestamp of [undefined, "not-a-time", future]) {
+  assert.equal(observe(sun("above_horizon", 45, future)).kind, "unknown");
+  assert.notEqual(
+    observe(sun(), reading(650), reading(1, "mm/h", "ok", future)).kind,
+    "rain",
+  );
+  for (const timestamp of [undefined, "not-a-time"]) {
     const source = sun();
     source.last_updated = timestamp;
-    assert.equal(observe(source).kind, "unknown");
-    const solar = reading(650);
-    solar.entity!.last_updated = timestamp;
-    assert.equal(observe(sun(), solar).kind, "unknown");
-    const rain = reading(1, "mm/h");
-    rain.entity!.last_updated = timestamp;
-    assert.notEqual(observe(sun(), reading(650), rain).kind, "rain");
+    assert.equal(
+      observe(source).kind,
+      "sunny",
+      "Disabled age policy follows current HA state without claiming heartbeat freshness",
+    );
+    assert.equal(
+      observe(source, reading(650), noRain(), dry, 5).kind,
+      "unknown",
+    );
   }
-  const freshReport = reading(
+  for (const status of [
+    "stale",
+    "unavailable",
+    "invalid",
+    "missing",
+  ] as const) {
+    assert.notEqual(
+      observe(sun(), reading(650), reading(1, "mm/h", status)).kind,
+      "rain",
+    );
+  }
+  const reported = reading(
     650,
     "W/m²",
     "ok",
     new Date(now - 3_600_000).toISOString(),
   );
-  freshReport.entity!.last_reported = current;
-  assert.equal(observe(sun(), freshReport).kind, "sunny");
+  reported.entity!.last_reported = current;
+  assert.equal(observe(sun(), reported, noRain(), dry, 5).kind, "sunny");
 });
 
 test("missing rainfall observation leaves an explicit limitation on an otherwise supported sky estimate", () => {
   const result = observe(sun(), reading(650), reading(null, "mm/h", "missing"));
   assert.equal(result.kind, "sunny");
-  assert.match(result.note, /Regenrate ist nicht verfügbar/);
-  assert.match(result.note, /keine Aussage über Niederschlag/);
+  assert.match(result.note, /Regenrate fehlt/);
+  assert.match(result.note, /keine Niederschlagsfreiheit/);
+});
+
+test("explicit secondary WS90 numerical rain rate can confirm rain but wetness never can", () => {
+  const secondary = reading(0.2, "mm/h");
+  const result = observeWeather(
+    undefined,
+    reading(null, "W/m²", "missing"),
+    noRain(),
+    reading(1, ""),
+    { now, secondaryRainRate: secondary },
+  );
+  assert.equal(result.kind, "rain");
+  assert.equal(result.source, "ws90");
+  assert.match(result.note, /WS90/);
+  const primary = observeWeather(
+    sun(),
+    reading(650),
+    reading(0.4, "mm/h"),
+    dry,
+    { now, secondaryRainRate: reading(20, "mm/h") },
+  );
+  assert.equal(primary.source, "wh40");
+  for (const invalid of [
+    reading(null, "mm/h", "unavailable"),
+    reading(1, "mm"),
+    reading(-1, "mm/h"),
+  ]) {
+    assert.notEqual(
+      observeWeather(sun(), reading(650), noRain(), reading(1, ""), {
+        now,
+        secondaryRainRate: invalid,
+      }).kind,
+      "rain",
+    );
+  }
+});
+
+test("visual rain density normalizes genuine metric and imperial rates without changing the source", () => {
+  const value = (n: number, unit: string) =>
+    observe(sun(), reading(650), reading(n, unit));
+  assert.equal(value(0.1, "mm/h").rainIntensity, "light");
+  assert.equal(value(0.2, "cm/h").rainIntensity, "light");
+  assert.equal(value(0.2, "in/h").rainIntensity, "moderate");
+  assert.equal(value(0.02, "m/h").rainIntensity, "heavy");
+});
+
+const condition = (state: string): HassEntity => ({
+  entity_id: "weather.demo_local",
+  state,
+  last_updated: current,
+  attributes: {
+    friendly_name: "Generische HA-Wetterquelle",
+    forecast: [{ condition: "sunny" }],
+  },
+});
+test("an explicit HA condition uses actual state, never forecast entries or an external request", () => {
+  const result = observeWeather(
+    undefined,
+    reading(null, "W/m²", "missing"),
+    noRain(),
+    dry,
+    { now, conditionEntity: condition("cloudy") },
+  );
+  assert.equal(result.kind, "cloudy");
+  assert.equal(result.source, "weather_entity");
+  assert.equal(result.estimated, false);
+  assert.match(result.note, /Generische HA-Wetterquelle/);
+  assert.match(result.note, /Keine Vorhersage/);
+  const unrelated = condition("sunny");
+  unrelated.entity_id = "sensor.demo_condition";
+  assert.equal(
+    observeWeather(undefined, reading(650), noRain(), dry, {
+      now,
+      conditionEntity: unrelated,
+    }).kind,
+    "unknown",
+  );
+  for (const state of ["unknown", "unavailable", "snowy", "lightning"]) {
+    assert.equal(
+      observeWeather(undefined, reading(650), noRain(), dry, {
+        now,
+        conditionEntity: condition(state),
+      }).kind,
+      "unknown",
+    );
+  }
+});
+test("HA source reports cannot silently invent measured local rain, snow or a contradictory night", () => {
+  const regional = observeWeather(
+    sun(),
+    reading(650),
+    noRain(),
+    reading(1, ""),
+    { now, conditionEntity: condition("rainy") },
+  );
+  assert.equal(regional.kind, "unknown");
+  assert.equal(regional.source, "weather_entity");
+  assert.match(
+    regional.note,
+    /positive lokale Regenrate wurde nicht bestätigt/,
+  );
+  const measured = observeWeather(
+    sun(),
+    reading(650),
+    reading(0.5, "mm/h"),
+    dry,
+    { now, conditionEntity: condition("sunny") },
+  );
+  assert.equal(measured.kind, "rain");
+  assert.equal(measured.source, "wh40");
+  assert.equal(
+    observeWeather(sun(), reading(650), noRain(), dry, {
+      now,
+      conditionEntity: condition("clear-night"),
+    }).kind,
+    "unknown",
+  );
+  const night = observeWeather(
+    sun("below_horizon", -10),
+    reading(0),
+    noRain(),
+    dry,
+    { now, conditionEntity: condition("sunny") },
+  );
+  assert.equal(night.kind, "night");
+  const stale = condition("sunny");
+  stale.last_updated = new Date(now - 3_600_000).toISOString();
+  assert.equal(
+    observeWeather(undefined, reading(650), noRain(), dry, {
+      now,
+      staleAfterMinutes: 5,
+      conditionEntity: stale,
+    }).kind,
+    "unknown",
+  );
 });

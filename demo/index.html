@@ -29,7 +29,7 @@ const idFor=key=>(key==='rain_wet'?'binary_sensor.':'sensor.')+'demo_'+key;
 const states=Object.fromEntries(Object.entries(definitions).map(([key,[state,unit,name,deviceClass]])=>[idFor(key),{entity_id:idFor(key),state:String(state),last_changed:new Date().toISOString(),last_updated:new Date().toISOString(),attributes:{friendly_name:name,...(unit!==undefined?{unit_of_measurement:unit}:{}),...(deviceClass?{device_class:deviceClass}:{})}}]));
 window.demoConfig={type:'custom:ecowitt-weather-card',title:'Wetterstation (Ecowitt)',subtitle:'Außensensor · Garten',entities:Object.fromEntries(Object.keys(definitions).filter(key=>!['extra','battery'].includes(key)).map(key=>[key,idFor(key)])),extra_entities:[idFor('extra')],diagnostic_entities:[idFor('battery')]};
 window.historyMode='data';window.historyRequests=[];
-window.hass={states,language:'de',callApi:async(method,path)=>{
+window.hass={states,language:'de',config:{time_zone:'Europe/Berlin'},callApi:async(method,path)=>{
   window.historyRequests.push({method,path});
   if(window.historyMode==='error')throw new Error('Synthetic recorder unavailable');
   if(window.historyMode==='empty')return [];
@@ -50,7 +50,7 @@ window.hass={states,language:'de',callApi:async(method,path)=>{
     {id:'demo-gw3000',name:'DEMO GW3000',model:'GW3000',manufacturer:'Ecowitt'},
     {id:'demo-wn31',name:'DEMO WN31',model:'WN31',manufacturer:'Ecowitt'},
   ];
-  if(message.type==='config/entity_registry/list')return Object.keys(states).map(id=>({entity_id:id,unique_id:id,platform:'demo_fixture',disabled_by:null,device_id:id.includes('rain')&&!id.includes('wet')?'demo-wh40':id.includes('temperature')||id.includes('humidity')?'demo-wn32':id.includes('pressure')?'demo-gw3000':id.includes('extra')?'demo-wn31':'demo-ws90'}));
+  if(message.type==='config/entity_registry/list')return Object.keys(states).map(id=>({entity_id:id,unique_id:id,platform:'demo_fixture',disabled_by:null,device_id:(id.includes('rain')&&!id.includes('wet')||id.includes('battery'))?'demo-wh40':id.includes('temperature')||id.includes('humidity')?'demo-wn32':id.includes('pressure')?'demo-gw3000':id.includes('extra')?'demo-wn31':'demo-ws90'}));
   if(message.type==='media_source/resolve_media')return {url:'/demo/generic-image.svg',mime_type:'image/svg+xml'};
   throw new Error('Unsupported synthetic callWS');
 }};

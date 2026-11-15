@@ -56,13 +56,17 @@ Weitere Dokumentation: [Konfiguration](docs/CONFIGURATION.md), [Produktspezifika
 Lizenz: MIT.
 
 
-## Visuelle Erweiterungen (nächster PR)
+## Darstellung und Datenquellen
 
 - Dezent beschrifteter Kompassring mit 0°–315° in 45°-Schritten zusätzlich zu N/O/S/W.
 - WS90-Batterie, Signalqualität und expliziter Verbindungsstatus auf der Hauptkarte; weitere Geräte im Detail und optional im Header. Batterien in Volt werden **nicht** in Prozentwerte umgerechnet.
 - Komfortabler Sensor-Editor mit Gerätegruppen, Suche und Checkboxen statt Strg-Mehrfachauswahl.
-- Animierter Regen bei positiver WH40-Regenrate; echte Sonnen-/Wolkenschätzung aus WS90-Globalstrahlung und Sonnenstand, mit klarer Kennzeichnung der Unsicherheit. Keine Wetter-API oder Cloud.
+- Animierte Wetterebenen direkt im vorhandenen Bild und an der Regenkachel: Tropfen und Spritzer bei positiver WH40- oder explizit gewählter WS90-Regenrate. Sonne/Wolken bleiben eine begrenzte Strahlungsschätzung oder folgen einer optionalen vorhandenen HA-Wetterquelle; bei tiefem Sonnenstand neutrales Tageslicht.
+- Die separat installierte Windrose Card kann per Drehung die Windgrafik innerhalb derselben Karte ersetzen. Keine Pflichtabhängigkeit und kein Plugin-Download durch die Karte.
+- Lesbare Detailquellen mit belegter Geräteherkunft, Zeit-/Werteachsen und Temperatur-Tagesminimum/-maximum aus echten Recorder-Daten, wenn keine eigenen Min-/Max-Quellen zugeordnet sind.
 - Zusätzliche WS90-Entitäten für Lux und Dampfdruckdefizit. Theme: automatisch, hell oder dunkel.
 - Verbesserte Medienbild-Einrichtung mit Beispiel `media-source://media_source/local/ecowitt/Wohnhaus.png` und optionaler Auswahl im HA-Medienbrowser.
+
+Quellenregeln, Einrichtung der optionalen Windrose und Recorder-Grenzen: [Wetter, Windrose und Tageswerte](docs/WEATHER_WINDROSE.md).
 
 Diese Änderungen werden ausschließlich nach Tests und PR-Review als neue Patch-Version veröffentlicht. Private Grundstücksgrafiken, Originalfotos und die vom Nutzer bereitgestellten Wetteranimationsbeispiele werden nicht im öffentlichen Repository gespeichert.

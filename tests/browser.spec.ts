@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 
 type DemoWindow = Window &
   typeof globalThis & {
@@ -54,9 +54,28 @@ async function noOverflow(page: Page) {
       overflow: elements
         .filter((node: Element) => {
           const box = node.getBoundingClientRect();
+          if (getComputedStyle(node).visibility === "hidden") return false;
+          // Decorative animation tracks may extend outside their clipping layer.
+          // Compare the painted horizontal extent rather than their un-clipped box.
+          let left = box.left,
+            right = box.right;
+          for (
+            let parent = node.parentElement;
+            parent && parent !== card;
+            parent = parent.parentElement
+          ) {
+            if (
+              ["hidden", "clip", "auto", "scroll"].includes(
+                getComputedStyle(parent).overflowX,
+              )
+            ) {
+              const clip = parent.getBoundingClientRect();
+              left = Math.max(left, clip.left);
+              right = Math.min(right, clip.right);
+            }
+          }
           return (
-            box.width > 0 &&
-            (box.right > root.right + 2 || box.left < root.left - 2)
+            right > left && (right > root.right + 2 || left < root.left - 2)
           );
         })
         .map(
@@ -287,9 +306,9 @@ test("additional sensors and diagnostics use only selected actual entities", asy
   await ready(page);
   await page.locator('[data-detail="sensors"]:visible').first().click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText("Beispiel Zusatzkanal WN31");
+  await expect(dialog).toContainText("Beispiel Zusatzkanal · WN31");
   await expect(dialog).toContainText(/21[,.]4/);
-  await expect(dialog).toContainText("Beispiel Batterie WH40");
+  await expect(dialog).toContainText("Beispiel Batterie · WH40");
   await expect(dialog).toContainText("86");
 });
 
@@ -393,6 +412,7 @@ test("public screenshots use synthetic fixtures and generic illustration only", 
     fullPage: true,
   });
   await page.setViewportSize({ width: 402, height: 874 });
+  await update(page, "rain_rate", 3, "mm/h");
   await page.screenshot({
     path: "docs/screenshots/mobile.png",
     fullPage: true,
@@ -717,24 +737,20 @@ test("320px summary contains long German labels with a wider fallback font", asy
   }
 });
 
-test("measured WH40 rain is visualized while wet Piezo remains a separate status", async ({
+test("measured WH40 rain is visualized in the image and tile while wet Piezo remains separate", async ({
   page,
 }) => {
   await ready(page);
-  await expect(page.locator(".rain-atmosphere i")).toHaveCount(14);
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "rain",
-  );
+  await expect(page.locator(".sky-banner")).toHaveCount(0);
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(24);
+  await expect(page.locator(".site .scene-splash")).toHaveCount(7);
+  await expect(page.locator(".rain .scene-drop-track")).toHaveCount(16);
+  await expect(page.locator(".weather-info summary")).toContainText("Regen");
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "on");
-  await expect(page.locator(".rain-atmosphere")).toHaveCount(0);
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "unknown",
-  );
-  await expect(page.locator(".sky-banner")).toContainText(
-    "Wetter nicht bestimmbar",
+  await expect(page.locator(".scene-drop-track")).toHaveCount(0);
+  await expect(page.locator(".weather-info summary")).toContainText(
+    "Wetterdaten ergänzen",
   );
   await expect(page.locator(".wet-badge:visible").first()).toContainText(
     "NASS",
@@ -917,27 +933,29 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
         a.right > b.left &&
         a.top < b.bottom &&
         a.bottom > b.top;
-      return [...site.querySelectorAll(".degree-ring [data-degrees]")].map((node) => {
-        const box = node.getBoundingClientRect();
-        const nearestX = Math.max(box.left, Math.min(cx, box.right));
-        const nearestY = Math.max(box.top, Math.min(cy, box.bottom));
-        return {
-          label: node.textContent,
-          outsideCircle: Math.hypot(nearestX - cx, nearestY - cy) > radius,
-          overlapsCardinal: cardinals.some((cardinal) =>
-            overlap(box, cardinal),
-          ),
-          clipped:
-            box.left < card.left ||
-            box.right > card.right ||
-            box.top < card.top ||
-            box.bottom > card.bottom,
-          color: getComputedStyle(node).color,
-          stroke: getComputedStyle(node).stroke,
-          textHeight: box.height,
-          cardinalHeight: cardinals[0].height,
-        };
-      });
+      return [...site.querySelectorAll(".degree-ring [data-degrees]")].map(
+        (node) => {
+          const box = node.getBoundingClientRect();
+          const nearestX = Math.max(box.left, Math.min(cx, box.right));
+          const nearestY = Math.max(box.top, Math.min(cy, box.bottom));
+          return {
+            label: node.textContent,
+            outsideCircle: Math.hypot(nearestX - cx, nearestY - cy) > radius,
+            overlapsCardinal: cardinals.some((cardinal) =>
+              overlap(box, cardinal),
+            ),
+            clipped:
+              box.left < card.left ||
+              box.right > card.right ||
+              box.top < card.top ||
+              box.bottom > card.bottom,
+            color: getComputedStyle(node).color,
+            stroke: getComputedStyle(node).stroke,
+            textHeight: box.height,
+            cardinalHeight: cardinals[0].height,
+          };
+        },
+      );
     });
     for (const result of results) {
       expect(result.outsideCircle, result.label || "degree").toBe(true);
@@ -951,73 +969,66 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
   });
 }
 
-test("wet surface coexists with estimated sun and clouds, with measured rain taking priority", async ({
+test("wet surface coexists with sun and clouds over the unchanged image; measured rain takes priority", async ({
   page,
 }) => {
   await ready(page);
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "on");
   await setSky(page, 45, 700);
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "sunny",
+  const scene = page.locator(".site .weather-scene");
+  await expect(scene).toHaveAttribute("data-scene-weather", "sunny");
+  await expect(page.locator(".site .scene-sun")).toHaveCount(1);
+  await expect(page.locator(".weather-info summary")).toContainText(
+    "geschätzt",
   );
-  await expect(page.locator(".sun-disc")).toHaveCount(1);
-  await expect(page.locator(".sky-banner")).toContainText("geschätzt");
   await expect(page.locator(".wet-badge:visible").first()).toContainText(
     "NASS",
   );
-  await expect(page.locator(".rain-sun-decoration")).toHaveCount(1);
+  await expect(page.locator(".rain .scene-sun")).toHaveCount(1);
   await setSky(page, 15, 150);
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "partlycloudy",
-  );
-  await expect(page.locator(".sun-disc")).toHaveCount(1);
-  await expect(page.locator(".cloud-one")).toHaveCount(1);
+  await expect(scene).toHaveAttribute("data-scene-weather", "partlycloudy");
+  await expect(page.locator(".site .scene-cloud--near")).toHaveCount(1);
   await setSky(page, 45, 30);
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "cloudy",
-  );
-  await expect(page.locator(".sun-disc")).toHaveCount(0);
-  await expect(page.locator(".cloud-one")).toHaveCount(1);
+  await expect(scene).toHaveAttribute("data-scene-weather", "cloudy");
+  await expect(page.locator(".site .scene-sun")).toHaveCount(0);
   await update(page, "rain_rate", 0.8, "mm/h");
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "rain",
-  );
-  await expect(page.locator(".sky-drop")).toHaveCount(1);
-  await expect(page.locator(".rain-atmosphere i")).toHaveCount(14);
+  await expect(scene).toHaveAttribute("data-scene-weather", "rain");
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(24);
 });
 
-test("night and incomplete local observations have honest independent moisture status", async ({
+test("night, low daylight and incomplete observations have independent moisture status", async ({
   page,
 }) => {
   await ready(page);
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "off");
   await setSky(page, -10, 0, "W/m²", "below_horizon");
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather",
     "night",
   );
-  await expect(page.locator(".moon-disc")).toHaveCount(1);
+  await expect(page.locator(".site .scene-moon")).toHaveCount(1);
   await expect(page.locator(".wet-badge:visible").first()).toContainText(
     "TROCKEN",
   );
+  await setSky(page, 5, 35);
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather",
+    "daylight",
+  );
+  await expect(page.locator(".site .scene-sun,.site .scene-cloud")).toHaveCount(
+    0,
+  );
   await setSky(page, 45, 0.7, "kW/m²");
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather",
     "sunny",
   );
   await update(page, "solar", "unavailable");
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "unknown",
-  );
-  await expect(page.locator(".sky-banner")).toContainText(
-    "Wetter nicht bestimmbar",
+  await expect(page.locator(".site .weather-scene")).toHaveCount(0);
+  await expect(page.locator(".weather-info summary")).toContainText(
+    "Wetterdaten ergänzen",
   );
   await page.evaluate(async () => {
     const win = window as DemoWindow;
@@ -1025,16 +1036,11 @@ test("night and incomplete local observations have honest independent moisture s
     win.card.hass = { ...win.hass };
     await win.card.updateComplete;
   });
-  await expect(page.locator(".sky-banner")).toHaveAttribute(
-    "data-weather",
-    "unknown",
-  );
-  await expect(page.locator(".sky-banner")).toContainText(
-    /Sonnenstatus|Sonnenstand/,
-  );
+  await page.locator(".weather-info summary").click();
+  await expect(page.locator(".weather-info p")).toContainText(/Sonnenzustand/);
 });
 
-test("weather animation preferences leave wind transitions intact and keep static rain accents", async ({
+test("weather preferences retain static visible rain and preserve independent wind transitions", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -1044,8 +1050,10 @@ test("weather animation preferences leave wind transitions intact and keep stati
     win.setDemoConfig({ ...win.demoConfig, weather_animation: false });
     await win.card.updateComplete;
   });
-  await expect(page.locator(".rain-atmosphere")).not.toHaveClass(/animated/);
-  await expect(page.locator(".rain-atmosphere i").first()).toHaveCSS(
+  await expect(page.locator(".site .weather-scene")).toHaveClass(
+    /weather-scene--still/,
+  );
+  await expect(page.locator(".scene-drop-track").first()).toHaveCSS(
     "animation-name",
     "none",
   );
@@ -1054,22 +1062,22 @@ test("weather animation preferences leave wind transitions intact and keep stati
     "1.1s",
   );
   const drop = await page
-    .locator(".rain-atmosphere i")
+    .locator(".site .scene-drop-track")
     .first()
     .evaluate((el) => ({
       y: el.getBoundingClientRect().top,
-      panelTop: el.closest(".rain")!.getBoundingClientRect().top,
-      panelBottom: el.closest(".rain")!.getBoundingClientRect().bottom,
+      top: el.closest(".site")!.getBoundingClientRect().top,
+      bottom: el.closest(".site")!.getBoundingClientRect().bottom,
     }));
-  expect(drop.y).toBeGreaterThan(drop.panelTop);
-  expect(drop.y).toBeLessThan(drop.panelBottom);
+  expect(drop.y).toBeGreaterThan(drop.top);
+  expect(drop.y).toBeLessThan(drop.bottom);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.evaluate(async () => {
     const win = window as DemoWindow;
     win.setDemoConfig({ ...win.demoConfig, weather_animation: true });
     await win.card.updateComplete;
   });
-  await expect(page.locator(".rain-atmosphere i").first()).toHaveCSS(
+  await expect(page.locator(".scene-drop-track").first()).toHaveCSS(
     "animation-name",
     "none",
   );
@@ -1174,11 +1182,15 @@ for (const view of ["panel", "sections"])
             ),
           ).toBe(true);
           const scroller = dialog.locator(".detail-content");
-          const canScroll = await scroller.evaluate(el => el.scrollHeight > el.clientHeight + 2);
+          const canScroll = await scroller.evaluate(
+            (el) => el.scrollHeight > el.clientHeight + 2,
+          );
           if (canScroll) {
             await scroller.hover();
             await page.mouse.wheel(0, 600);
-            await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+            await expect
+              .poll(() => scroller.evaluate((el) => el.scrollTop))
+              .toBeGreaterThan(0);
           }
           const close = dialog.getByRole("button", { name: "Schließen" });
           await expect(close).toBeVisible();
@@ -1195,7 +1207,9 @@ test("UV Index sources render while incompatible UV and signal units stay neutra
 }) => {
   await ready(page);
   await update(page, "uv", 4.2, "UV Index");
-  await expect(page.locator('[data-key="uv"]').first().locator(".value")).toHaveText(/^4\s*UV Index$/);
+  await expect(
+    page.locator('[data-key="uv"]').first().locator(".value"),
+  ).toHaveText(/^4\s*UV Index$/);
   await expect(page.locator('[data-key="uv"]').first()).not.toContainText(
     "Quelle prüfen",
   );
@@ -1502,7 +1516,9 @@ test("GW3000A and WH90 registry variants preserve sources and persist explicit g
     await page.evaluate(() => (window as DemoWindow).editor._config.entities),
   ).toEqual(before);
   expect(
-    await page.evaluate(() => (window as DemoWindow).lastEditorConfig?.device_roles?.GW3000),
+    await page.evaluate(
+      () => (window as DemoWindow).lastEditorConfig?.device_roles?.GW3000,
+    ),
   ).toBe("");
 });
 
@@ -1706,11 +1722,13 @@ async function withNativeHaCard(page: Page) {
     if (customElements.get("ha-card")) return;
     // Relevant host/slot behavior from Home Assistant's native ha-card.ts.
     // This is a local component harness, not a complete HA/Safari installation.
-    customElements.define("ha-card", class extends HTMLElement {
-      header?: string;
-      constructor() {
-        super();
-        this.attachShadow({ mode: "open" }).innerHTML = `<style>
+    customElements.define(
+      "ha-card",
+      class extends HTMLElement {
+        header?: string;
+        constructor() {
+          super();
+          this.attachShadow({ mode: "open" }).innerHTML = `<style>
           :host { display:block;position:relative;box-sizing:border-box;
             background:var(--ha-card-background,var(--card-background-color,white));
             border:var(--ha-card-border-width,1px) solid var(--ha-card-border-color,var(--divider-color,#e0e0e0));
@@ -1720,30 +1738,59 @@ async function withNativeHaCard(page: Page) {
           ::slotted(.card-content) { padding:16px; }
           ::slotted(.card-actions) { border-top:1px solid var(--divider-color,#e8e8e8);padding:8px; }
         </style><slot></slot>`;
-      }
-    });
+        }
+      },
+    );
   });
 }
 
-test("native HA card keeps a full title and single-line device chips at real card widths", async ({ page }) => {
+test("native HA card keeps a full title and single-line device chips at real card widths", async ({
+  page,
+}) => {
   await withNativeHaCard(page);
   for (const width of [320, 402, 874, 1024, 1440]) {
     await page.setViewportSize({ width, height: width === 874 ? 402 : 874 });
     await ready(page);
     await setStatusDevices(page, 3, true);
     await expect(page.locator("ha-card")).toHaveCSS("position", "relative");
-    await expect(page.locator(".device-chip > strong")).toHaveText(["WS90", "WH40", "WN31"]);
-    const layout = await page.locator(".station-header").evaluate(header => {
+    await expect(page.locator(".device-chip > strong")).toHaveText([
+      "WS90",
+      "WH40",
+      "WN31",
+    ]);
+    const layout = await page.locator(".station-header").evaluate((header) => {
       const root = header.getBoundingClientRect();
-      const heading = header.querySelector(".station-heading")!.getBoundingClientRect();
+      const heading = header
+        .querySelector(".station-heading")!
+        .getBoundingClientRect();
       const title = header.querySelector("h1")!.getBoundingClientRect();
-      const font = parseFloat(getComputedStyle(header.querySelector("h1")!).fontSize);
-      const chips = [...header.querySelectorAll(".device-chip")].map(chip => {
+      const font = parseFloat(
+        getComputedStyle(header.querySelector("h1")!).fontSize,
+      );
+      const chips = [...header.querySelectorAll(".device-chip")].map((chip) => {
         const rect = chip.getBoundingClientRect();
-        const centers = [...chip.children].map(child => { const box = child.getBoundingClientRect(); return (box.top + box.bottom) / 2; });
-        return { left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom,height:rect.height,centers,overflow:chip.scrollWidth-chip.clientWidth };
+        const centers = [...chip.children].map((child) => {
+          const box = child.getBoundingClientRect();
+          return (box.top + box.bottom) / 2;
+        });
+        return {
+          left: rect.left,
+          right: rect.right,
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height,
+          centers,
+          overflow: chip.scrollWidth - chip.clientWidth,
+        };
       });
-      return { headerHeight:root.height,headingWidth:heading.width,titleBottom:title.bottom,titleHeight:title.height,font,chips };
+      return {
+        headerHeight: root.height,
+        headingWidth: heading.width,
+        titleBottom: title.bottom,
+        titleHeight: title.height,
+        font,
+        chips,
+      };
     });
     expect(layout.headingWidth).toBeGreaterThanOrEqual(140);
     expect(layout.titleHeight).toBeLessThan(layout.font * 5);
@@ -1751,141 +1798,589 @@ test("native HA card keeps a full title and single-line device chips at real car
     for (const chip of layout.chips) {
       expect(chip.height).toBeLessThanOrEqual(46);
       expect(chip.overflow).toBeLessThanOrEqual(1);
-      expect(Math.max(...chip.centers)-Math.min(...chip.centers)).toBeLessThan(1);
+      expect(
+        Math.max(...chip.centers) - Math.min(...chip.centers),
+      ).toBeLessThan(1);
       if (width <= 900) expect(chip.top).toBeGreaterThan(layout.titleBottom);
     }
-    if (width <= 900) for (let i=1;i<layout.chips.length;i++) expect(layout.chips[i].top).toBeGreaterThan(layout.chips[i-1].bottom);
-    else for (let i=1;i<layout.chips.length;i++) {
-      expect(layout.chips[i].top).toBeCloseTo(layout.chips[0].top,0);
-      expect(layout.chips[i].left).toBeGreaterThan(layout.chips[i-1].right);
-    }
+    if (width <= 900)
+      for (let i = 1; i < layout.chips.length; i++)
+        expect(layout.chips[i].top).toBeGreaterThan(layout.chips[i - 1].bottom);
+    else
+      for (let i = 1; i < layout.chips.length; i++) {
+        expect(layout.chips[i].top).toBeCloseTo(layout.chips[0].top, 0);
+        expect(layout.chips[i].left).toBeGreaterThan(layout.chips[i - 1].right);
+      }
     await noOverflow(page);
   }
 });
 
-test("header fallback stays mobile-safe when container-query rules are ignored", async ({ page }) => {
+test("header fallback stays mobile-safe when container-query rules are ignored", async ({
+  page,
+}) => {
   await withNativeHaCard(page);
-  await page.setViewportSize({ width:402,height:874 });
+  await page.setViewportSize({ width: 402, height: 874 });
   await ready(page);
-  await setStatusDevices(page,3,true);
-  await page.locator("ecowitt-weather-card").evaluate(card => {
+  await setStatusDevices(page, 3, true);
+  await page.locator("ecowitt-weather-card").evaluate((card) => {
     const sheet = new CSSStyleSheet();
-    const rules = card.shadowRoot!.adoptedStyleSheets.flatMap(style => [...style.cssRules]);
-    sheet.replaceSync(rules.filter(rule => rule.constructor.name !== "CSSContainerRule").map(rule => rule.cssText).join("\n"));
+    const rules = card.shadowRoot!.adoptedStyleSheets.flatMap((style) => [
+      ...style.cssRules,
+    ]);
+    sheet.replaceSync(
+      rules
+        .filter((rule) => rule.constructor.name !== "CSSContainerRule")
+        .map((rule) => rule.cssText)
+        .join("\n"),
+    );
     card.shadowRoot!.adoptedStyleSheets = [sheet];
   });
   const heading = await page.locator(".station-heading").boundingBox();
   expect(heading!.width).toBeGreaterThan(200);
-  const chips = await page.locator(".device-chip").evaluateAll(nodes => nodes.map(node => { const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom}; }));
-  expect(chips[0].top).toBeGreaterThan(heading!.y+heading!.height);
+  const chips = await page.locator(".device-chip").evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const r = node.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    }),
+  );
+  expect(chips[0].top).toBeGreaterThan(heading!.y + heading!.height);
   expect(chips[1].top).toBeGreaterThan(chips[0].bottom);
   expect(chips[2].top).toBeGreaterThan(chips[1].bottom);
 });
 
-test("compass restores pre-PR5 circle size while degree labels follow exact cardinal axes", async ({ page }) => {
+test("compass restores pre-PR5 circle size while degree labels follow exact cardinal axes", async ({
+  page,
+}) => {
   await withNativeHaCard(page);
-  for (const [width, expected] of [[402,324],[1440,564]]) {
-    await page.setViewportSize({ width,height:874 });
+  for (const [width, expected] of [
+    [402, 324],
+    [1440, 564],
+  ]) {
+    await page.setViewportSize({ width, height: 874 });
     await ready(page);
     const circle = await page.locator(".site").boundingBox();
-    expect(circle!.width).toBeCloseTo(expected,0);
-    const errors = await page.locator(".site").evaluate(site => {
-      const circle=site.getBoundingClientRect(),cx=(circle.left+circle.right)/2,cy=(circle.top+circle.bottom)/2;
-      return [...site.querySelectorAll<HTMLElement>(".degree-ring [data-degrees]")].map(label => {
-        const box=label.getBoundingClientRect(),x=(box.left+box.right)/2-cx,y=(box.top+box.bottom)/2-cy;
-        const actual=(Math.atan2(x,-y)*180/Math.PI+360)%360,expected=Number(label.dataset.degrees);
-        return Math.min(Math.abs(actual-expected),360-Math.abs(actual-expected));
+    expect(circle!.width).toBeCloseTo(expected, 0);
+    const errors = await page.locator(".site").evaluate((site) => {
+      const circle = site.getBoundingClientRect(),
+        cx = (circle.left + circle.right) / 2,
+        cy = (circle.top + circle.bottom) / 2;
+      return [
+        ...site.querySelectorAll<HTMLElement>(".degree-ring [data-degrees]"),
+      ].map((label) => {
+        const box = label.getBoundingClientRect(),
+          x = (box.left + box.right) / 2 - cx,
+          y = (box.top + box.bottom) / 2 - cy;
+        const actual = ((Math.atan2(x, -y) * 180) / Math.PI + 360) % 360,
+          expected = Number(label.dataset.degrees);
+        return Math.min(
+          Math.abs(actual - expected),
+          360 - Math.abs(actual - expected),
+        );
       });
     });
-    expect(Math.max(...errors)).toBeLessThan(.05);
-    await expect(page.locator(".degree-ring [data-degrees]").first()).toHaveCSS("font-size","9px");
+    expect(Math.max(...errors)).toBeLessThan(0.05);
+    await expect(page.locator(".degree-ring [data-degrees]").first()).toHaveCSS(
+      "font-size",
+      "9px",
+    );
   }
 });
 
-for (const portrait of [true,false]) for (const theme of ["light","dark"]) {
-  test(`native HA ${portrait ? "portrait" : "landscape"} ${theme}: every detail ends at its content and contains scrolling`, async ({ page }) => {
-    await withNativeHaCard(page);
-    await page.setViewportSize({ width:portrait?402:874,height:portrait?874:402 });
-    await ready(page,theme==="light"?"/?theme=light":"/");
-    for (const detail of ["wind","rain","temperature","pressure","sun","sensors"]) {
-      await page.locator(`[data-detail="${detail}"]:visible`).first().click();
-      const dialog=page.getByRole("dialog"),scroller=dialog.locator(".detail-content");
-      await expect(dialog).toBeVisible();
-      await expect(dialog.getByText("Recorder-Verlauf wird geladen …")).toHaveCount(0);
-      const end=await scroller.evaluate(el => {
-        el.scrollTop=el.scrollHeight;
-        const last=el.lastElementChild!.getBoundingClientRect(),box=el.getBoundingClientRect();
-        return { gap:box.bottom-last.bottom,max:el.scrollHeight-el.clientHeight,top:el.scrollTop,overflow:el.scrollWidth-el.clientWidth };
+for (const portrait of [true, false])
+  for (const theme of ["light", "dark"]) {
+    test(`native HA ${portrait ? "portrait" : "landscape"} ${theme}: every detail ends at its content and contains scrolling`, async ({
+      page,
+    }) => {
+      await withNativeHaCard(page);
+      await page.setViewportSize({
+        width: portrait ? 402 : 874,
+        height: portrait ? 874 : 402,
       });
-      expect(end.top).toBeCloseTo(end.max,0);
-      expect(end.gap).toBeGreaterThanOrEqual(-1);
-      expect(end.gap).toBeLessThanOrEqual(21);
-      expect(end.overflow).toBeLessThanOrEqual(1);
-      const pageY=await page.evaluate(()=>window.scrollY);
-      await scroller.hover();
-      await page.mouse.wheel(0,900);
-      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-      expect(await page.evaluate(()=>window.scrollY)).toBe(pageY);
-      await dialog.getByRole("button",{name:"Schließen"}).click();
-      await expect(dialog).not.toBeVisible();
-    }
-  });
-}
+      await ready(page, theme === "light" ? "/?theme=light" : "/");
+      for (const detail of [
+        "wind",
+        "rain",
+        "temperature",
+        "pressure",
+        "sun",
+        "sensors",
+      ]) {
+        await page.locator(`[data-detail="${detail}"]:visible`).first().click();
+        const dialog = page.getByRole("dialog"),
+          scroller = dialog.locator(".detail-content");
+        await expect(dialog).toBeVisible();
+        await expect(
+          dialog.getByText("Recorder-Verlauf wird geladen …"),
+        ).toHaveCount(0);
+        const end = await scroller.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+          const last = el.lastElementChild!.getBoundingClientRect(),
+            box = el.getBoundingClientRect();
+          return {
+            gap: box.bottom - last.bottom,
+            max: el.scrollHeight - el.clientHeight,
+            top: el.scrollTop,
+            overflow: el.scrollWidth - el.clientWidth,
+          };
+        });
+        expect(end.top).toBeCloseTo(end.max, 0);
+        expect(end.gap).toBeGreaterThanOrEqual(-1);
+        expect(end.gap).toBeLessThanOrEqual(21);
+        expect(end.overflow).toBeLessThanOrEqual(1);
+        const pageY = await page.evaluate(() => window.scrollY);
+        await scroller.hover();
+        await page.mouse.wheel(0, 900);
+        await page.evaluate(
+          () =>
+            new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            ),
+        );
+        expect(await page.evaluate(() => window.scrollY)).toBe(pageY);
+        await dialog.getByRole("button", { name: "Schließen" }).click();
+        await expect(dialog).not.toBeVisible();
+      }
+    });
+  }
 
-test("wet status droplet permits its edge stroke outside the SVG viewport", async ({ page }) => {
+test("wet status droplet permits its edge stroke outside the SVG viewport", async ({
+  page,
+}) => {
   await ready(page);
-  const icon=page.locator(".rain .wet-badge .icon");
-  await expect(icon).toHaveCSS("overflow","visible");
-  const edge=await icon.evaluate(node => {
-    const svg=node as SVGSVGElement,path=svg.querySelector("path")!;
-    const box=path.getBBox(),stroke=parseFloat(getComputedStyle(path).strokeWidth);
-    return box.y+box.height+stroke/2 > svg.viewBox.baseVal.height;
+  const icon = page.locator(".rain .wet-badge .icon");
+  await expect(icon).toHaveCSS("overflow", "visible");
+  const edge = await icon.evaluate((node) => {
+    const svg = node as SVGSVGElement,
+      path = svg.querySelector("path")!;
+    const box = path.getBBox(),
+      stroke = parseFloat(getComputedStyle(path).strokeWidth);
+    return box.y + box.height + stroke / 2 > svg.viewBox.baseVal.height;
   });
   expect(edge).toBe(true);
 });
 
-test("manual alternate gateway persists across a recreated editor and delayed HA registry", async ({ page }) => {
-  await ready(page,"/?editor=1");
+test("manual alternate gateway persists across a recreated editor and delayed HA registry", async ({
+  page,
+}) => {
+  await ready(page, "/?editor=1");
   await page.evaluate(async () => {
-    const win=window as DemoWindow;
-    const original=win.hass.callWS;
-    const states={...win.hass.states,"sensor.demo_alternate_pressure":{entity_id:"sensor.demo_alternate_pressure",state:"1010",last_updated:new Date().toISOString(),attributes:{friendly_name:"Relativer Luftdruck · Alternativ",unit_of_measurement:"hPa",device_class:"atmospheric_pressure"}}};
-    win.hass={...win.hass,states,callWS:async (message:any)=>{
-      if(message.type==="config/device_registry/list") return [
-        {id:"demo-gw3000",name:"Automatisches Beispielgateway",model:"GW3000A"},
-        {id:"demo-alternate",name:"Manuelles Beispielgateway",model:"Gateway"},
-      ];
-      if(message.type==="config/entity_registry/list") return [
-        {entity_id:"sensor.demo_pressure",device_id:"demo-gw3000",disabled_by:null},
-        {entity_id:"sensor.demo_alternate_pressure",device_id:"demo-alternate",disabled_by:null},
-      ];
-      return original(message);
-    }};
-    win.editor._registryState="idle";
-    win.editor.hass=win.hass;
+    const win = window as DemoWindow;
+    const original = win.hass.callWS;
+    const states = {
+      ...win.hass.states,
+      "sensor.demo_alternate_pressure": {
+        entity_id: "sensor.demo_alternate_pressure",
+        state: "1010",
+        last_updated: new Date().toISOString(),
+        attributes: {
+          friendly_name: "Relativer Luftdruck · Alternativ",
+          unit_of_measurement: "hPa",
+          device_class: "atmospheric_pressure",
+        },
+      },
+    };
+    win.hass = {
+      ...win.hass,
+      states,
+      callWS: async (message: any) => {
+        if (message.type === "config/device_registry/list")
+          return [
+            {
+              id: "demo-gw3000",
+              name: "Automatisches Beispielgateway",
+              model: "GW3000A",
+            },
+            {
+              id: "demo-alternate",
+              name: "Manuelles Beispielgateway",
+              model: "Gateway",
+            },
+          ];
+        if (message.type === "config/entity_registry/list")
+          return [
+            {
+              entity_id: "sensor.demo_pressure",
+              device_id: "demo-gw3000",
+              disabled_by: null,
+            },
+            {
+              entity_id: "sensor.demo_alternate_pressure",
+              device_id: "demo-alternate",
+              disabled_by: null,
+            },
+          ];
+        return original(message);
+      },
+    };
+    win.editor._registryState = "idle";
+    win.editor.hass = win.hass;
     await win.editor.updateComplete;
   });
-  const editor=page.locator("ecowitt-weather-card-editor");
-  await editor.getByLabel("Gerät GW3000",{exact:true}).selectOption("demo-alternate");
-  await expect.poll(()=>page.evaluate(()=>(window as DemoWindow).lastEditorConfig?.device_roles?.GW3000)).toBe("demo-alternate");
-  expect(await page.evaluate(()=>(window as DemoWindow).lastEditorConfig?.entities?.pressure)).toBe("sensor.demo_pressure");
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await editor
+    .getByLabel("Gerät GW3000", { exact: true })
+    .selectOption("demo-alternate");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as DemoWindow).lastEditorConfig?.device_roles?.GW3000,
+      ),
+    )
+    .toBe("demo-alternate");
+  expect(
+    await page.evaluate(
+      () => (window as DemoWindow).lastEditorConfig?.entities?.pressure,
+    ),
+  ).toBe("sensor.demo_pressure");
   await page.evaluate(async () => {
-    const win=window as DemoWindow,saved=win.lastEditorConfig;
-    const Editor=customElements.get("ecowitt-weather-card") as any;
-    const replacement=await Editor.getConfigElement();
-    const host=document.querySelector("#editor")!;
-    win.editor.remove();host.append(replacement);win.editor=replacement;
+    const win = window as DemoWindow,
+      saved = win.lastEditorConfig;
+    const Editor = customElements.get("ecowitt-weather-card") as any;
+    const replacement = await Editor.getConfigElement();
+    const host = document.querySelector("#editor")!;
+    win.editor.remove();
+    host.append(replacement);
+    win.editor = replacement;
     replacement.setConfig(saved);
-    const original=win.hass.callWS;
-    replacement.hass={...win.hass,callWS:async(message:any)=>{
-      await new Promise(resolve=>setTimeout(resolve,30));
-      return original(message);
-    }};
+    const original = win.hass.callWS;
+    replacement.hass = {
+      ...win.hass,
+      callWS: async (message: any) => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return original(message);
+      },
+    };
     await replacement.updateComplete;
   });
-  const recreated=page.locator("ecowitt-weather-card-editor");
-  await expect(recreated.getByLabel("Gerät GW3000",{exact:true})).toHaveValue("demo-alternate");
-  const pressure=recreated.locator('[data-metric="pressure"]');
-  await expect(pressure.locator(".suggestion")).toContainText("Relativer Luftdruck · Alternativ");
-  await expect(pressure.locator(".suggestion")).not.toContainText("Relativer Luftdruck GW3000");
+  const recreated = page.locator("ecowitt-weather-card-editor");
+  await expect(
+    recreated.getByLabel("Gerät GW3000", { exact: true }),
+  ).toHaveValue("demo-alternate");
+  const pressure = recreated.locator('[data-metric="pressure"]');
+  await expect(pressure.locator(".suggestion")).toContainText(
+    "Relativer Luftdruck · Alternativ",
+  );
+  await expect(pressure.locator(".suggestion")).not.toContainText(
+    "Relativer Luftdruck GW3000",
+  );
+});
+
+test("rain trajectories and ground splashes animate within the original image without intercepting taps", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  const scene = page.locator(".site .weather-scene");
+  await expect(scene).toHaveCSS("pointer-events", "none");
+  await expect(scene).toHaveCSS("border-radius", "50%");
+  await expect(page.locator(".site .scene-splash").first()).toHaveCSS(
+    "animation-name",
+    "weather-ground-splash",
+  );
+  const sample = () =>
+    page
+      .locator(".site .scene-drop-track")
+      .evaluateAll((nodes) =>
+        nodes.map((node) => node.getBoundingClientRect().y),
+      );
+  const before = await sample();
+  await page.waitForTimeout(250);
+  const after = await sample();
+  expect(after.some((y, i) => Math.abs(y - before[i]) > 5)).toBe(true);
+  const circle = await page.locator(".site").boundingBox();
+  expect(circle?.width).toBeCloseTo(324, 0);
+  await update(page, "rain_rate", 0, "mm/h");
+  await setSky(page, 45, 700);
+  const sunCircle = await page.locator(".site").boundingBox();
+  expect(sunCircle?.width).toBe(circle?.width);
+  await expect(page.locator(".site .scene-sun")).toBeVisible();
+  await page.locator(".site").click();
+  await expect(page.locator(".wind-stage")).toHaveClass(/is-flipped/);
+  await expect(page.locator("ecowitt-windrose-host")).toContainText(
+    "HACS-Ressource",
+  );
+  await page.getByRole("button", { name: "Windgrafik", exact: true }).click();
+  await expect(page.locator(".wind-stage")).not.toHaveClass(/is-flipped/);
+  await page.waitForTimeout(700);
+  await expect(page.locator(".site")).toBeFocused();
+  await noOverflow(page);
+});
+
+test("unchanged valid rain does not silently expire; explicit age and real secondary rate are honored", async ({
+  page,
+}) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      id = win.demoConfig.entities.rain_rate;
+    win.hass.states[id] = {
+      ...win.hass.states[id],
+      last_updated: new Date(Date.now() - 2 * 3600_000).toISOString(),
+    };
+    win.setDemoConfig({ ...win.demoConfig, stale_after_minutes: 0 });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(24);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({ ...win.demoConfig, stale_after_minutes: 5 });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(0);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      id = "sensor.demo_secondary_rate";
+    win.hass.states[id] = {
+      entity_id: id,
+      state: "3",
+      last_updated: new Date().toISOString(),
+      attributes: {
+        friendly_name: "Piezo Regenrate",
+        unit_of_measurement: "mm/h",
+      },
+    };
+    win.setDemoConfig({
+      ...win.demoConfig,
+      entities: { ...win.demoConfig.entities, rain_rate_secondary: id },
+      stale_after_minutes: 5,
+    });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(34);
+  await page.locator(".weather-info summary").click();
+  await expect(page.locator(".weather-info p")).toContainText("WS90");
+  await expect(page.locator(".wet-badge:visible").first()).toContainText(
+    "NASS",
+  );
+});
+
+test("optional real HA weather selection and installed windrose preferences survive visual edits", async ({
+  page,
+}) => {
+  await ready(page, "/?editor=1");
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      id = "weather.demo_local";
+    win.hass.states[id] = {
+      entity_id: id,
+      state: "sunny",
+      attributes: { friendly_name: "Lokale Wetterquelle" },
+      last_updated: new Date().toISOString(),
+    };
+    win.editor.hass = { ...win.hass };
+    await win.editor.updateComplete;
+  });
+  await page
+    .getByText("Darstellung, Wetteranimation und Theme", { exact: true })
+    .click();
+  await page
+    .getByLabel("Optionale HA-Wetterquelle", { exact: true })
+    .selectOption("weather.demo_local");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as DemoWindow).lastEditorConfig.weather_entity,
+      ),
+    )
+    .toBe("weather.demo_local");
+  await update(page, "rain_rate", 0, "mm/h");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather",
+    "sunny",
+  );
+  await page.getByText("Eingebettete Windrose", { exact: true }).click();
+  await page
+    .getByLabel("Windrose beim Tippen auf die Windgrafik", { exact: true })
+    .uncheck();
+  await expect(page.locator(".site")).toHaveAttribute("role", "img");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as DemoWindow).lastEditorConfig.windrose.enabled,
+      ),
+    )
+    .toBe(false);
+  await expect(page.locator(".rose-toggle")).toHaveCount(0);
+});
+
+test("details identify actual source devices, show both axes, and derive extrema from the HA calendar day", async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date("2026-11-15T15:00:00Z") });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      original = win.hass.callWS;
+    win.hass.states["sensor.demo_temperature"].attributes.friendly_name =
+      "Außentemperatur";
+    win.hass.callWS = async (message: any) => {
+      const result = await original(message);
+      return message.type === "config/entity_registry/list"
+        ? result.map((entry: any) =>
+            entry.entity_id === "sensor.demo_temperature"
+              ? { ...entry, device_id: "demo-ws90" }
+              : entry,
+          )
+        : result;
+    };
+    const { temperature_min, temperature_max, ...entities } =
+      win.demoConfig.entities;
+    win.hass.callApi = async (method: string, path: string) => {
+      win.historyRequests.push({ method, path });
+      return [
+        [
+          ...[-1, 1, 4, 9].map((hours, i) => ({
+            entity_id: "sensor.demo_temperature",
+            state: String([7, 3, 12, 8][i]),
+            attributes: { unit_of_measurement: "°C" },
+            last_updated: new Date(
+              Date.parse("2026-11-14T23:00:00Z") + hours * 3600_000,
+            ).toISOString(),
+          })),
+        ],
+      ];
+    };
+    win.setDemoConfig({ ...win.demoConfig, entities });
+    await win.card.updateComplete;
+  });
+  await page.locator('[data-detail="temperature"]:visible').first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(
+    dialog.locator('.detail-reading[data-key="temperature"] .label'),
+  ).toHaveText("Außentemperatur · WS90");
+  await expect(dialog).not.toContainText("sensor.demo_");
+  await expect(dialog.locator('[data-key="temperature_min"]')).toContainText(
+    "3",
+  );
+  await expect(dialog.locator('[data-key="temperature_max"]')).toContainText(
+    "12",
+  );
+  await expect(dialog.locator(".daily-coverage")).toContainText(
+    "2026-11-15 · Europe/Berlin",
+  );
+  await expect(dialog.locator(".plot-values").first()).toContainText("12");
+  await expect(dialog.locator(".plot-unit").first()).toHaveText("°C");
+  await expect(
+    dialog.locator(".plot-times").first().locator("time"),
+  ).toHaveCount(3);
+  await expect(dialog.locator(".plot-zone").first()).toContainText(
+    "Europe/Berlin",
+  );
+  const requests = await page.evaluate(
+    () => (window as DemoWindow).historyRequests,
+  );
+  const daily = requests.find((request) =>
+    request.path.startsWith("history/period/2026-11-14T23:00:00.000Z"),
+  );
+  expect(daily).toBeTruthy();
+  expect(
+    new URL(daily.path, "http://fixture").searchParams.get("filter_entity_id"),
+  ).toBe("sensor.demo_temperature");
+  await page.clock.runFor(50);
+  await dialog
+    .locator(".detail-content")
+    .evaluate((el) => (el.scrollTop = el.scrollHeight));
+  const endGap = await dialog
+    .locator(".detail-content")
+    .evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+  expect(endGap).toBeLessThanOrEqual(1);
+});
+
+test("installed real windrose flips into the dashboard, retains instance across HA updates and stops on return", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.WINDROSE_UPSTREAM_JS,
+    "Provide the locally downloaded upstream release to verify the actual installed resource.",
+  );
+  const upstream = await readFile(process.env.WINDROSE_UPSTREAM_JS!);
+  await page.route("**/__installed_windrose.js", (route) =>
+    route.fulfill({ contentType: "text/javascript", body: upstream }),
+  );
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  await page.addScriptTag({ url: "/__installed_windrose.js", type: "module" });
+  await page.waitForFunction(() => customElements.get("windrose-card"));
+  await page.evaluate(async () => {
+    const win = window as DemoWindow,
+      original = win.hass.callWS;
+    (win as any).roseRequests = [];
+    Object.assign(win.hass, {
+      entities: {},
+      connection: { connected: true },
+      locale: {
+        language: "de",
+        number_format: "decimal_comma",
+        time_format: "24",
+        date_format: "DMY",
+        first_weekday: "monday",
+        time_zone: "server",
+      },
+      localize: (key: string) => key,
+    });
+    win.hass.callWS = async (message: any) => {
+      if (message.type !== "history/history_during_period")
+        return original(message);
+      (win as any).roseRequests.push(message);
+      const id = message.entity_ids[0],
+        timestamp = Math.floor(Date.now() / 1000);
+      return {
+        [id]: Array.from({ length: 96 }, (_, i) => ({
+          lu: timestamp - 86400 + i * 900,
+          s: String(id.includes("direction") ? (i * 15) % 360 : 4 + (i % 12)),
+        })),
+      };
+    };
+    win.card.hass = win.hass;
+    await win.card.updateComplete;
+  });
+  const initialURL = page.url();
+  await page.locator(".site").click();
+  const installed = page.locator("ecowitt-windrose-host windrose-card");
+  await expect(installed.locator("svg").first()).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).roseRequests?.length))
+    .toBe(2);
+  await page.evaluate(() => {
+    (window as any).installedRose = (window as DemoWindow).card.shadowRoot
+      .querySelector("ecowitt-windrose-host")
+      .shadowRoot.querySelector("windrose-card");
+  });
+  const width = await installed
+    .locator("svg")
+    .first()
+    .evaluate((el) => el.getBoundingClientRect().width);
+  expect(width).toBeLessThanOrEqual(300);
+  expect(width).toBeGreaterThan(200);
+  await expect
+    .poll(async () => {
+      const rose = await installed.locator("svg").first().boundingBox();
+      const stage = await page.locator(".wind-stage").boundingBox();
+      return Boolean(
+        rose && stage && rose.y + rose.height <= stage.y + stage.height + 1,
+      );
+    })
+    .toBe(true);
+  await update(page, "wind_direction", 301);
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).installedRose ===
+        (window as DemoWindow).card.shadowRoot
+          .querySelector("ecowitt-windrose-host")
+          .shadowRoot.querySelector("windrose-card"),
+    ),
+  ).toBe(true);
+  expect(page.url()).toBe(initialURL);
+  await page.getByRole("button", { name: "Windgrafik", exact: true }).click();
+  await expect(installed).toHaveCount(0);
+  expect(
+    await page.evaluate(() => (window as any).installedRose.updateInterval),
+  ).toBeUndefined();
+  await noOverflow(page);
+  expect(errors).toEqual([]);
 });
