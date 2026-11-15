@@ -6,104 +6,182 @@ import {
 } from "./data";
 import type { HassEntity } from "./types";
 
-/** Local observations only. Sky conditions are estimates, never a forecast. */
+/** Local observations and explicitly selected HA conditions; never a forecast. */
 export type WeatherKind =
   | "rain"
   | "sunny"
   | "partlycloudy"
   | "cloudy"
   | "night"
+  | "daylight"
   | "unknown";
 export interface WeatherObservation {
   kind: WeatherKind;
   label: string;
   note: string;
   estimated: boolean;
+  source?: "wh40" | "ws90" | "weather_entity" | "solar" | "sun";
   /** Irradiance/model ratio, not a measured fraction of cloud cover. */
   clearSkyRatio?: number;
+  /** Visual density derived only from a configured numerical rain-rate source. */
+  rainIntensity?: "light" | "moderate" | "heavy";
 }
 export interface WeatherOptions {
   now?: number;
+  /** Optional HA-state age policy. Zero leaves unchanged HA states usable. */
   staleAfterMinutes?: number;
+  /** Optional, explicitly configured WS90 precipitation RATE, never wetness. */
+  secondaryRainRate?: Reading;
+  /** Actual HA state only. No forecast or external fetch is performed here. */
+  conditionEntity?: HassEntity;
 }
-
-/**
- * Conservative display policy, not a physical constant or a telemetry guarantee.
- * Weather inference never reuses observations older than 30 minutes; an explicit
- * shorter card freshness threshold can tighten this limit. last_reported helps
- * distinguish unchanged HA states from reports that have stopped arriving.
- */
-export const WEATHER_MAX_AGE_MINUTES = 30;
 const MIN_SKY_ELEVATION = 12;
-// Heuristic irradiance thresholds: shading/haze can look like cloud attenuation.
 const SUNNY_RATIO = 0.78;
 const PARTLY_CLOUDY_RATIO = 0.4;
 
-/** Haurwitz global horizontal clear-sky irradiance, W/m²; elevation is in degrees. */
+/** Haurwitz global horizontal clear-sky irradiance, W/m²; elevation in degrees. */
 export function clearSkyIrradiance(elevation: number): number | null {
   if (!Number.isFinite(elevation) || elevation <= 0 || elevation > 90)
     return null;
-  // cos(zenith) = sin(elevation), not cos(elevation).
   const cosZenith = Math.sin((elevation * Math.PI) / 180);
   return 1098 * cosZenith * Math.exp(-0.059 / cosZenith);
 }
-
-function unknown(note: string): WeatherObservation {
-  return {
-    kind: "unknown",
-    label: "Wetter nicht bestimmbar",
-    note,
-    estimated: false,
-  };
+function unknown(
+  note: string,
+  label = "Wetterdaten ergänzen",
+): WeatherObservation {
+  return { kind: "unknown", label, note, estimated: false };
 }
-function fresh(
+/**
+ * last_updated is a change timestamp, not a telemetry heartbeat. Do not impose an
+ * undocumented 30-minute expiry on unchanged rain or solar values. The card's
+ * explicit age policy and unavailable/stale Reading states remain authoritative.
+ */
+function usableTime(
   entity: HassEntity | undefined,
   options: WeatherOptions,
 ): boolean {
-  if (!entity) return false;
-  const configured = options.staleAfterMinutes;
-  const minutes =
-    typeof configured === "number" &&
-    Number.isFinite(configured) &&
-    configured > 0
-      ? Math.min(configured, WEATHER_MAX_AGE_MINUTES)
-      : WEATHER_MAX_AGE_MINUTES;
+  const age = entityFreshness(entity, {
+    now: options.now,
+    staleAfterMinutes: options.staleAfterMinutes,
+  });
   return (
-    entityFreshness(entity, {
-      now: options.now,
-      staleAfterMinutes: minutes,
-    }).status === "current"
+    age.status === "current" ||
+    (age.status === "unknown" &&
+      !(
+        Number.isFinite(options.staleAfterMinutes) &&
+        options.staleAfterMinutes! > 0
+      ))
   );
 }
 function validObservation(
-  reading: Reading,
+  reading: Reading | undefined,
   key: "solar" | "rain_rate",
   options: WeatherOptions,
 ): reading is Reading & { value: number } {
-  return (
+  return Boolean(
+    reading &&
     reading.status === "ok" &&
     reading.value !== null &&
     Number.isFinite(reading.value) &&
     reading.value >= 0 &&
     isUnitValid(key, reading.unit) &&
-    fresh(reading.entity, options)
+    usableTime(reading.entity, options),
   );
 }
 function elevationOf(sun: HassEntity): number | null {
   const elevation = sun.attributes.elevation;
-  if (
-    (typeof elevation !== "number" && typeof elevation !== "string") ||
-    (typeof elevation === "string" && !elevation.trim())
-  )
+  if (typeof elevation !== "number" && typeof elevation !== "string")
     return null;
   const parsed = numericState(String(elevation));
   return parsed !== null && parsed >= -90 && parsed <= 90 ? parsed : null;
 }
+function rateInMmPerHour(reading: Reading & { value: number }): number {
+  const unit = reading.unit.replace(/\/hr$/, "/h");
+  const scale =
+    unit === "in/h" ? 25.4 : unit === "cm/h" ? 10 : unit === "m/h" ? 1000 : 1;
+  return reading.value * scale;
+}
+function measuredRain(
+  reading: Reading | undefined,
+  source: "wh40" | "ws90",
+  options: WeatherOptions,
+): WeatherObservation | undefined {
+  if (!validObservation(reading, "rain_rate", options) || reading.value <= 0)
+    return undefined;
+  const rate = rateInMmPerHour(reading);
+  if (!Number.isFinite(rate)) return undefined;
+  return {
+    kind: "rain",
+    label: "Regen",
+    estimated: false,
+    source,
+    note: `${source === "wh40" ? "WH40" : "WS90"} meldet eine positive Niederschlagsrate. Die Anzeige folgt diesem HA-Messzustand; ein unveränderter Zustand ist kein Nachweis für ausgefallene Telemetrie.`,
+    rainIntensity: rate < 2.5 ? "light" : rate < 10 ? "moderate" : "heavy",
+  };
+}
+function sourceCondition(
+  entity: HassEntity | undefined,
+  options: WeatherOptions,
+  isNight: boolean,
+  isDay: boolean,
+): WeatherObservation | undefined {
+  if (
+    !entity ||
+    !entity.entity_id.startsWith("weather.") ||
+    !usableTime(entity, options)
+  )
+    return undefined;
+  const state = entity.state.toLowerCase().trim();
+  const label =
+    typeof entity.attributes.friendly_name === "string"
+      ? entity.attributes.friendly_name
+      : "HA-Wetterquelle";
+  const note = `Aktueller Zustand der ausgewählten HA-Wetterquelle „${label}“. Keine Vorhersage wird abgerufen; der Anbieter dieser HA-Entität kann eigene Datenquellen verwenden.`;
+  if (["rainy", "pouring", "lightning-rainy"].includes(state))
+    return {
+      kind: "unknown",
+      label: "Regen laut Wetterquelle",
+      estimated: false,
+      source: "weather_entity",
+      note: `${note} Eine positive lokale Regenrate wurde nicht bestätigt. Für eine lokale Regenanimation WH40 oder eine tatsächliche WS90-Regenrate zuordnen; Piezo-NASS genügt nicht.`,
+    };
+  if (state === "clear-night" && isDay)
+    return unknown(
+      "Wetterquelle und Sonnenstatus widersprechen sich; keine Nachtanzeige bei bestätigtem Tageslicht.",
+    );
+  if (
+    state === "clear-night" ||
+    (isNight && ["sunny", "partlycloudy", "cloudy"].includes(state))
+  )
+    return {
+      kind: "night",
+      label: "Nacht",
+      estimated: false,
+      source: "weather_entity",
+      note,
+    };
+  const kind = (
+    { sunny: "sunny", partlycloudy: "partlycloudy", cloudy: "cloudy" } as const
+  )[state as "sunny" | "partlycloudy" | "cloudy"];
+  if (!kind) return undefined;
+  return {
+    kind,
+    label:
+      kind === "sunny"
+        ? "Sonnig · Wetterquelle"
+        : kind === "partlycloudy"
+          ? "Teilweise bewölkt · Wetterquelle"
+          : "Bewölkt · Wetterquelle",
+    estimated: false,
+    source: "weather_entity",
+    note,
+  };
+}
 
 /**
- * WH40 measures rain rate. WS90 moisture is independent and stays in its own UI.
- * The unused fourth argument preserves callers while deliberately preventing a
- * wet surface from replacing a simultaneous sky estimate or astronomical night.
+ * Positive local precipitation rates have priority. Surface moisture is ignored
+ * for sky classification and remains a separate live status in the parent card.
  */
 export function observeWeather(
   sun: HassEntity | undefined,
@@ -112,32 +190,40 @@ export function observeWeather(
   _wet: Reading,
   options: WeatherOptions = {},
 ): WeatherObservation {
-  const measuredRate = validObservation(rainRate, "rain_rate", options);
-  if (measuredRate && rainRate.value > 0)
-    return {
-      kind: "rain",
-      label: "Regen",
-      estimated: false,
-      note: "Positive, aktuelle Niederschlagsrate vom WH40 gemessen.",
-    };
-
-  if (!sun || !["above_horizon", "below_horizon"].includes(sun.state))
+  const rain =
+    measuredRain(rainRate, "wh40", options) ??
+    measuredRain(options.secondaryRainRate, "ws90", options);
+  if (rain) return rain;
+  const validSun = Boolean(
+    sun &&
+    ["above_horizon", "below_horizon"].includes(sun.state) &&
+    usableTime(sun, options),
+  );
+  const altitude = validSun && sun ? elevationOf(sun) : null;
+  const isNight = Boolean(
+    validSun &&
+    sun?.state === "below_horizon" &&
+    (sun.attributes.elevation === undefined ||
+      (altitude !== null && altitude <= 0)),
+  );
+  const condition = sourceCondition(
+    options.conditionEntity,
+    options,
+    isNight,
+    Boolean(
+      validSun &&
+      sun?.state === "above_horizon" &&
+      altitude !== null &&
+      altitude >= 0,
+    ),
+  );
+  if (condition) return condition;
+  if (!validSun || !sun)
     return unknown(
-      "Für die lokale Himmelsabschätzung fehlt ein gültiger Sonnenstatus aus Home Assistant.",
+      "Für Tag/Nacht und die lokale Himmelsabschätzung fehlt ein verwendbarer Sonnenzustand aus sun.sun. Regen benötigt davon unabhängig eine zugeordnete Regenrate.",
     );
-  if (!fresh(sun, options))
-    return unknown(
-      "Sonnenstand nicht aktuell oder ohne verlässlichen Aktualisierungszeitpunkt; keine Himmelsabschätzung.",
-    );
-
-  const altitude = elevationOf(sun);
-  // A fresh below-horizon state is enough for astronomical night. A supplied
-  // contradictory/invalid elevation must not silently become a night claim.
   if (sun.state === "below_horizon") {
-    if (
-      sun.attributes.elevation !== undefined &&
-      (altitude === null || altitude > 0)
-    )
+    if (!isNight)
       return unknown(
         "Sonnenstatus und Sonnenhöhe sind ungültig oder widersprüchlich.",
       );
@@ -145,24 +231,28 @@ export function observeWeather(
       kind: "night",
       label: "Nacht",
       estimated: false,
-      note: "Sonne unter dem Horizont. Dies ist kein Nachweis für eine wolkenfreie oder niederschlagsfreie Nacht.",
+      source: "sun",
+      note: "Astronomischer Nachtstatus aus Home Assistant. Eine wolkenfreie oder niederschlagsfreie Nacht wird daraus nicht abgeleitet.",
     };
   }
-  if (altitude === null)
+  if (altitude === null || altitude < 0)
     return unknown(
       "Für die lokale Himmelsabschätzung fehlt eine gültige Sonnenhöhe.",
     );
   if (altitude < MIN_SKY_ELEVATION)
-    return unknown(
-      "Sonnenhöhe unter 12°: bei Sonnenaufgang, Sonnenuntergang und tiefem Sonnenstand wird keine Himmelsabschätzung ausgegeben.",
-    );
+    return {
+      kind: "daylight",
+      label: "Tag · tiefer Sonnenstand",
+      estimated: false,
+      source: "sun",
+      note: "Die Sonne steht über dem Horizont. Bei tiefem Sonnenstand sind Wolken aus einem einzelnen Strahlungswert nicht zuverlässig bestimmbar. Eine neutrale Tageslichtszene ersetzt deshalb die bisherige Fehlermeldung; direkte Sonne wird nicht behauptet.",
+    };
   if (!validObservation(solar, "solar", options))
     return unknown(
-      "Für die lokale Himmelsabschätzung fehlt eine gültige, aktuelle Globalstrahlung in W/m² oder kW/m².",
+      "Für eine lokale Himmelsabschätzung WS90-Globalstrahlung in W/m² oder kW/m² zuordnen und den Zustand der Quelle prüfen. Eine ausgewählte HA-Wetterentität kann alternativ ihren aktuellen Zustand liefern.",
     );
-
-  const scale = solar.unit === "kW/m²" || solar.unit === "kW/m2" ? 1000 : 1;
-  const irradiance = solar.value * scale;
+  const irradiance =
+    solar.value * (solar.unit === "kW/m²" || solar.unit === "kW/m2" ? 1000 : 1);
   const clear = clearSkyIrradiance(altitude);
   if (!Number.isFinite(irradiance) || clear === null || clear <= 0)
     return unknown(
@@ -179,6 +269,9 @@ export function observeWeather(
       : ratio >= PARTLY_CLOUDY_RATIO
         ? "partlycloudy"
         : "cloudy";
+  const rateKnown =
+    validObservation(rainRate, "rain_rate", options) ||
+    validObservation(options.secondaryRainRate, "rain_rate", options);
   return {
     kind,
     label:
@@ -188,11 +281,12 @@ export function observeWeather(
           ? "Teilweise bewölkt (geschätzt)"
           : "Bewölkt (geschätzt)",
     estimated: true,
+    source: "solar",
     clearSkyRatio: ratio,
     note:
-      "Nur lokale Schätzung anhand WS90-Globalstrahlung und Sonnenhöhe (Haurwitz-Klarhimmelmodell), keine Vorhersage oder gemessene Wolkenbedeckung. Verschattung, Dunst, Sensorposition, Sensorabweichungen und Nebel können das Ergebnis verfälschen." +
-      (measuredRate
+      "Grobe lokale Strahlungsschätzung aus WS90-Globalstrahlung und Sonnenhöhe (Haurwitz). Verschattung, Dunst, Sensorlage und Modellabweichungen können wie Wolken wirken. Temperatur, Feuchte und Luftdruck erlauben keine eindeutige Wolken- oder Regenbestimmung; keine Vorhersage und keine gemessene Wolkenbedeckung." +
+      (rateKnown
         ? ""
-        : " Die aktuelle Regenrate ist nicht verfügbar; die Himmelsabschätzung trifft keine Aussage über Niederschlag."),
+        : " Eine verwendbare Regenrate fehlt; daraus folgt keine Niederschlagsfreiheit."),
   };
 }

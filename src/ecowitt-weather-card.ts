@@ -1,5 +1,15 @@
 import { LitElement, html, svg, nothing, type PropertyValues } from "lit";
 import { cardStyles } from "./styles";
+import { experienceStyles } from "./experience-styles";
+import { weatherScene, weatherSceneStyles } from "./weather-scene";
+import { historyPlot, historyPlotStyles } from "./history-plot";
+import { sourceLabel, type SourceRegistry } from "./source-label";
+import {
+  loadDailyTemperature,
+  type DailyTemperatureResult,
+} from "./daily-temperature";
+import type { RegistryDevice, RegistryEntity } from "./suggestions";
+import "./windrose-host";
 import { sitePlan } from "./site-plan";
 import {
   getReading,
@@ -45,6 +55,7 @@ const detailKeys: Record<Detail, MetricKey[]> = {
   rain: [
     "rain_today",
     "rain_rate",
+    "rain_rate_secondary",
     "rain_wet",
     "rain_24h",
     "rain_week",
@@ -112,8 +123,19 @@ export class EcowittWeatherCard extends LitElement {
     _loading: { state: true },
     _imageUrl: { state: true },
     _imageError: { state: true },
+    _flipped: { state: true },
+    _roseActive: { state: true },
+    _roseHeight: { state: true },
+    _reducedMotion: { state: true },
+    _daily: { state: true },
+    _sourceRegistry: { state: true },
   };
-  static styles = cardStyles;
+  static styles = [
+    cardStyles,
+    experienceStyles,
+    weatherSceneStyles,
+    historyPlotStyles,
+  ];
   hass?: HomeAssistant;
   private _config: CardConfig = { type: "custom:ecowitt-weather-card" };
   private _detail?: Detail;
@@ -128,6 +150,25 @@ export class EcowittWeatherCard extends LitElement {
   private _rotation?: number;
   private _averageRotation?: number;
   private _ageTimer?: ReturnType<typeof setInterval>;
+  private _flipped = false;
+  private _roseActive = false;
+  private _roseHeight = 0;
+  private _roseObserver?: ResizeObserver;
+  private _observedBack?: Element;
+  private _reducedMotion = false;
+  private _flipTimer?: ReturnType<typeof setTimeout>;
+  private _motionQuery?: MediaQueryList;
+  private _daily?: DailyTemperatureResult;
+  private _sourceRegistry?: SourceRegistry;
+  private _registryRequest = 0;
+  private _registryRequested = false;
+  private _motionChange = () => {
+    this._reducedMotion = this._motionQuery?.matches ?? false;
+    if (this._reducedMotion && !this._flipped) {
+      clearTimeout(this._flipTimer);
+      this._roseActive = false;
+    }
+  };
 
   static getConfigElement() {
     return document.createElement("ecowitt-weather-card-editor");
@@ -149,6 +190,12 @@ export class EcowittWeatherCard extends LitElement {
       this._imageNeedsHass = false;
     }
     this._historyRequest++;
+    clearTimeout(this._flipTimer);
+    this._flipped = this._roseActive = false;
+    this._daily = undefined;
+    this._registryRequest++;
+    this._registryRequested = false;
+    this._sourceRegistry = undefined;
     this._detail = undefined;
     this._dialog()?.close();
   }
@@ -160,11 +207,30 @@ export class EcowittWeatherCard extends LitElement {
   }
   connectedCallback() {
     super.connectedCallback();
+    this._roseObserver = new ResizeObserver((entries) => {
+      const height =
+        entries[0]?.borderBoxSize?.[0]?.blockSize ??
+        entries[0]?.target.getBoundingClientRect().height;
+      if (height && Math.abs(height - this._roseHeight) > 1)
+        this._roseHeight = Math.ceil(height);
+    });
+    this._observedBack = undefined;
+    this.requestUpdate();
+    this._motionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+    this._motionChange();
+    this._motionQuery.addEventListener("change", this._motionChange);
     this._ageTimer = setInterval(() => this.requestUpdate(), 60_000);
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this._ageTimer);
+    clearTimeout(this._flipTimer);
+    this._roseObserver?.disconnect();
+    this._observedBack = undefined;
+    this._motionQuery?.removeEventListener("change", this._motionChange);
+    this._flipped = this._roseActive = false;
+    this._registryRequest++;
+    this._registryRequested = false;
     this._closeDetail();
     this._imageRequest++;
     this._imageSource = "";
@@ -192,6 +258,14 @@ export class EcowittWeatherCard extends LitElement {
       void this._resolveImage(source);
     }
   }
+  protected updated() {
+    const back = this.renderRoot.querySelector(".wind-back") ?? undefined;
+    if (back !== this._observedBack) {
+      this._roseObserver?.disconnect();
+      this._observedBack = back;
+      if (back) this._roseObserver?.observe(back);
+    }
+  }
   private async _resolveImage(source: string) {
     const request = ++this._imageRequest;
     this._imageUrl = "";
@@ -216,9 +290,11 @@ export class EcowittWeatherCard extends LitElement {
   private _value(key: MetricKey, small = false) {
     const reading = this._reading(key);
     return html`<span class=${small ? "small-value" : "value"}
-        >${reading.text}${reading.value !== null && reading.unit
-          ? html`<span class="unit">${reading.unit}</span>`
-          : nothing}</span
+        >${reading.text}${
+          reading.value !== null && reading.unit
+            ? html`<span class="unit">${reading.unit}</span>`
+            : nothing
+        }</span
       >${this._status(reading)}`;
   }
   private _status(reading: Reading) {
@@ -226,13 +302,15 @@ export class EcowittWeatherCard extends LitElement {
       ? nothing
       : html`<span
           class="status-note ${reading.status === "stale" ? "stale" : ""}"
-          >${reading.status === "stale"
-            ? "Veraltet"
-            : reading.status === "missing"
-              ? "Quelle auswählen"
-              : reading.status === "invalid"
-                ? "Quelle prüfen"
-                : "Nicht verfügbar"}</span
+          >${
+            reading.status === "stale"
+              ? "Veraltet"
+              : reading.status === "missing"
+                ? "Quelle auswählen"
+                : reading.status === "invalid"
+                  ? "Quelle prüfen"
+                  : "Nicht verfügbar"
+          }</span
         >`;
   }
   private _wetBadge() {
@@ -240,11 +318,9 @@ export class EcowittWeatherCard extends LitElement {
     const status =
       r.status === "ok" ? (r.value === 1 ? "wet" : "dry") : "unavailable";
     return html`<span class="wet-badge ${status}"
-      >${icon("humidity")}${status === "wet"
-        ? "NASS"
-        : status === "dry"
-          ? "TROCKEN"
-          : "UNAVAILABLE"}</span
+      >${icon("humidity")}${
+        status === "wet" ? "NASS" : status === "dry" ? "TROCKEN" : "UNAVAILABLE"
+      }</span
     >`;
   }
   protected render() {
@@ -275,89 +351,92 @@ export class EcowittWeatherCard extends LitElement {
           ${icon("sensors")}
         </button>
       </div>
-      ${hasEntities ? this._sky() : nothing}
-      ${!hasEntities
-        ? this._setup()
-        : html`
-            <div class="mobile-summary">
-              <button
-                class="summary-item"
-                data-key="temperature"
-                data-detail="temperature"
-                @click=${() => this._openDetail("temperature")}
-              >
-                <span class="label">Außentemperatur</span>${this._value(
+      ${
+        !hasEntities
+          ? this._setup()
+          : html`
+              <div class="mobile-summary">
+                <button
+                  class="summary-item"
+                  data-key="temperature"
+                  data-detail="temperature"
+                  @click=${() => this._openDetail("temperature")}
+                >
+                  <span class="label">Außentemperatur</span>${this._value(
+                    "temperature",
+                    true,
+                  )}
+                </button>
+                <button
+                  class="summary-item"
+                  data-key="rain_wet"
+                  data-detail="rain"
+                  @click=${() => this._openDetail("rain")}
+                >
+                  <span class="label">WS90 · Feuchtigkeitsstatus</span
+                  >${this._wetBadge()}
+                </button>
+              </div>
+              <div class="main-layout">
+                ${this._site()}
+                <div class="weather">${this._wind()}${this._rain()}</div>
+              </div>
+              <div class="metrics">
+                ${this._metric(
                   "temperature",
-                  true,
+                  "Temperatur",
+                  "temperature",
+                  "#ff9f95",
+                  "temperature",
                 )}
-              </button>
-              <button
-                class="summary-item"
-                data-key="rain_wet"
-                data-detail="rain"
-                @click=${() => this._openDetail("rain")}
-              >
-                <span class="label">WS90 · Feuchtigkeitsstatus</span
-                >${this._wetBadge()}
-              </button>
-            </div>
-            <div class="main-layout">
-              ${this._site()}
-              <div class="weather">${this._wind()}${this._rain()}</div>
-            </div>
-            <div class="metrics">
-              ${this._metric(
-                "temperature",
-                "Temperatur",
-                "temperature",
-                "#ff9f95",
-                "temperature",
-              )}
-              ${this._metric(
-                "humidity",
-                "Luftfeuchte",
-                "humidity",
-                "#1dcce4",
-                "temperature",
-              )}
-              ${this._metric(
-                "pressure",
-                "Luftdruck",
-                "pressure",
-                "#b7a4ef",
-                "pressure",
-              )}
-              ${this._metric("uv", "UV-Index", "sun", "#bca2f5", "sun")}
-              ${this._metric(
-                "solar",
-                "Solarstrahlung",
-                "sun",
-                "#f2d669",
-                "sun",
-              )}
-              ${this._metric(
-                "solar_lux",
-                "Beleuchtungsstärke",
-                "sun",
-                "#f2d669",
-                "sun",
-              )}
-            </div>
-            ${missing.length
-              ? html`<div class="setup-missing">
-                  <strong>Einrichtung vervollständigen</strong> ·
-                  ${missing.length} Hauptquellen fehlen. Im Karteneditor
-                  zuordnen:
-                  ${missing
-                    .map((key) => METRICS.find((m) => m.key === key)!.label)
-                    .join(", ")}.
-                </div>`
-              : nothing}
-            <div class="footer">
-              <span>Wetterdaten aus Home Assistant</span
-              ><span>Nordorientierte Ansicht</span>
-            </div>
-          `}
+                ${this._metric(
+                  "humidity",
+                  "Luftfeuchte",
+                  "humidity",
+                  "#1dcce4",
+                  "temperature",
+                )}
+                ${this._metric(
+                  "pressure",
+                  "Luftdruck",
+                  "pressure",
+                  "#b7a4ef",
+                  "pressure",
+                )}
+                ${this._metric("uv", "UV-Index", "sun", "#bca2f5", "sun")}
+                ${this._metric(
+                  "solar",
+                  "Solarstrahlung",
+                  "sun",
+                  "#f2d669",
+                  "sun",
+                )}
+                ${this._metric(
+                  "solar_lux",
+                  "Beleuchtungsstärke",
+                  "sun",
+                  "#f2d669",
+                  "sun",
+                )}
+              </div>
+              ${
+                missing.length
+                  ? html`<div class="setup-missing">
+                      <strong>Einrichtung vervollständigen</strong> ·
+                      ${missing.length} Hauptquellen fehlen. Im Karteneditor
+                      zuordnen:
+                      ${missing
+                        .map((key) => METRICS.find((m) => m.key === key)!.label)
+                        .join(", ")}.
+                    </div>`
+                  : nothing
+              }
+              <div class="footer">
+                <span>Wetterdaten aus Home Assistant</span
+                ><span>Nordorientierte Ansicht</span>
+              </div>
+            `
+      }
       ${this._renderDialog()}
     </ha-card>`;
   }
@@ -368,7 +447,13 @@ export class EcowittWeatherCard extends LitElement {
       this._reading("solar"),
       this._reading("rain_rate"),
       this._reading("rain_wet"),
-      { staleAfterMinutes: this._config.stale_after_minutes },
+      {
+        staleAfterMinutes: this._config.stale_after_minutes,
+        secondaryRainRate: this._reading("rain_rate_secondary"),
+        conditionEntity: this._config.weather_entity
+          ? this.hass?.states[this._config.weather_entity]
+          : undefined,
+      },
     );
   }
   private _batteryGlyph(percent?: number) {
@@ -389,21 +474,25 @@ export class EcowittWeatherCard extends LitElement {
     return html`<button
       type="button"
       class="device-chip ${compact ? "compact" : "full"}"
-      title=${"Batterie: " +
-      indicator.battery.label +
-      ", Signal: " +
-      indicator.signal.label +
-      ", Verbindung: " +
-      indicator.connection.label}
+      title=${
+        "Batterie: " +
+        indicator.battery.label +
+        ", Signal: " +
+        indicator.signal.label +
+        ", Verbindung: " +
+        indicator.connection.label
+      }
       @click=${() => this._openDetail("sensors")}
     >
       <strong title=${device.name || device.role}>${device.role}</strong>
       <span
         title=${indicator.battery.detail}
-        class="status-battery ${indicator.battery.percent !== undefined &&
-        indicator.battery.percent < 20
-          ? "low"
-          : ""}"
+        class="status-battery ${
+          indicator.battery.percent !== undefined &&
+          indicator.battery.percent < 20
+            ? "low"
+            : ""
+        }"
       >
         ${this._batteryGlyph(indicator.battery.percent)}
         ${indicator.battery.state === "unknown" ? "—" : indicator.battery.label}
@@ -415,7 +504,8 @@ export class EcowittWeatherCard extends LitElement {
         title=${indicator.connection.detail}
         class="status-connection ${indicator.connection.state}"
       >
-        <i aria-hidden="true"></i>${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}
+        <i aria-hidden="true"></i
+        >${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}
       </span>
     </button>`;
   }
@@ -424,48 +514,45 @@ export class EcowittWeatherCard extends LitElement {
       (device) => device.show_on_main,
     );
     return html`<div class="header-devices" aria-label="Gerätestatus">
-      ${selected.length
-        ? selected.map((device) => this._deviceChip(device))
-        : html`<button
-            type="button"
-            class="device-placeholder"
-            @click=${() => this._openDetail("sensors")}
-            title="WS90-Gerätestatus im Karteneditor zuordnen"
-          >
-            WS90 · Status zuordnen
-          </button>`}
+      ${
+        selected.length
+          ? selected.map((device) => this._deviceChip(device))
+          : html`<button
+              type="button"
+              class="device-placeholder"
+              @click=${() => this._openDetail("sensors")}
+              title="WS90-Gerätestatus im Karteneditor zuordnen"
+            >
+              WS90 · Status zuordnen
+            </button>`
+      }
     </div>`;
   }
-  private _sky() {
-    const sky = this._observation();
-    const animated = this._config.weather_animation !== false;
-    return html`<div
-      class="sky-banner"
-      data-weather=${sky.kind}
-      role="status"
-      title=${sky.note}
-    >
-      <div
-        class="sky-art ${sky.kind} ${animated ? "animated" : ""}"
-        aria-hidden="true"
-      >
-        ${sky.kind === "sunny" || sky.kind === "partlycloudy"
-          ? html`<i class="sun-disc"></i>`
-          : nothing}
-        ${sky.kind === "night" ? html`<i class="moon-disc"></i>` : nothing}
-        ${["cloudy", "partlycloudy", "rain"].includes(sky.kind)
-          ? html`<i class="cloud-one"></i><i class="cloud-two"></i>`
-          : nothing}
-        ${sky.kind === "rain" ? html`<i class="sky-drop"></i>` : nothing}
-        ${sky.kind === "unknown" ? icon("unknown") : nothing}
-      </div>
-      <span>${sky.label}</span>
-      <small
-        >${sky.estimated
-          ? "Lokale Schätzung · WS90 + Sonnenstand"
-          : sky.note}</small
-      >
-    </div>`;
+  private _toggleRose(show = !this._flipped) {
+    clearTimeout(this._flipTimer);
+    this._flipped = show;
+    void this.updateComplete.then(() => {
+      if (this._flipped === show)
+        this.renderRoot
+          .querySelector<HTMLElement>(
+            show ? ".wind-back-head button" : ".wind-front[role=button]",
+          )
+          ?.focus({ preventScroll: true });
+    });
+    if (show) this._roseActive = true;
+    else if (this._reducedMotion || this._config.weather_animation === false)
+      this._roseActive = false;
+    else
+      this._flipTimer = setTimeout(() => {
+        if (!this._flipped) this._roseActive = false;
+      }, 650);
+  }
+  private _weatherInfo() {
+    const observation = this._observation();
+    return html`<details class="weather-info">
+      <summary>${observation.label}</summary>
+      <p>${observation.note}</p>
+    </details>`;
   }
   private _setup() {
     return html`<section class="setup">
@@ -525,58 +612,123 @@ export class EcowittWeatherCard extends LitElement {
       class="site-wrap"
       aria-label="Wind über nordorientierter Draufsicht"
     >
-      <figure class="site" role="img" aria-label=${description}>
-        <div class="site-content">
-          ${this._imageUrl && !this._imageError
-            ? html`<img
-                class="site-image"
-                src=${this._imageUrl}
-                alt="Eigene HA-Bildquelle"
-                style="transform:rotate(${this._clamp(
-                  this._config.image_rotation,
-                  0,
-                  -180,
-                  180,
-                )}deg)"
-                @error=${() => {
-                  this._imageError =
-                    "Bild konnte nicht geladen werden. Pfad und Zugriffsrechte in Home Assistant prüfen.";
-                }}
-              />`
-            : sitePlan()}
+      <div
+        style=${`min-height:${this._flipped ? this._roseHeight : 0}px`}
+        class="wind-stage ${this._flipped ? "is-flipped" : ""} ${this._reducedMotion || this._config.weather_animation === false ? "no-animation" : ""}"
+      >
+        <div class="wind-flipper">
+          <figure
+            class="site wind-front"
+            role=${this._config.windrose?.enabled === false ? "img" : "button"}
+            tabindex=${this._config.windrose?.enabled === false || this._flipped ? -1 : 0}
+            ?inert=${this._flipped}
+            aria-label=${description + (this._config.windrose?.enabled === false ? "" : " Windrose öffnen.")}
+            @click=${() => {
+              if (this._config.windrose?.enabled !== false)
+                this._toggleRose(true);
+            }}
+            @keydown=${(event: KeyboardEvent) => {
+              if (
+                this._config.windrose?.enabled !== false &&
+                ["Enter", " "].includes(event.key)
+              ) {
+                event.preventDefault();
+                this._toggleRose(true);
+              }
+            }}
+          >
+            <div class="site-content">
+              ${
+                this._imageUrl && !this._imageError
+                  ? html`<img
+                      class="site-image"
+                      src=${this._imageUrl}
+                      alt="Eigene HA-Bildquelle"
+                      style="transform:rotate(${this._clamp(
+                        this._config.image_rotation,
+                        0,
+                        -180,
+                        180,
+                      )}deg)"
+                      @error=${() => {
+                        this._imageError =
+                          "Bild konnte nicht geladen werden. Pfad und Zugriffsrechte in Home Assistant prüfen.";
+                      }}
+                    />`
+                  : sitePlan()
+              }
+            </div>
+            ${weatherScene(this._observation(), this._config.weather_animation !== false)}
+            <svg class="wind-layer" viewBox="0 0 100 100" aria-hidden="true">
+              ${
+                averageVisible
+                  ? svg`<g class="flow-average" data-bearing=${normalizeDegrees(avg.value!)} style="transform:rotate(${this._averageRotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(0.7, avg.value!)}/></g>`
+                  : nothing
+              }
+              ${
+                currentVisible
+                  ? svg`<g class="flow-current" data-bearing=${normalizeDegrees(current.value!)} data-flow-bearing=${flowBearing(current.value!)} style="transform:rotate(${this._rotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(1.7, current.value!)}/></g>`
+                  : nothing
+              }
+              <circle class="target" cx=${targetX} cy=${targetY} r="1" />
+            </svg>
+            <div class="degree-ring" aria-hidden="true">
+              ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
+                const theta = (bearing * Math.PI) / 180;
+                const sin = Math.round(Math.sin(theta) * 1e6) / 1e6;
+                const cos = Math.round(Math.cos(theta) * 1e6) / 1e6;
+                return html`<span
+                  data-degrees=${bearing}
+                  style=${`left:calc(${50 + sin * 50}% + ${sin} * var(--degree-offset));top:calc(${50 - cos * 50}% - ${cos} * var(--degree-offset))`}
+                  >${bearing}°</span
+                >`;
+              })}
+            </div>
+            <span class="cardinal north">N</span
+            ><span class="cardinal east">O</span
+            ><span class="cardinal south">S</span
+            ><span class="cardinal west">W</span>
+          </figure>
+          <div
+            class="wind-back"
+            ?inert=${!this._flipped}
+            aria-hidden=${String(!this._flipped)}
+          >
+            <div class="wind-back-head">
+              <h3>Windrose</h3>
+              <button type="button" @click=${() => this._toggleRose(false)}>
+                Windgrafik
+              </button>
+            </div>
+            <ecowitt-windrose-host
+              .hass=${this.hass}
+              .entities=${this._config.entities}
+              .options=${this._config.windrose}
+              .active=${this._roseActive}
+              .reducedMotion=${this._reducedMotion}
+              .animation=${this._config.weather_animation !== false}
+            ></ecowitt-windrose-host>
+          </div>
         </div>
-        <svg class="wind-layer" viewBox="0 0 100 100" aria-hidden="true">
-          ${averageVisible
-            ? svg`<g class="flow-average" data-bearing=${normalizeDegrees(avg.value!)} style="transform:rotate(${this._averageRotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(0.7, avg.value!)}/></g>`
-            : nothing}
-          ${currentVisible
-            ? svg`<g class="flow-current" data-bearing=${normalizeDegrees(current.value!)} data-flow-bearing=${flowBearing(current.value!)} style="transform:rotate(${this._rotation}deg);transform-origin:${targetX}% ${targetY}%"><polygon points=${arrow(1.7, current.value!)}/></g>`
-            : nothing}
-          <circle class="target" cx=${targetX} cy=${targetY} r="1" />
-        </svg>
-        <div class="degree-ring" aria-hidden="true">
-          ${[0, 45, 90, 135, 180, 225, 270, 315].map((bearing) => {
-            const theta = (bearing * Math.PI) / 180;
-            const sin = Math.round(Math.sin(theta)*1e6)/1e6;
-            const cos = Math.round(Math.cos(theta)*1e6)/1e6;
-            return html`<span data-degrees=${bearing} style=${`left:calc(${50+sin*50}% + ${sin} * var(--degree-offset));top:calc(${50-cos*50}% - ${cos} * var(--degree-offset))`}>${bearing}°</span>`;
-          })}
-        </div>
-        <span class="cardinal north">N</span><span class="cardinal east">O</span
-        ><span class="cardinal south">S</span
-        ><span class="cardinal west">W</span>
-      </figure>
+      </div>
       <div class="legend">
-        <span><i></i>Aktuelle Strömung zum Ziel</span
-        ><span><i class="average"></i>Ø 10 Min. Strömung</span>
+        ${this._flipped ? html`<span>Richtungs- und Geschwindigkeitsverteilung</span>` : html`<span><i></i>Aktuelle Strömung zum Ziel</span><span><i class="average"></i>Ø 10 Min. Strömung</span>`}
+      </div>
+      <div class="site-actions">
+        ${this._config.windrose?.enabled !== false ? html`<button type="button" class="text-button rose-toggle" @click=${() => this._toggleRose()}>${this._flipped ? "Windgrafik anzeigen" : "Windrose öffnen ↻"}</button>` : nothing}
+        ${this._weatherInfo()}
       </div>
       <p class="image-note">
-        ${this._imageError ||
-        (calm
-          ? "Flaute · aktueller Pfeil ausgeblendet"
-          : this._imageUrl
-            ? "Eigene HA-Bildquelle · Norden oben prüfen"
-            : "Generische Beispielgrafik · Norden oben")}
+        ${
+          this._flipped
+            ? "Windrose · Home-Assistant-Daten"
+            : this._imageError ||
+              (calm
+                ? "Flaute · aktueller Pfeil ausgeblendet"
+                : this._imageUrl
+                  ? "Eigene HA-Bildquelle · Norden oben prüfen"
+                  : "Generische Beispielgrafik · Norden oben")
+        }
       </p>
     </section>`;
   }
@@ -610,9 +762,9 @@ export class EcowittWeatherCard extends LitElement {
         </div>
         <div class="from">
           Wind aus<br /><b
-            >${direction.value === null
-              ? "—"
-              : directionLabel(direction.value)}</b
+            >${
+              direction.value === null ? "—" : directionLabel(direction.value)
+            }</b
           >
         </div>
       </div>
@@ -643,26 +795,7 @@ export class EcowittWeatherCard extends LitElement {
       aria-label="Regendetails öffnen"
       @click=${() => this._openDetail("rain")}
     >
-      ${["sunny", "partlycloudy"].includes(sky.kind)
-        ? html`<span
-            class="rain-sun-decoration ${animated ? "animated" : ""}"
-            aria-hidden="true"
-          ></span>`
-        : nothing}
-      ${raining
-        ? html`<span
-            class="rain-atmosphere ${animated ? "animated" : ""}"
-            aria-hidden="true"
-          >
-            ${Array.from(
-              { length: 14 },
-              (_, i) =>
-                html`<i
-                  style=${"left:" + (7 + i * 6.3) + "%;--drop:" + i}
-                ></i>`,
-            )}
-          </span>`
-        : nothing}
+      ${weatherScene(sky, animated, "tile")}
       <div class="panel-heading">
         ${icon("rain")}
         <h2>Regen</h2>
@@ -683,11 +816,13 @@ export class EcowittWeatherCard extends LitElement {
           >WS90 Piezo · Feuchtigkeit,<br />kein Nachweis für Regenfall</span
         >
       </div>
-      ${this._reading("rain_wet").status === "stale"
-        ? html`<span class="status-note stale"
-            >Feuchtigkeitsstatus veraltet</span
-          >`
-        : nothing}
+      ${
+        this._reading("rain_wet").status === "stale"
+          ? html`<span class="status-note stale"
+              >Feuchtigkeitsstatus veraltet</span
+            >`
+          : nothing
+      }
     </button>`;
   }
   private _metric(
@@ -716,9 +851,43 @@ export class EcowittWeatherCard extends LitElement {
   private _dialog() {
     return this.renderRoot?.querySelector<HTMLDialogElement>("dialog");
   }
+  private _source(id: string, metricLabel?: string) {
+    return sourceLabel(
+      this.hass,
+      this._config,
+      id,
+      metricLabel,
+      this._sourceRegistry,
+    );
+  }
+  private async _loadSourceRegistry() {
+    if (this._registryRequested || !this.hass?.callWS) return;
+    this._registryRequested = true;
+    const request = ++this._registryRequest;
+    try {
+      const [devices, entities] = await Promise.all([
+        this.hass.callWS<RegistryDevice[]>({
+          type: "config/device_registry/list",
+        }),
+        this.hass.callWS<RegistryEntity[]>({
+          type: "config/entity_registry/list",
+        }),
+      ]);
+      if (
+        request === this._registryRequest &&
+        Array.isArray(devices) &&
+        Array.isArray(entities)
+      )
+        this._sourceRegistry = { devices, entities };
+    } catch {
+      /* Friendly source names remain available without registry permission. */
+    }
+  }
   private async _openDetail(detail: Detail) {
     this._detail = detail;
     this._history = undefined;
+    this._daily = undefined;
+    void this._loadSourceRegistry();
     this._loading = detail !== "sensors";
     const request = ++this._historyRequest;
     await this.updateComplete;
@@ -736,11 +905,24 @@ export class EcowittWeatherCard extends LitElement {
     const ids = keys.flatMap((key) =>
       this._config.entities?.[key] ? [this._config.entities[key]!] : [],
     );
-    const result = this.hass
-      ? await loadHistory(this.hass, ids, this._config.history_hours ?? 24)
-      : undefined;
+    const hass = this.hass;
+    const needsDaily =
+      detail === "temperature" &&
+      (!this._config.entities?.temperature_min ||
+        !this._config.entities?.temperature_max);
+    const [result, daily] = await Promise.all([
+      hass
+        ? loadHistory(hass, ids, this._config.history_hours ?? 24)
+        : undefined,
+      needsDaily && hass
+        ? loadDailyTemperature(hass, this._config.entities?.temperature ?? "", {
+            staleAfterMinutes: this._config.stale_after_minutes,
+          })
+        : undefined,
+    ]);
     if (request === this._historyRequest) {
       this._history = result;
+      this._daily = daily;
       this._loading = false;
     }
   }
@@ -777,84 +959,105 @@ export class EcowittWeatherCard extends LitElement {
         }
       }}
     >
-      ${detail
-        ? html`<div class="dialog-head">
-              <div>
-                <span class="eyebrow">Wetterstation · Details</span>
-                <h2 id="detail-title">${detailNames[detail]}</h2>
+      ${
+        detail
+          ? html`<div class="dialog-head">
+                <div>
+                  <span class="eyebrow">Wetterstation · Details</span>
+                  <h2 id="detail-title">${detailNames[detail]}</h2>
+                </div>
+                <button
+                  class="close"
+                  aria-label="Schließen"
+                  @click=${this._closeDetail}
+                >
+                  ×
+                </button>
               </div>
-              <button
-                class="close"
-                aria-label="Schließen"
-                @click=${this._closeDetail}
-              >
-                ×
-              </button>
-            </div>
-            <div class="detail-content">
-              ${detail === "sensors"
-                ? this._sensorDetails()
-                : html`
-                    <p class="detail-caption">
-                      ${detail === "rain"
-                        ? "WH40-Mengen und WS90-Feuchtigkeit sind getrennte Messungen. Heute ist der Kalendertag; „letzte 24 Stunden“ benötigt eine eigene gleitende Quellentität."
-                        : detail === "wind"
-                          ? "Alle Richtungsangaben bezeichnen die meteorologische Herkunft. Die Strömungspfeile zeigen von dort zum Ziel. 10-Minuten-Mittelwerte stammen ausschließlich aus den zugeordneten Quellentitäten."
-                          : "Aktuelle Werte der zugeordneten Home-Assistant-Entitäten. Verlauf nur aus dem lokalen Recorder."}
-                    </p>
-                    <div class="detail-grid">
-                      ${detailKeys[detail].map((key) =>
-                        this._detailReading(key),
-                      )}
-                    </div>
-                    <h3 class="history-heading">
-                      Verlauf · letzte
-                      ${this._clamp(this._config.history_hours, 24, 1, 168)}
-                      Stunden
-                    </h3>
-                    ${this._loading
-                      ? html`<p class="notice" role="status">
-                          Recorder-Verlauf wird geladen …
-                        </p>`
-                      : this._history?.status === "ok"
-                        ? this._history.series.map((series) =>
-                            this._chart(series),
-                          )
-                        : html`<p class="notice">
-                            ${this._history?.message ??
-                            "Keine Historienquelle verfügbar."}
-                          </p>`}
-                    ${detail === "rain"
-                      ? html`<p class="detail-caption">
-                          Der Tagesmengen-Verlauf setzt sich am Tageswechsel
-                          zurück. Daraus wird kein rollierender 24h-Wert
-                          berechnet.
-                        </p>`
-                      : nothing}
-                    <button
-                      class="text-button"
-                      @click=${() => this._openDetail(detail)}
-                    >
-                      Verlauf neu laden
-                    </button>
-                  `}
-            </div>`
-        : nothing}
+              <div class="detail-content">
+                ${
+                  detail === "sensors"
+                    ? this._sensorDetails()
+                    : html`
+                        <h3 class="detail-section-title">
+                          Messwerte & Quellen
+                        </h3>
+                        <div class="detail-grid">
+                          ${detailKeys[detail].filter((key) => this._config.entities?.[key] || ["temperature", "humidity", "temperature_min", "temperature_max", "wind_speed", "wind_gust", "wind_direction", "rain_today", "rain_rate", "rain_wet", "pressure", "uv", "solar"].includes(key)).map((key) => this._detailReading(key))}
+                        </div>
+                        ${detail === "temperature" && this._daily ? html`<p class="daily-coverage">${this._daily.date ? `${this._daily.date} · ${this._daily.timeZone}. ` : ""}${this._daily.note}</p>` : nothing}
+                        <details class="detail-explanation">
+                          <summary>Messungen richtig einordnen</summary>
+                          <p>
+                            ${
+                              detail === "rain"
+                                ? "WH40-Mengen und WS90-Feuchtigkeit sind getrennte Messungen. Heute ist der Kalendertag; letzte 24 Stunden benötigt eine eigene gleitende Quelle."
+                                : detail === "wind"
+                                  ? "Richtungsangaben bezeichnen die meteorologische Herkunft. Strömungspfeile zeigen von dort zum Ziel. 10-Minuten-Mittel stammen aus den zugeordneten Quellen. Die Windrose öffnet sich beim Tippen auf die Windgrafik."
+                                  : "Aktuelle Werte der ausgewählten Home-Assistant-Quellen; Verläufe stammen ausschließlich aus dem lokalen Recorder."
+                            }
+                          </p>
+                        </details>
+                        <h3 class="history-heading">
+                          Verlauf · letzte
+                          ${this._clamp(this._config.history_hours, 24, 1, 168)}
+                          Stunden
+                        </h3>
+                        ${
+                          this._loading
+                            ? html`<p class="notice" role="status">
+                                Recorder-Verlauf wird geladen …
+                              </p>`
+                            : this._history?.status === "ok"
+                              ? this._history.series.map((series) =>
+                                  this._chart(series),
+                                )
+                              : html`<p class="notice">
+                                  ${
+                                    this._history?.message ??
+                                    "Keine Historienquelle verfügbar."
+                                  }
+                                </p>`
+                        }
+                        ${
+                          detail === "rain"
+                            ? html`<p class="detail-caption">
+                                Der Tagesmengen-Verlauf setzt sich am
+                                Tageswechsel zurück. Daraus wird kein
+                                rollierender 24h-Wert berechnet.
+                              </p>`
+                            : nothing
+                        }
+                        <button
+                          class="text-button"
+                          @click=${() => this._openDetail(detail)}
+                        >
+                          Verlauf neu laden
+                        </button>
+                      `
+                }
+              </div>`
+          : nothing
+      }
     </dialog>`;
   }
   private _detailReading(key: MetricKey) {
     const r = this._reading(key);
     const id = this._config.entities?.[key];
+    const label =
+      METRICS.find((m) => m.key === key)?.label.split(" · ")[0] ?? key;
+    const autoDaily =
+      !id && (key === "temperature_min" || key === "temperature_max");
+    const dailyValue =
+      key === "temperature_min" ? this._daily?.min : this._daily?.max;
     return html`<div class="detail-reading" data-key=${key}>
       <span class="label"
-        >${METRICS.find((m) => m.key === key)?.label ?? key}</span
-      >${this._value(key)}${r.note
-        ? html`<span class="status-note">${r.note}</span>`
-        : nothing}${id
-        ? html`<button class="text-button" @click=${() => this._moreInfo(id)}>
-              In Home Assistant öffnen ↗</button
-            ><span class="entity-id">${id}</span>`
-        : nothing}
+        >${autoDaily ? `${label} · Recorder` : id ? this._source(id, label) : label}</span
+      >
+      ${autoDaily ? html`<span class="value">${dailyValue != null ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(dailyValue) : "—"}${dailyValue != null ? html`<span class="unit">${this._daily?.unit}</span>` : nothing}</span><span class="status-note">${this._loading ? "Tageswerte werden geladen …" : dailyValue != null ? "Aufgezeichnet heute · bisher" : "Keine belastbaren Tageswerte"}</span>` : this._value(key)}
+      ${autoDaily && this._config.entities?.temperature ? html`<span class="status-note">${this._source(this._config.entities.temperature, "Außentemperatur")}</span>` : nothing}
+      ${r.note && !autoDaily ? html`<span class="status-note">${r.note}</span>` : nothing}
+      ${id || (autoDaily && this._config.entities?.temperature) ? html`<button class="text-button" @click=${() => this._moreInfo(id || this._config.entities!.temperature!)}>Sensor in HA öffnen</button>` : nothing}
     </div>`;
   }
   private _sensorDetails() {
@@ -881,29 +1084,33 @@ export class EcowittWeatherCard extends LitElement {
         ohne echten Verbindungsstatus wird kein „Online“ behauptet.
       </p>
       <h3>Geräte · Batterien, Empfang und Verbindung</h3>
-      ${devices.length
-        ? deviceDetails
-        : html`<p class="empty">
-            Geräte und Statussensoren im grafischen Editor auswählen.
-          </p>`}
-      <h3>Weitere gespeicherte Zusatzsensoren</h3>
-      ${extras.length
-        ? extras.map((id) => this._sensorRow(id))
-        : html`<p class="empty">
-            Zusatzsensoren im visuellen Karteneditor auswählen.
-          </p>`}
-      <h3>Weitere gespeicherte Diagnosen</h3>
-      ${diagnostic.length
-        ? diagnostic.map((id) => this._sensorRow(id))
-        : html`<p class="empty">
-            Batterie-/Signalentitäten im Karteneditor auswählen.
-          </p>`}
-      <h3>Zugeordnete Wetterquellen</h3>
-      ${weatherSources.map(([key, id]) =>
-        id
-          ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label)
-          : nothing,
-      )} `;
+      ${
+        devices.length
+          ? deviceDetails
+          : html`<p class="empty">
+              Geräte und Statussensoren im grafischen Editor auswählen.
+            </p>`
+      }
+      ${
+        extras.length
+          ? html`<details class="sensor-group" ?open=${!devices.length}>
+              <summary>Zusatzsensoren · ${extras.length}</summary>
+              ${extras.map((id) => this._sensorRow(id))}
+            </details>`
+          : nothing
+      }
+      ${
+        diagnostic.length
+          ? html`<details class="sensor-group">
+              <summary>Weitere Diagnosen · ${diagnostic.length}</summary>
+              ${diagnostic.map((id) => this._sensorRow(id))}
+            </details>`
+          : nothing
+      }
+      <details class="sensor-group">
+        <summary>Zugeordnete Wetterquellen · ${weatherSources.length}</summary>
+        ${weatherSources.map(([key, id]) => (id ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label) : nothing))}
+      </details>`;
   }
 
   private _deviceDetail(
@@ -951,15 +1158,16 @@ export class EcowittWeatherCard extends LitElement {
         ? updated.toLocaleString("de-DE")
         : "Kein Aktualisierungszeitpunkt verfügbar";
     return html`<div class="sensor-row" data-entity-id=${id}>
-      <span class="label"
-        >${label || entity?.attributes.friendly_name || id}</span
+      <span class="label">${this._source(id, label)}</span
       ><strong
-        >${entity
-          ? `${Number.isFinite(Number(entity.state)) && entity.state.trim() !== "" ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(Number(entity.state)) : entity.state} ${entity.attributes.unit_of_measurement ?? ""}`
-          : "Nicht verfügbar"}</strong
+        >${
+          entity
+            ? `${Number.isFinite(Number(entity.state)) && entity.state.trim() !== "" ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(Number(entity.state)) : entity.state} ${entity.attributes.unit_of_measurement ?? ""}`
+            : "Nicht verfügbar"
+        }</strong
       ><span class="status-note">${time}</span
       ><button class="text-button" @click=${() => this._moreInfo(id)}>
-        ${id} ↗
+        Sensor in HA öffnen
       </button>
     </div>`;
   }
@@ -967,62 +1175,29 @@ export class EcowittWeatherCard extends LitElement {
     const key = graphKeys[this._detail!].find(
       (key) => this._config.entities?.[key] === series.entityId,
     );
-    const start = this._history!.start,
-      end = this._history!.end;
+    const { start, end } = this._history!;
     const charts = buildHistoryCharts(series, start, end, key);
+    const name = this._source(
+      series.entityId,
+      key ? METRICS.find((m) => m.key === key)?.label : undefined,
+    );
     if (!charts.length)
       return html`<p class="notice">
-        Keine passenden numerischen Recorder-Daten: ${series.entityId}
+        Keine passenden numerischen Recorder-Daten: ${name}
       </p>`;
-    const format = (value: number) =>
-      new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(
-        value,
-      );
     return charts.map(
       (chart) =>
         html`<figure
           class="chart"
-          aria-label=${`${key ? METRICS.find((m) => m.key === key)?.label : series.entityId}: ${format(chart.min)} bis ${format(chart.max)} ${chart.unit}, ${chart.sampleCount} Recorder-Aktualisierungen im Zeitraum`}
+          aria-label=${`${name}: ${chart.min} bis ${chart.max} ${chart.unit}`}
         >
-          <h4>
-            ${key ? METRICS.find((m) => m.key === key)?.label : series.entityId}
-            · ${chart.unit}
-          </h4>
-          <div class="chart-meta">
-            <span>Min. ${format(chart.min)}</span
-            ><span>Max. ${format(chart.max)}</span>
-          </div>
-          <svg
-            viewBox="0 0 500 100"
-            role="img"
-            aria-label="Recorder-Zustände bis zur nächsten Änderung gehalten; Lücken bleiben frei"
-          >
-            <path class="axis" d="M10 90H490" />
-            ${chart.paths.map((path) => svg`<path d=${path}/>`)}
-          </svg>
-          <div class="chart-meta">
-            <span
-              >${new Date(start).toLocaleString("de-DE", {
-                day: "2-digit",
-                month: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}</span
-            ><span>${chart.sampleCount} Aktualisierungen</span
-            ><span
-              >${new Date(end).toLocaleTimeString("de-DE", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}</span
-            >
-          </div>
-          ${chart.initial
-            ? html`<p class="status-note">
-                Recorder-Ausgangszustand vom
-                ${new Date(chart.initial.timestamp).toLocaleString("de-DE")};
-                bis zur nächsten aufgezeichneten Änderung gehalten.
-              </p>`
-            : nothing}
+          <h4>${name}</h4>
+          ${historyPlot(chart, start, end, this.hass?.config?.time_zone)}
+          <figcaption>
+            ${chart.sampleCount} Recorder-Aktualisierungen · Zustände bis zur
+            nächsten Änderung gehalten.
+          </figcaption>
+          ${chart.initial ? html`<p class="status-note">Echter Recorder-Ausgangszustand vom ${new Date(chart.initial.timestamp).toLocaleString("de-DE", { timeZone: this.hass?.config?.time_zone })}; keine neue Messung am Beginn der Zeitachse.</p>` : nothing}
         </figure>`,
     );
   }

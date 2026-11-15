@@ -82,7 +82,10 @@ export class EcowittWeatherCardEditor extends LitElement {
         deviceLabel(a).localeCompare(deviceLabel(b)),
       );
       this._registry = entities;
-      this._roleDevices = resolveDeviceRoles(devices, this._config.device_roles);
+      this._roleDevices = resolveDeviceRoles(
+        devices,
+        this._config.device_roles,
+      );
       this._registryState = "ready";
     } catch {
       this._registryState = "unavailable";
@@ -131,77 +134,133 @@ export class EcowittWeatherCardEditor extends LitElement {
       : [];
     const nativePicker = Boolean(customElements.get("ha-entity-picker"));
     return html`<div class="entity-field" data-metric=${key}>
-      ${nativePicker
-        ? html`<ha-entity-picker
-            .hass=${this.hass}
-            .label=${label}
-            .value=${selected || undefined}
-            .includeDomains=${key === "rain_wet"
-              ? ["binary_sensor"]
-              : ["sensor"]}
-            .includeEntities=${available}
-            .allowCustomEntity=${false}
-            @value-changed=${(event: CustomEvent<{ value?: string }>) => {
-              event.stopPropagation();
-              this._setEntity(key, event.detail.value);
-            }}
-          ></ha-entity-picker>`
-        : html`<label
-            >${label}<select
-              aria-label=${label}
-              .value=${selected}
-              @change=${(event: Event) =>
-                this._setEntity(key, this._value(event))}
-            >
-              <option value="">Nicht zugeordnet</option>
-              ${selected && !available.includes(selected)
-                ? html`<option value=${selected}>
-                    ${selected} · nicht verfügbar
-                  </option>`
-                : nothing}
-              ${available
-                .filter((id) =>
-                  key === "rain_wet"
-                    ? id.startsWith("binary_sensor.")
-                    : id.startsWith("sensor."),
-                )
+      ${
+        nativePicker
+          ? html`<ha-entity-picker
+              .hass=${this.hass}
+              .label=${label}
+              .value=${selected || undefined}
+              .includeDomains=${
+                key === "rain_wet" ? ["binary_sensor"] : ["sensor"]
+              }
+              .includeEntities=${available}
+              .allowCustomEntity=${false}
+              @value-changed=${(event: CustomEvent<{ value?: string }>) => {
+                event.stopPropagation();
+                this._setEntity(key, event.detail.value);
+              }}
+            ></ha-entity-picker>`
+          : html`<label
+              >${label}<select
+                aria-label=${label}
+                .value=${selected}
+                @change=${(event: Event) =>
+                  this._setEntity(key, this._value(event))}
+              >
+                <option value="">Nicht zugeordnet</option>
+                ${
+                  selected && !available.includes(selected)
+                    ? html`<option value=${selected}>
+                        ${selected} · nicht verfügbar
+                      </option>`
+                    : nothing
+                }
+                ${available
+                  .filter((id) =>
+                    key === "rain_wet"
+                      ? id.startsWith("binary_sensor.")
+                      : id.startsWith("sensor."),
+                  )
+                  .map(
+                    (id) =>
+                      html`<option value=${id} .selected=${selected === id}>
+                        ${this._label(id)}
+                      </option>`,
+                  )}
+              </select></label
+            >`
+      }
+      ${
+        suggestions.length
+          ? html`<div class="suggestions">
+              <span>Gerätevorschläge – bitte prüfen:</span>
+              ${suggestions
+                .filter((id) => id !== selected)
                 .map(
                   (id) =>
-                    html`<option value=${id} .selected=${selected === id}>
-                      ${this._label(id)}
-                    </option>`,
+                    html`<button
+                      type="button"
+                      class="suggestion"
+                      @click=${() => this._setEntity(key, id)}
+                      title=${id}
+                    >
+                      ${this._label(id)} übernehmen
+                    </button>`,
                 )}
-            </select></label
-          >`}
-      ${suggestions.length
-        ? html`<div class="suggestions">
-            <span>Gerätevorschläge – bitte prüfen:</span>
-            ${suggestions
-              .filter((id) => id !== selected)
-              .map(
-                (id) =>
-                  html`<button
-                    type="button"
-                    class="suggestion"
-                    @click=${() => this._setEntity(key, id)}
-                    title=${id}
-                  >
-                    ${this._label(id)} übernehmen
-                  </button>`,
-              )}
-            ${suggestions.includes(selected)
-              ? html`<span class="matched"
-                  >Zugeordneter Sensor gehört zum ausgewählten Gerät.</span
-                >`
-              : nothing}
-          </div>`
-        : nothing}
-      ${selected && !this.hass?.states[selected]
-        ? html`<p class="warning">
-            Diese Entität ist derzeit nicht in Home Assistant verfügbar. Die
-            Zuordnung bleibt erhalten.
-          </p>`
-        : nothing}
+              ${
+                suggestions.includes(selected)
+                  ? html`<span class="matched"
+                      >Zugeordneter Sensor gehört zum ausgewählten Gerät.</span
+                    >`
+                  : nothing
+              }
+            </div>`
+          : nothing
+      }
+      ${
+        selected && !this.hass?.states[selected]
+          ? html`<p class="warning">
+              Diese Entität ist derzeit nicht in Home Assistant verfügbar. Die
+              Zuordnung bleibt erhalten.
+            </p>`
+          : nothing
+      }
+    </div>`;
+  }
+
+  private _weatherPicker() {
+    const selected = this._config.weather_entity || "";
+    const available = Object.keys(this.hass?.states || {})
+      .filter((id) => id.startsWith("weather."))
+      .sort();
+    const change = (value?: string) => {
+      if (!value || available.includes(value))
+        this._change({ weather_entity: value || undefined });
+    };
+    return html`<div class="entity-field">
+      ${
+        customElements.get("ha-entity-picker")
+          ? html`<ha-entity-picker
+              .hass=${this.hass}
+              .label=${"Optionale HA-Wetterquelle"}
+              .value=${selected || undefined}
+              .includeDomains=${["weather"]}
+              .includeEntities=${available}
+              .allowCustomEntity=${false}
+              @value-changed=${(event: CustomEvent<{ value?: string }>) => {
+                event.stopPropagation();
+                change(event.detail.value);
+              }}
+            ></ha-entity-picker>`
+          : html`<label
+              >Optionale HA-Wetterquelle<select
+                aria-label="Optionale HA-Wetterquelle"
+                .value=${selected}
+                @change=${(event: Event) => change(this._value(event))}
+              >
+                <option value="">Nur lokale Messwerte und Sonnenstand</option>
+                ${selected && !available.includes(selected) ? html`<option value=${selected} .selected=${true}>Gespeicherte Quelle · nicht verfügbar</option>` : nothing}
+                ${available.map((id) => html`<option value=${id} .selected=${id === selected}>${this._label(id)}</option>`)}
+              </select></label
+            >`
+      }
+      <p class="hint">
+        Optionaler aktueller Himmelszustand. Keine Vorhersageabfrage. Die
+        vorhandene HA-Integration kann eigene Datenquellen verwenden. Lokaler
+        Regen folgt einer positiven WH40- oder zusätzlich ausgewählten
+        WS90-Regenrate; NASS allein genügt nicht. Bei tiefem Sonnenstand wird
+        ohne weitere Quelle nur Tageslicht dargestellt.
+      </p>
     </div>`;
   }
 
@@ -284,61 +343,71 @@ export class EcowittWeatherCardEditor extends LitElement {
         Messwerte dieses Geräts erscheinen in den Sensor-Details. Bereits
         gespeicherte Zusatz- und Diagnoseauswahlen bleiben erhalten.
       </p>
-      ${all.length
-        ? html`<label
-              >Messwerte durchsuchen
-              <input
-                type="search"
-                aria-label=${`Messwerte durchsuchen · ${device.name || device.role}`}
-                .value=${this._listSearch[device.device_id] || ""}
-                @input=${(event: Event) => {
-                  this._listSearch = {
-                    ...this._listSearch,
-                    [device.device_id]: this._value(event),
-                  };
-                }}
-              />
-            </label>
-            <div class="check-groups">
-              ${visible.map(
-                (id) =>
-                  html`<label class="check-row">
-                    <input
-                      type="checkbox"
-                      .checked=${selected.includes(id)}
-                      @change=${(event: Event) =>
-                        this._toggleDeviceExtra(
-                          device,
-                          id,
-                          (event.target as HTMLInputElement).checked,
-                        )}
-                    />
-                    <span
-                      >${this._label(id)}
-                      ${legacy.includes(id)
-                        ? html`<small
-                            >Bestehende Auswahl ·
-                            ${this._config.diagnostic_entities?.includes(id)
-                              ? "Diagnose"
-                              : "Zusatzwert"}</small
-                          >`
-                        : nothing}
-                      ${!this.hass?.states[id]
-                        ? html`<small
-                            >Momentan nicht verfügbar; Zuordnung bleibt
-                            erhalten.</small
-                          >`
-                        : nothing}
-                    </span>
-                  </label>`,
-              )}
-              ${!visible.length
-                ? html`<p class="hint">Keine Treffer.</p>`
-                : nothing}
-            </div>`
-        : html`<p class="hint">
-            Keine weiteren Messwerte für dieses Gerät gefunden.
-          </p>`}
+      ${
+        all.length
+          ? html`<label
+                >Messwerte durchsuchen
+                <input
+                  type="search"
+                  aria-label=${`Messwerte durchsuchen · ${device.name || device.role}`}
+                  .value=${this._listSearch[device.device_id] || ""}
+                  @input=${(event: Event) => {
+                    this._listSearch = {
+                      ...this._listSearch,
+                      [device.device_id]: this._value(event),
+                    };
+                  }}
+                />
+              </label>
+              <div class="check-groups">
+                ${visible.map(
+                  (id) =>
+                    html`<label class="check-row">
+                      <input
+                        type="checkbox"
+                        .checked=${selected.includes(id)}
+                        @change=${(event: Event) =>
+                          this._toggleDeviceExtra(
+                            device,
+                            id,
+                            (event.target as HTMLInputElement).checked,
+                          )}
+                      />
+                      <span
+                        >${this._label(id)}
+                        ${
+                          legacy.includes(id)
+                            ? html`<small
+                                >Bestehende Auswahl ·
+                                ${
+                                  this._config.diagnostic_entities?.includes(id)
+                                    ? "Diagnose"
+                                    : "Zusatzwert"
+                                }</small
+                              >`
+                            : nothing
+                        }
+                        ${
+                          !this.hass?.states[id]
+                            ? html`<small
+                                >Momentan nicht verfügbar; Zuordnung bleibt
+                                erhalten.</small
+                              >`
+                            : nothing
+                        }
+                      </span>
+                    </label>`,
+                )}
+                ${
+                  !visible.length
+                    ? html`<p class="hint">Keine Treffer.</p>`
+                    : nothing
+                }
+              </div>`
+          : html`<p class="hint">
+              Keine weiteren Messwerte für dieses Gerät gefunden.
+            </p>`
+      }
     </section>`;
   }
   private _diagnosticSource(id: string): boolean {
@@ -427,11 +496,13 @@ export class EcowittWeatherCardEditor extends LitElement {
             /><span
               >${this._label(id)}
               <small
-                >${this._config.extra_entities?.includes(id)
-                  ? "Zusatzwert"
-                  : "Diagnose"}${!this.hass?.states[id]
-                  ? " · momentan nicht verfügbar"
-                  : ""}</small
+                >${
+                  this._config.extra_entities?.includes(id)
+                    ? "Zusatzwert"
+                    : "Diagnose"
+                }${
+                  !this.hass?.states[id] ? " · momentan nicht verfügbar" : ""
+                }</small
               >
             </span></label
           >`,
@@ -556,13 +627,15 @@ export class EcowittWeatherCardEditor extends LitElement {
             </div>
           </details>`,
       )}
-      ${!devices.length
-        ? html`<p class="warning">
-            Keine Ecowitt-Geräte im HA-Geräteregister gefunden. Bestehende
-            Sensorzuordnungen bleiben erhalten; Hauptmesswerte können direkt in
-            ihren Sensorfeldern zugeordnet werden.
-          </p>`
-        : nothing}
+      ${
+        !devices.length
+          ? html`<p class="warning">
+              Keine Ecowitt-Geräte im HA-Geräteregister gefunden. Bestehende
+              Sensorzuordnungen bleiben erhalten; Hauptmesswerte können direkt
+              in ihren Sensorfeldern zugeordnet werden.
+            </p>`
+          : nothing
+      }
       ${this._legacyEditor(devices)}
     </section>`;
   }
@@ -678,90 +751,111 @@ export class EcowittWeatherCardEditor extends LitElement {
           nächsten Öffnen wiederhergestellt. Sie steuert passende
           Sensorvorschläge und ersetzt keine vorhandene Sensorzuordnung. Erst
           „übernehmen“ oder eine manuelle Sensorauswahl ändert eine Messquelle.
-          WN32 ist optional; ohne WN32 werden passende WS90-Quellen vorgeschlagen.
-          Zum Abschluss im Home-Assistant-Karteneditor „Speichern“ wählen.
-          Batterie-, Signal- und Verbindungsquellen stehen weiter unten.
+          WN32 ist optional; ohne WN32 werden passende WS90-Quellen
+          vorgeschlagen. Zum Abschluss im Home-Assistant-Karteneditor
+          „Speichern“ wählen. Batterie-, Signal- und Verbindungsquellen stehen
+          weiter unten.
         </p>
-        ${this._registryState === "loading"
-          ? html`<p role="status">Geräteregister wird geladen …</p>`
-          : nothing}
-        ${this._registryState === "unavailable" || !this.hass?.callWS
-          ? html`<p class="hint">
-              Geräteregister nicht verfügbar. Wähle deine Sensoren direkt in den
-              Feldern aus.
-            </p>`
-          : nothing}
-        ${this._devices.length || Object.keys(this._config.device_roles || {}).length
-          ? html`<div class="fields">
-              ${DEVICE_ROLES.filter((role) => role !== "WN31").map(
-                (role) =>
-                  html`<label
-                    >${role === "WN32" ? "WN32 · optional" : role}<select
-                      aria-label=${`Gerät ${role}`}
-                      .value=${this._roleDevices[role] || ""}
-                      @change=${(event: Event) =>
-                        this._setDeviceRole(role, this._value(event))}
-                    >
-                      <option value="">Kein Gerät ausgewählt</option>
-                      ${this._roleDevices[role] &&
-                      !this._devices.some((device) => device.id === this._roleDevices[role])
-                        ? html`<option value=${this._roleDevices[role]!} .selected=${true}>
-                            Gespeicherte Auswahl · Gerät derzeit nicht verfügbar
-                          </option>`
-                        : nothing}
-                      ${this._devices.map(
-                        (device) =>
-                          html`<option
-                            value=${device.id}
-                            .selected=${this._roleDevices[role] === device.id}
-                          >
-                            ${deviceLabel(device)}
-                          </option>`,
-                      )}
-                    </select></label
-                  >`,
-              )}
-            </div>`
-          : nothing}
+        ${
+          this._registryState === "loading"
+            ? html`<p role="status">Geräteregister wird geladen …</p>`
+            : nothing
+        }
+        ${
+          this._registryState === "unavailable" || !this.hass?.callWS
+            ? html`<p class="hint">
+                Geräteregister nicht verfügbar. Wähle deine Sensoren direkt in
+                den Feldern aus.
+              </p>`
+            : nothing
+        }
+        ${
+          this._devices.length ||
+          Object.keys(this._config.device_roles || {}).length
+            ? html`<div class="fields">
+                ${DEVICE_ROLES.filter((role) => role !== "WN31").map(
+                  (role) =>
+                    html`<label
+                      >${role === "WN32" ? "WN32 · optional" : role}<select
+                        aria-label=${`Gerät ${role}`}
+                        .value=${this._roleDevices[role] || ""}
+                        @change=${(event: Event) =>
+                          this._setDeviceRole(role, this._value(event))}
+                      >
+                        <option value="">Kein Gerät ausgewählt</option>
+                        ${
+                          this._roleDevices[role] &&
+                          !this._devices.some(
+                            (device) => device.id === this._roleDevices[role],
+                          )
+                            ? html`<option
+                                value=${this._roleDevices[role]!}
+                                .selected=${true}
+                              >
+                                Gespeicherte Auswahl · Gerät derzeit nicht
+                                verfügbar
+                              </option>`
+                            : nothing
+                        }
+                        ${this._devices.map(
+                          (device) =>
+                            html`<option
+                              value=${device.id}
+                              .selected=${this._roleDevices[role] === device.id}
+                            >
+                              ${deviceLabel(device)}
+                            </option>`,
+                        )}
+                      </select></label
+                    >`,
+                )}
+              </div>`
+            : nothing
+        }
       </details>
       ${["Wind", "Regen", "Außenklima", "Druck & Sonne"].map(
         (group) =>
           html`<details open>
             <summary>${group}</summary>
-            ${group === "Regen"
-              ? html`<p class="hint">
-                  WH40-Mengen und -Rate separat zuordnen. WS90-Piezo: on = NASS,
-                  off = TROCKEN; Feuchtigkeit ist keine Garantie für aktuell
-                  fallenden Regen. „Heute“ ist nicht „letzte 24 h“.
-                </p>`
-              : nothing}
+            ${
+              group === "Regen"
+                ? html`<p class="hint">
+                    WH40-Mengen und -Rate separat zuordnen. WS90-Piezo: on =
+                    NASS, off = TROCKEN; Feuchtigkeit ist keine Garantie für
+                    aktuell fallenden Regen. „Heute“ ist nicht „letzte 24 h“.
+                  </p>`
+                : nothing
+            }
             <div class="fields">
               ${METRICS.filter((metric) => metric.group === group).map(
                 (metric) => this._picker(metric.key, metric.label),
               )}
             </div>
-            ${group === "Wind" &&
-            this.hass?.states["sensor.ecowitt_wind_direction_avg_175da"] &&
-            this._config.entities?.wind_direction_avg !==
-              "sensor.ecowitt_wind_direction_avg_175da"
-              ? html`<button
-                  type="button"
-                  class="suggestion"
-                  @click=${() =>
-                    this._setEntity(
-                      "wind_direction_avg",
-                      "sensor.ecowitt_wind_direction_avg_175da",
-                    )}
-                >
-                  Vorhandenen bekannten Sensor für die mittlere Richtung
-                  übernehmen: sensor.ecowitt_wind_direction_avg_175da
-                </button>`
-              : nothing}
+            ${
+              group === "Wind" &&
+              this.hass?.states["sensor.ecowitt_wind_direction_avg_175da"] &&
+              this._config.entities?.wind_direction_avg !==
+                "sensor.ecowitt_wind_direction_avg_175da"
+                ? html`<button
+                    type="button"
+                    class="suggestion"
+                    @click=${() =>
+                      this._setEntity(
+                        "wind_direction_avg",
+                        "sensor.ecowitt_wind_direction_avg_175da",
+                      )}
+                  >
+                    Vorhandenen bekannten Sensor für die mittlere Richtung
+                    übernehmen: sensor.ecowitt_wind_direction_avg_175da
+                  </button>`
+                : nothing
+            }
           </details>`,
       )}
 
       <details>
         <summary>Darstellung, Wetteranimation und Theme</summary>
+        ${this._weatherPicker()}
         <div class="fields">
           <label
             >Farbschema
@@ -795,14 +889,37 @@ export class EcowittWeatherCardEditor extends LitElement {
         </div>
       </details>
       <details>
+        <summary>Eingebettete Windrose</summary>
+        <label class="check-row check-preference"
+          ><input
+            type="checkbox"
+            aria-label="Windrose beim Tippen auf die Windgrafik"
+            .checked=${this._config.windrose?.enabled !== false}
+            @change=${(event: Event) => this._change({ windrose: { ...this._config.windrose, enabled: (event.target as HTMLInputElement).checked } })}
+          /><span
+            >Windrose beim Tippen auf die Windgrafik innerhalb dieser Karte
+            anzeigen</span
+          ></label
+        >
+        <p class="hint">
+          Benötigt die separat installierte HACS-Karte „Windrose Card“ von
+          aukedejong und deren geladene Ressource. Die Ecowitt-Karte lädt kein
+          Plugin nach. Ohne die Ressource erscheint ein Einrichtungshinweis; die
+          Wetterkarte bleibt eigenständig nutzbar. Standard: ausgewählte
+          Windrichtung und Geschwindigkeit, letzte 24 Stunden. Eine eigene
+          native Konfiguration kann im YAML unter windrose.config ergänzt werden
+          und bleibt hier erhalten.
+        </p>
+      </details>
+      <details>
         <summary>Private Bildquelle & Ausrichtung</summary>
         <label
           >Bildpfad / HA-URL<input
             type="text"
             aria-label="Bildpfad / HA-URL"
-            .value=${this._config.site_image ??
-            this._config.background_image ??
-            ""}
+            .value=${
+              this._config.site_image ?? this._config.background_image ?? ""
+            }
             placeholder="media-source://media_source/local/ecowitt/Wohnhaus.png"
             @change=${(event: Event) =>
               this._change({
@@ -827,45 +944,52 @@ export class EcowittWeatherCardEditor extends LitElement {
           ?disabled=${this._mediaLoading}
           @click=${() => this._browseMedia()}
         >
-          ${this._mediaLoading
-            ? "Medien werden geladen …"
-            : "Bild aus Home Assistant Medien auswählen …"}
+          ${
+            this._mediaLoading
+              ? "Medien werden geladen …"
+              : "Bild aus Home Assistant Medien auswählen …"
+          }
         </button>
-        ${this._mediaItems.length
-          ? html`<div class="media-browser">
-              <button type="button" @click=${() => this._browseMedia()}>
-                Hauptordner anzeigen
-              </button>
-              ${this._mediaItems.map((item) => {
-                const folder =
-                  item.can_expand === true || item.media_class === "directory";
-                const image =
-                  !folder &&
-                  (item.media_class === "image" ||
-                    item.media_content_type?.startsWith("image/") ||
-                    /\.(png|jpe?g|webp|gif|svg)$/i.test(item.title));
-                if (!folder && !image) return nothing;
-                return html`<button
-                  type="button"
-                  @click=${() =>
-                    folder
-                      ? this._browseMedia(item.media_content_id)
-                      : (this._change({
-                          site_image: item.media_content_id,
-                          background_image: undefined,
-                        }),
-                        (this._mediaItems = []),
-                        ++this._mediaRequest,
-                        (this._mediaLoading = false))}
-                >
-                  ${folder ? "📁" : "🖼️"} ${item.title}
-                </button>`;
-              })}
-            </div>`
-          : nothing}
-        ${this._mediaError
-          ? html`<p class="warning" role="alert">${this._mediaError}</p>`
-          : nothing}
+        ${
+          this._mediaItems.length
+            ? html`<div class="media-browser">
+                <button type="button" @click=${() => this._browseMedia()}>
+                  Hauptordner anzeigen
+                </button>
+                ${this._mediaItems.map((item) => {
+                  const folder =
+                    item.can_expand === true ||
+                    item.media_class === "directory";
+                  const image =
+                    !folder &&
+                    (item.media_class === "image" ||
+                      item.media_content_type?.startsWith("image/") ||
+                      /\.(png|jpe?g|webp|gif|svg)$/i.test(item.title));
+                  if (!folder && !image) return nothing;
+                  return html`<button
+                    type="button"
+                    @click=${() =>
+                      folder
+                        ? this._browseMedia(item.media_content_id)
+                        : (this._change({
+                            site_image: item.media_content_id,
+                            background_image: undefined,
+                          }),
+                          (this._mediaItems = []),
+                          ++this._mediaRequest,
+                          (this._mediaLoading = false))}
+                  >
+                    ${folder ? "📁" : "🖼️"} ${item.title}
+                  </button>`;
+                })}
+              </div>`
+            : nothing
+        }
+        ${
+          this._mediaError
+            ? html`<p class="warning" role="alert">${this._mediaError}</p>`
+            : nothing
+        }
         <p class="warning">
           /config/www → /local ist nicht automatisch zugriffsgeschützt. Der
           Medienordner ist die bevorzugte Alternative, aber die Zugriffsrechte

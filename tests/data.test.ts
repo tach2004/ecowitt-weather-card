@@ -406,8 +406,14 @@ test("new PR4 illuminance and VPD values keep units and reject negative or incom
   assert.equal(reading("vpd", "2", "%").status, "invalid");
 });
 
-test('UV display rounds to a whole index without discarding source precision',()=>{
-  assert.equal(reading('uv','2.7','UV Index').text,'3');
-  assert.equal(reading('uv','2.7','UV Index').value,2.7);
-  assert.equal(reading('uv','0','UV Index').text,'0');
+test("UV display rounds to a whole index without discarding source precision", () => {
+  assert.equal(reading("uv", "2.7", "UV Index").text, "3");
+  assert.equal(reading("uv", "2.7", "UV Index").value, 2.7);
+  assert.equal(reading("uv", "0", "UV Index").text, "0");
+});
+
+test("secondary piezo rate requires rate units and never accepts wetness or accumulated rain", () => {
+  assert.equal(reading("rain_rate_secondary", "2.4", "mm/h").value, 2.4);
+  assert.equal(reading("rain_rate_secondary", "1", "mm").status, "invalid");
+  assert.equal(reading("rain_rate_secondary", "on", "").status, "invalid");
 });

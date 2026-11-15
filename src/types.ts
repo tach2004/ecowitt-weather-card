@@ -1,3 +1,4 @@
+import type { WindroseOptions } from "./windrose";
 export interface HassEntity {
   entity_id: string;
   state: string;
@@ -14,6 +15,7 @@ export interface HassEntity {
 export interface HomeAssistant {
   states: Record<string, HassEntity>;
   language?: string;
+  config?: { time_zone?: string };
   callApi?<T>(method: string, path: string): Promise<T>;
   callWS?<T>(message: Record<string, unknown>): Promise<T>;
 }
@@ -32,6 +34,7 @@ export type MetricKey =
   | "wind_gust_max"
   | "rain_today"
   | "rain_rate"
+  | "rain_rate_secondary"
   | "rain_wet"
   | "rain_24h"
   | "rain_week"
@@ -74,6 +77,8 @@ export interface CardConfig {
   /** Automatic uses the parent HA theme. */
   theme_mode?: "auto" | "light" | "dark";
   weather_animation?: boolean;
+  weather_entity?: string;
+  windrose?: WindroseOptions;
   diagnostic_entities?: string[];
   history_hours?: number;
   stale_after_minutes?: number;
@@ -118,6 +123,11 @@ export const METRICS: {
   },
   { key: "rain_today", label: "Regen heute · WH40", group: "Regen" },
   { key: "rain_rate", label: "Regenrate · WH40", group: "Regen" },
+  {
+    key: "rain_rate_secondary",
+    label: "Optionale zusätzliche Regenrate · WS90 Piezo (kein Nassstatus)",
+    group: "Regen",
+  },
   {
     key: "rain_wet",
     label: "Feuchtigkeitsstatus · WS90 Piezo (on/off)",

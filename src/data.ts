@@ -1,11 +1,7 @@
 import type { CardConfig, HassEntity, HomeAssistant, MetricKey } from "./types";
 
 export type ReadingStatus =
-  | "ok"
-  | "missing"
-  | "unavailable"
-  | "invalid"
-  | "stale";
+  "ok" | "missing" | "unavailable" | "invalid" | "stale";
 export interface Reading {
   value: number | null;
   text: string;
@@ -116,7 +112,8 @@ export function isUnitValid(key: MetricKey, unit: string): boolean {
   if (key === "pressure") return pressure.has(unit);
   if (key === "uv") return uvUnits.has(unit.trim().toLowerCase());
   if (key === "solar") return solar.has(unit);
-  if (key === "rain_rate") return precipitationRate.has(unit);
+  if (key === "rain_rate" || key === "rain_rate_secondary")
+    return precipitationRate.has(unit);
   return precipitation.has(unit);
 }
 
@@ -158,7 +155,8 @@ function format(value: number, key: MetricKey): string {
   ].includes(key);
   return new Intl.NumberFormat("de-DE", {
     minimumFractionDigits: whole ? 0 : 1,
-    maximumFractionDigits: key.startsWith("wind_direction") || key === "uv" ? 0 : 1,
+    maximumFractionDigits:
+      key.startsWith("wind_direction") || key === "uv" ? 0 : 1,
   }).format(value);
 }
 

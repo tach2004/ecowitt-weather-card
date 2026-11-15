@@ -177,29 +177,79 @@ test("untyped theme values are rejected without coercing YAML objects", () => {
   assert.equal(normalizeConfig({ theme_mode: "light" }).theme_mode, "light");
 });
 
-test('saved device-role choices survive normalization without requiring a live registry', () => {
+test("saved device-role choices survive normalization without requiring a live registry", () => {
   const input = {
-    device_roles:{GW3000:' fixture-manual-gateway ',WS90:'fixture-wind',WN32:'',UNKNOWN:'fixture-unknown',WH40:42},
-    entities:{pressure:'sensor.fixture_pressure',temperature:'sensor.fixture_temperature'},
-    extra_entities:['sensor.fixture_legacy'],
+    device_roles: {
+      GW3000: " fixture-manual-gateway ",
+      WS90: "fixture-wind",
+      WN32: "",
+      UNKNOWN: "fixture-unknown",
+      WH40: 42,
+    },
+    entities: {
+      pressure: "sensor.fixture_pressure",
+      temperature: "sensor.fixture_temperature",
+    },
+    extra_entities: ["sensor.fixture_legacy"],
   };
-  const before=structuredClone(input);
-  const normalized=normalizeConfig(input);
-  assert.deepEqual(normalized.device_roles,{GW3000:'fixture-manual-gateway',WS90:'fixture-wind',WN32:''});
-  assert.deepEqual(normalized.entities,input.entities);
-  assert.deepEqual(normalized.extra_entities,input.extra_entities);
-  assert.deepEqual(normalizeConfig(normalized).device_roles,normalized.device_roles);
-  assert.deepEqual(input,before);
-  normalized.device_roles!.GW3000='fixture-other';
-  assert.equal(input.device_roles.GW3000,' fixture-manual-gateway ');
+  const before = structuredClone(input);
+  const normalized = normalizeConfig(input);
+  assert.deepEqual(normalized.device_roles, {
+    GW3000: "fixture-manual-gateway",
+    WS90: "fixture-wind",
+    WN32: "",
+  });
+  assert.deepEqual(normalized.entities, input.entities);
+  assert.deepEqual(normalized.extra_entities, input.extra_entities);
+  assert.deepEqual(
+    normalizeConfig(normalized).device_roles,
+    normalized.device_roles,
+  );
+  assert.deepEqual(input, before);
+  normalized.device_roles!.GW3000 = "fixture-other";
+  assert.equal(input.device_roles.GW3000, " fixture-manual-gateway ");
 });
 
-test('legacy cards and malformed device-role maps retain their existing sensor assignments', () => {
-  const entities={pressure:'sensor.fixture_selected_pressure'};
-  for (const device_roles of [undefined,null,[],42,'GW3000']) {
-    const normalized=normalizeConfig({device_roles,entities});
-    assert.equal(normalized.device_roles,undefined);
-    assert.deepEqual(normalized.entities,entities);
+test("legacy cards and malformed device-role maps retain their existing sensor assignments", () => {
+  const entities = { pressure: "sensor.fixture_selected_pressure" };
+  for (const device_roles of [undefined, null, [], 42, "GW3000"]) {
+    const normalized = normalizeConfig({ device_roles, entities });
+    assert.equal(normalized.device_roles, undefined);
+    assert.deepEqual(normalized.entities, entities);
   }
-  assert.deepEqual(normalizeConfig({device_roles:{GW3000:{id:'fixture'},WN32:'   '},entities}).device_roles,{WN32:''});
+  assert.deepEqual(
+    normalizeConfig({
+      device_roles: { GW3000: { id: "fixture" }, WN32: "   " },
+      entities,
+    }).device_roles,
+    { WN32: "" },
+  );
+});
+
+test("optional weather, secondary rain and native windrose config survive editor normalization", () => {
+  const native = {
+    data_period: { period_back: "-48h" },
+    rose_config: { wind_direction_count: 16 },
+    windspeed_entities: [{ entity: "sensor.demo_speed", speed_unit: "kph" }],
+  };
+  const config = normalizeConfig({
+    type: "custom:ecowitt-weather-card",
+    weather_entity: "weather.demo_local",
+    entities: { rain_rate_secondary: "sensor.demo_piezo_rate" },
+    windrose: { enabled: false, config: native },
+  });
+  assert.equal(config.weather_entity, "weather.demo_local");
+  assert.equal(config.entities?.rain_rate_secondary, "sensor.demo_piezo_rate");
+  assert.equal(config.windrose?.enabled, false);
+  assert.deepEqual(config.windrose?.config, native);
+  assert.notEqual(config.windrose?.config, native);
+  assert.equal(
+    normalizeConfig({ weather_entity: "sensor.demo" }).weather_entity,
+    undefined,
+  );
+  assert.equal(normalizeConfig({}).windrose?.enabled, true);
+  assert.equal(
+    normalizeConfig({ windrose: { config: [] } }).windrose?.config,
+    undefined,
+  );
 });
