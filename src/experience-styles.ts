@@ -14,6 +14,40 @@ export const experienceStyles = css`
     border-left: 1px solid var(--line);
     padding-left: 14px;
   }
+  .climate-temperature-row {
+    display: flex;
+    align-items: center;
+    gap: clamp(4px, 0.9cqi, 10px);
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .climate-current-value { flex: 0 1 auto; min-width: 0; }
+  .climate-extremes {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .climate-extreme {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    font-size: clamp(0.57rem, 1.1cqi, 0.76rem);
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .climate-extreme.maximum {
+    color: color-mix(in srgb, #d94f51 84%, var(--primary-text-color) 16%);
+  }
+  .climate-extreme.minimum {
+    color: color-mix(in srgb, #367fce 84%, var(--primary-text-color) 16%);
+  }
+  .climate-extreme .extreme-label { font-weight: 600; }
+  .climate-extreme .extreme-unit { font-size: 0.88em; margin-left: 2px; }
   .direction-pair {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -60,6 +94,10 @@ export const experienceStyles = css`
       font-size: 0.72rem;
       min-height: 2.7em;
     }
+    .climate-temperature-row { gap: 4px; }
+    .climate-temperature-row .climate-current-value .unit { margin-left: 1px; }
+    .climate-extremes { gap: 2px; }
+    .climate-extreme { font-size: 0.55rem; gap: 2px; }
     .direction-pair .label {
       min-height: 2.7em;
     }

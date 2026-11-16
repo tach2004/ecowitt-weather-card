@@ -130,6 +130,7 @@ export class EcowittWeatherCard extends LitElement {
     _roseHeight: { state: true },
     _reducedMotion: { state: true },
     _daily: { state: true },
+    _dailyOverview: { state: true },
     _sourceRegistry: { state: true },
   };
   static styles = [
@@ -162,6 +163,10 @@ export class EcowittWeatherCard extends LitElement {
   private _flipTimer?: ReturnType<typeof setTimeout>;
   private _motionQuery?: MediaQueryList;
   private _daily?: DailyTemperatureResult;
+  private _dailyOverview?: DailyTemperatureResult;
+  private _dailyOverviewRequest = 0;
+  private _dailyOverviewSource = "";
+  private _dailyOverviewRefreshAfter = 0;
   private _sourceRegistry?: SourceRegistry;
   private _registryRequest = 0;
   private _registryRequested = false;
@@ -207,6 +212,10 @@ export class EcowittWeatherCard extends LitElement {
     clearTimeout(this._flipTimer);
     this._flipped = this._roseActive = false;
     this._daily = undefined;
+    this._dailyOverview = undefined;
+    this._dailyOverviewSource = "";
+    this._dailyOverviewRefreshAfter = 0;
+    this._dailyOverviewRequest++;
     this._registryRequest++;
     this._registryRequested = false;
     this._sourceRegistry = undefined;
@@ -248,6 +257,8 @@ export class EcowittWeatherCard extends LitElement {
     this._closeDetail();
     this._imageRequest++;
     this._imageSource = "";
+    this._dailyOverviewRequest++;
+    this._dailyOverviewRefreshAfter = 0;
   }
   protected willUpdate(_changes: PropertyValues) {
     const current = this._reading("wind_direction").value;
@@ -279,7 +290,70 @@ export class EcowittWeatherCard extends LitElement {
       this._observedBack = back;
       if (back) this._roseObserver?.observe(back);
     }
+
+    void this._refreshDailyOverview();
   }
+
+  /** Reuse HA-local calendar-day Recorder extrema, without repeated HA-state requests. */
+  private async _refreshDailyOverview() {
+    const hass = this.hass;
+    const source = this._config.entities?.temperature ?? "";
+    const zone = hass?.config?.time_zone ?? "";
+    const key = JSON.stringify([source, zone]);
+    if (key !== this._dailyOverviewSource) {
+      this._dailyOverviewSource = key;
+      this._dailyOverview = undefined;
+      this._dailyOverviewRefreshAfter = 0;
+      this._dailyOverviewRequest++;
+    }
+    if (
+      (this._config.entities?.temperature_min &&
+       this._config.entities?.temperature_max) ||
+      !this.isConnected || !source || !zone || !hass?.callApi ||
+      !hass.states[source]
+    ) return;
+    const now = Date.now();
+    if (this._dailyOverview?.dayEnd && now >= this._dailyOverview.dayEnd) {
+      this._dailyOverview = undefined;
+      this._dailyOverviewRefreshAfter = 0;
+    }
+    if (now < this._dailyOverviewRefreshAfter) return;
+    this._dailyOverviewRefreshAfter = now + 300_000;
+    const request = ++this._dailyOverviewRequest;
+    try {
+      const result = await loadDailyTemperature(hass, source, {
+        staleAfterMinutes: this._config.stale_after_minutes,
+      });
+      if (request === this._dailyOverviewRequest &&
+          this._dailyOverviewSource === key && this.isConnected)
+        this._dailyOverview = result;
+    } catch {
+      // Recorder failures cannot break the dashboard; retry after throttle.
+    }
+  }
+
+  private _climateExtreme(key: "temperature_min" | "temperature_max") {
+    const isMax = key === "temperature_max";
+    const entity = this._config.entities?.[key];
+    const reading = entity ? this._reading(key) : undefined;
+    const recorded = isMax ? this._dailyOverview?.max : this._dailyOverview?.min;
+    const usable = typeof recorded === "number" && Number.isFinite(recorded);
+    const text = reading ? reading.text : usable
+      ? new Intl.NumberFormat("de-DE", {
+          minimumFractionDigits: 1, maximumFractionDigits: 1,
+        }).format(recorded) : "—";
+    const unit = reading ? reading.unit : usable ? this._dailyOverview?.unit : "";
+    const note = reading
+      ? reading.note || "Ausgewählte Home-Assistant-Entität"
+      : this._dailyOverview?.note || "Recorder-Werte werden geladen oder fehlen.";
+    return html`<span class=${isMax ? "climate-extreme maximum" : "climate-extreme minimum"}
+      data-source=${entity ? "entity" : "recorder"} title=${note}
+      aria-label=${(isMax ? "Tagesmaximum: " : "Tagesminimum: ") + text + " " + (unit || "")}>
+      <span class="extreme-label">${isMax ? "Max" : "Min"}</span>
+      <span class="extreme-value">${text}${unit ? html`<span class="extreme-unit">${unit}</span>` : nothing}</span>
+    </span>`;
+  }
+
   private async _resolveImage(source: string) {
     const request = ++this._imageRequest;
     this._imageUrl = "";
@@ -785,7 +859,12 @@ export class EcowittWeatherCard extends LitElement {
         ).map(
           ([key, label]) =>
             html`<div data-key=${key}>
-              <span class="label">${label}</span>${this._value(key)}
+              <span class="label">${label}</span>${key === "temperature"
+                ? html`<span class="climate-temperature-row">
+                    <span class="climate-current-value">${this._value(key)}</span>
+                    <span class="climate-extremes">${this._climateExtreme("temperature_max")}${this._climateExtreme("temperature_min")}</span>
+                  </span>`
+                : this._value(key)}
             </div>`,
         )}
       </div>
