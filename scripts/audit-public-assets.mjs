@@ -24,7 +24,7 @@ export function forbiddenPath(path) {
       normalized,
     ) ||
     /(?:_privat|\.private|_priv)(?:\.|$)/.test(normalized) ||
-    /(?:^|\/)[^/]*(?:privat|private|luftbild|grundstueck|grundstück|wohnhaus|aerial|personal|mockup|hausfoto|garten|grafik(?:\(|[_-])))[^/]*\.(?:png|jpe?g|webp|gif|svg|zip|pdf|heic)$/i.test(
+    /(?:^|\/)[^/]*(?:privat|private|luftbild|grundstueck|grundstück|wohnhaus|aerial|personal|mockup|hausfoto|garten|grafik(?:\(|[_-]))[^/]*\.(?:png|jpe?g|webp|gif|svg|zip|pdf|heic)$/i.test(
       normalized,
     )
   );
