@@ -2,10 +2,10 @@
 
 Eine eigenständige Home-Assistant-Lovelace-Karte für lokale Ecowitt-Wetterdaten: Wind und Regen im Mittelpunkt, nordorientierte Windgrafik, grafischer Karteneditor und ein Layout, das sich an der tatsächlichen Kartenbreite orientiert.
 
-**Entwicklungsstand:** erster funktionsfähiger Meilenstein; automatisierte Tests liegen vor, die Abnahme auf deiner echten Home-Assistant-Instanz und auf dem iPhone steht noch aus. GitHub-Versionen und HACS-Downloads folgen ab jetzt den SemVer-Tags und GitHub-Releases (erstes manuelles Tag v0.0.1). [Prüfungen und offene Punkte](docs/MILESTONE_1.md).
+**Status:** HACS-installierbare Releases mit automatisierten Tests, Build und Datenschutzprüfung. Die Nutzung auf einer konkreten HA-Installation und mobilen Hardware muss zusätzlich dort geprüft werden.
 
 - `custom:ecowitt-weather-card` mit Kartenkatalog, Startkonfiguration und visuellem Editor.
-- Windgeschwindigkeit, Böen, Herkunftsrichtung, 10-Minuten-Mittelwerte und Tagesmaximalböe aus auswählbaren HA-Entitäten.
+- Windgeschwindigkeit, Böen, Herkunftsrichtung, mittlere Windrichtung und Tagesmaximalböe aus auswählbaren HA-Entitäten.
 - WH40-Regenmenge und Regenrate getrennt vom WS90-Piezo-Status **NASS / TROCKEN / UNAVAILABLE**.
 - Außentemperatur und Feuchte, Druck, UV und Solarstrahlung; zusätzliche Kanäle und Diagnosen in den Details.
 - Detailfenster mit lokalen HA-Recorder-Abfragen beim Öffnen; fehlende Historie bleibt erkennbar.
@@ -22,11 +22,11 @@ Für einen eigenen Wetter-Reiter empfehlen wir die [Panel View](examples/view-pa
 
 ## Automatische HACS-Releases
 
-Nach jedem erfolgreich gemergten Pull Request in `main` führt `.github/workflows/release.yml` den vollständigen Test-/Build-Prozess aus, ermittelt die nächste **Patch-Version** aus vorhandenen Tags (z. B. `v0.1.0` → `v0.1.1`) und erstellt ein GitHub-Release mit **`ecowitt-weather-card.js` als herunterladbarem Release-Asset**. Die HACS-Konfiguration verwendet den Release-Asset, nicht eine eingecheckte Datei im `dist/`-Ordner. Wenn das Build oder die Tests fehlschlagen, wird **kein neues Release** erzeugt.
+Nach jedem ausdrücklich freigegebenen und erfolgreich gemergten Pull Request in `main` führt `.github/workflows/release.yml` den vollständigen Test-/Build-Prozess aus, ermittelt die nächste **Patch-Version** aus vorhandenen Tags (z. B. `v0.1.0` → `v0.1.1`) und erstellt ein GitHub-Release mit **`ecowitt-weather-card.js` als herunterladbarem Release-Asset**. Die HACS-Konfiguration verwendet den Release-Asset, nicht eine eingecheckte Datei im `dist/`-Ordner. Wenn das Build oder die Tests fehlschlagen, wird **kein neues Release** erzeugt.
 
 Ein früheres Release ohne Asset lässt sich per GitHub → Actions → Release card → Run workflow → `repair_tag` reparieren, z. B. `v0.0.1`. Die Reparatur baut genau den Code dieses Tags und ergänzt den fehlenden Release-Asset.
 
-Die Version im `package.json` wird als interne Entwicklungsversion verwendet; **die tatsächlich veröffentlichte HACS-Version ist der GitHub-Release-Tag**. Der Workflow erzeugt automatisch Patch-Releases; Major-/Minor-Versionen können später bewusst durch einen separaten Versionsprozess eingeführt werden. Keine Bilder aus deinem privaten Designpaket werden mit veröffentlicht.
+Die Version im `package.json` wird als interne Entwicklungsversion verwendet; **die tatsächlich veröffentlichte HACS-Version ist der GitHub-Release-Tag**. Der Workflow erzeugt automatisch Patch-Releases; Major-/Minor-Versionen können später bewusst durch einen separaten Versionsprozess eingeführt werden. Keine privaten Bilder sind Bestandteil des veröffentlichten Bundles.
 
 ## Entwicklung
 
@@ -51,7 +51,7 @@ Private Luftbilder und erkennbare Grundstückszeichnungen gehören niemals in di
 
 Die Gradangabe bezeichnet die meteorologische **Herkunft**. Ein Wind aus 292° kommt aus WNW; der Strömungspfeil läuft von dort zum Haus und zeigt nach 112°. Heute und ein gleitendes 24-Stunden-Regenfenster sind ebenfalls unterschiedliche Messgrößen.
 
-Weitere Dokumentation: [Konfiguration](docs/CONFIGURATION.md), [Produktspezifikation](SPEC.md), [Umsetzungsphasen](docs/CODEX_IMPLEMENTATION.md) und [Agentenanweisungen](AGENTS.md).
+Weitere Dokumentation: [Konfiguration](docs/CONFIGURATION.md), [Produktspezifikation](SPEC.md), [private Bildquellen](docs/PRIVATE_IMAGES.md) und [verbindliche Agentenregeln](AGENTS.md).
 
 Lizenz: MIT.
 
@@ -67,8 +67,8 @@ Lizenz: MIT.
 - Die separat installierte Windrose Card kann per Drehung die Windgrafik innerhalb derselben Karte ersetzen. Keine Pflichtabhängigkeit und kein Plugin-Download durch die Karte.
 - Lesbare Detailquellen mit belegter Geräteherkunft, Zeit-/Werteachsen und Temperatur-Tagesminimum/-maximum aus echten Recorder-Daten, wenn keine eigenen Min-/Max-Quellen zugeordnet sind.
 - Zusätzliche WS90-Entitäten für Lux und Dampfdruckdefizit. Theme: automatisch, hell oder dunkel.
-- Verbesserte Medienbild-Einrichtung mit Beispiel `media-source://media_source/local/ecowitt/Wohnhaus.png` und optionaler Auswahl im HA-Medienbrowser.
+- Verbesserte Medienbild-Einrichtung mit Beispiel `media-source://media_source/local/wetter/beispielbild.png` und optionaler Auswahl im HA-Medienbrowser.
 
 Quellenregeln, Einrichtung der optionalen Windrose und Recorder-Grenzen: [Wetter, Windrose und Tageswerte](docs/WEATHER_WINDROSE.md).
 
-Diese Änderungen werden ausschließlich nach Tests und PR-Review als neue Patch-Version veröffentlicht. Private Grundstücksgrafiken, Originalfotos und die vom Nutzer bereitgestellten Wetteranimationsbeispiele werden nicht im öffentlichen Repository gespeichert.
+Änderungen werden nach Tests und ausdrücklicher PR-Freigabe veröffentlicht. Öffentliche Beispiele und Screenshots enthalten nur generische Illustrationen und synthetische Werte.

@@ -24,10 +24,25 @@ export function forbiddenPath(path) {
       normalized,
     ) ||
     /(?:_privat|\.private|_priv)(?:\.|$)/.test(normalized) ||
-    /(?:original_luftbild|finales_dashboard_design|grundstueck_4zu3|grundstueck_quadrat|ecowitt_card_design_reference|beleuchteter_garten_mit_modernem_wohnhaus|grafik\(9\))/.test(
+    /(?:^|\/)[^/]*(?:privat|private|luftbild|grundstueck|grundstück|wohnhaus|aerial|personal|mockup|hausfoto|garten|grafik(?:\(|[_-])))[^/]*\.(?:png|jpe?g|webp|gif|svg|zip|pdf|heic)$/i.test(
       normalized,
     )
   );
+}
+
+/** Basic patterns for identifying content in current public text; historical prose still needs review. */
+export function inspectSensitiveText(path, value) {
+  const findings = [];
+  if (typeof value !== "string" || !value) return findings;
+  if (/\b(?:sensor|binary_sensor|number|switch|weather|climate|input_number)\.[a-z0-9_]+_[a-f0-9]{5,8}\b/i.test(value))
+    findings.push("installation-specific entity ID");
+  if (/\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/.test(value))
+    findings.push("private IPv4 address");
+  if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(value))
+    findings.push("email address");
+  if (/\b(?:lat|latitude|lon|lng|longitude)\s*[:=]\s*[-+]?\d{1,3}\.\d{3,}\b/i.test(value))
+    findings.push("location coordinates");
+  return findings.map(reason => `${path}: ${reason}`);
 }
 
 export function imageKind(data) {
@@ -157,7 +172,11 @@ function selfTest() {
     ).findings.length,
     0,
   );
-  console.log("Privacy guard self-test: 10 checks passed.");
+  assert(forbiddenPath("assets/placeholder-wohnhaus.png"));
+  assert(inspectSensitiveText("fixture", "sensor.generic_example_" + "a1b2c").length);
+  assert(inspectSensitiveText("fixture", "192" + ".168.1.10").length);
+  assert.equal(inspectSensitiveText("fixture", "sensor.generic, example.invalid").length, 0);
+  console.log("Privacy guard self-test: 14 checks passed.");
 }
 
 function main() {
@@ -180,6 +199,9 @@ function main() {
   const inspect = (path, data, source) => {
     checked++;
     const result = inspectAsset(path, data);
+    if ((source === "working tree" || source === "Git index") && !data.includes(0))
+      for (const issue of inspectSensitiveText(path, data.toString("utf8")))
+        failures.push(`${source}: ${issue}`);
     for (const finding of result.findings)
       failures.push(`${source}: ${path}: ${finding}`);
     for (const asset of result.assets)
@@ -282,7 +304,7 @@ function main() {
     process.exitCode = 1;
   } else
     console.log(
-      "No forbidden image payloads or paths detected. Review the listed SVG geometry and screenshots visually before publication.",
+      "No forbidden media payloads, paths or obvious current identifiers detected. Historical prose and images require manual review.",
     );
 }
 

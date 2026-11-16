@@ -1,51 +1,27 @@
-# Codex / Agent instructions — Ecowitt Weather Card
+# Ecowitt Weather Card — mandatory agent instructions
 
-## Purpose
-Create a standalone, production-quality, mobile-first Home Assistant custom Lovelace weather card for Ecowitt weather stations, especially `alexlenk/ecowitt_local`.
+This is a **public** repository. The following rules apply to Codex and every other contributor. Read `SPEC.md` and the current explicit user request before acting.
 
-## Source of truth and status
-- Read `SPEC.md` before any implementation.
-- **The planning decisions in SPEC.md are approved. Implementation begins only on an explicit Codex task (for example the prepared GitHub implementation issue / a direct user request in Codex). Never assume GitHub file changes automatically launch Codex.**
-- Preserve the distinction between confirmed requirements and proposals/open decisions.
-- Never invent actual entity IDs, user sensor values, or the appearance/orientation of their property. The one user-supplied ID is `sensor.ecowitt_wind_direction_avg_175da` (10-minute average wind direction), used only as a suggested editable configuration.
-- If technical details are ambiguous, document the uncertainty instead of silently guessing.
+## Task and merge authorization
+- Only implement the user's approved scope. Never guess entity IDs, sensor readings, supported device features, or undisclosed requirements; ask or document uncertainty.
+- Always work in a **separate branch**, based on the latest `main`. Open a reviewable PR. **Never push directly to main, merge, tag/release, rewrite Git history, or edit another repository without separate, explicit user approval.**
+- Preserve existing behavior, approved visual layout, backwards compatibility and tests. Avoid surprise changes and repeated broken intermediate commits. Tests must not be weakened to manufacture a passing result.
+- Run applicable checks before pushing. State exactly which checks passed or failed and what remains unverified in real Home Assistant / mobile hardware. Simulated tests are not a real-device validation.
 
-## Implementation principles (when explicitly requested)
-- A single standalone `custom:ecowitt-weather-card` without mandatory dependencies on other HACS cards.
-- Visual editor, native card picker, optional manual YAML example; no automated edits to the user's dashboard.
-- Responsive to **card container width**, especially iPhone 17 portrait and landscape.
-- Respect HA theme variables and reduced-motion preferences.
-- Semantically accurate wind direction: meteorological "wind from" vs physically moving arrows towards the property; include direction tests (N/E/S/W, 359°→0°).
-- Wind and rain receive visual priority; WH40 measures rain quantity and WS90 piezo determines wet status as separate sources.
-- Gracefully handle missing, unavailable, unknown or stale sensors.
-- Use local Home Assistant state/history APIs, no cloud or map calls, and do not modify Ecowitt Local.
-- Support two example VIEW YAMLs for the SAME card: Panel View (default for dedicated weather tab; one card) and Sections View (for integration with other dashboard cards). Do not auto-edit existing dashboards.
-- Deliver small, reviewable PRs, tests, setup documentation, screenshots/demos and honest limitations.
+## Privacy rules — binding publication gate
+- Treat **every private user-supplied image, screenshot, config, log, prompt, attachment or reference** as confidential. It may be viewed in an explicitly authorized private task, but **never** added to source control, public PRs/issues, demos, GitHub Actions artifacts, screenshots, release assets or example fixtures.
+- Do not publish identifiable property geometry or private-image derivatives, aerial photographs, home addresses, coordinates, personal names, private IP addresses/hostnames/MACs, credentials, accounts, or installation-specific sensor/device/entity IDs. Cropping or stylistically transforming a private property image does not make it a safe public demo.
+- Public imagery must be **independently generic**, with **synthetic** entities, measurements and device names. Never trace real geometry. Do not publish actual screenshots from a user's HA instance.
+- Never hard-code personal sensor IDs as defaults or suggestions. Discover actual devices/entities dynamically from Home Assistant and let users choose.
+- User background images stay on the user's own HA instance, never in the repository or HACS bundle. Direct `/local/` image URLs are **not automatically private**; warn about access control. No remote image-upload service.
+- Before any push/PR inspect the **complete diff, staged files, documentation, code comments, UI fixtures, screenshots, build assets and PR body**. Run `npm run check` including the asset/history and current-text privacy audit. Never switch off a privacy safeguard just to pass CI.
+- Automatic scanning is only defense in depth. Manually inspect ordinary prose and every visual. If private information exists in **historical** public commits, report it privately; editing today's files does not erase history/forks/caches. **Never force-push or rewrite history without separately coordinated consent.**
+- Do not repeat identifying filenames/identifiers in a public PR while describing their removal; use neutral generic wording.
 
-## Workflow
-1. Discuss and finalize UI/spec in ChatGPT; keep SPEC.md updated.
-2. When user authorizes coding, produce a PR plan with discrete milestones.
-3. Implement only approved scope and verify on mobile/desktop.
-4. Do not mark design or feature as complete on the basis of a mockup alone.
+## Product and engineering requirements
+- Maintain one standalone `custom:ecowitt-weather-card`, Panel/Sections views, native editor, container-responsive layouts, HA themes, accessible controls and reduced-motion support.
+- Use only actual configured HA states/Recorder data; do not invent histories or connectivity. Preserve wind-from direction vs airflow-to target, measured rainfall vs wet-surface indication, and calendar-day vs rolling period.
+- An optional installed Windrose Card is separate from this project's bundle and is not fetched from GitHub at runtime.
+- Keep CI, HACS release automation and regression tests. Review changes on desktop/mobile using **synthetic-only** screenshots.
 
-
-## Current implementation priorities
-1. Read SPEC.md, docs/CODEX_IMPLEMENTATION.md and examples/ before editing code.
-2. Build the actual custom-card foundation and visual editor first, with deterministic demo states and an explicit setup placeholder.
-3. Build a **generic, non-identifying** north-up 2D site-plan demo SVG and accurately transformed wind arrows. The private real-world site photo or any derived recognizable asset must never be committed or included in public PRs/screenshots. Accept private reference images only through explicit Codex task attachments and keep personalized visual output out of the public repo.
-4. Add high-visibility wet/dry/unavailable rain status using WS90 piezo, WH40 accumulation/rate as distinct inputs.
-5. Implement responsive layout and tap-details with live HA data/recorder access; iPhone 17 portrait, iPhone landscape and desktop screenshot verification.
-6. Package for HACS, give a reliable visual editor and test the prepared View-YAML examples. Do not invent device entity IDs.
-
-## Quality gates
-- Test wind arrow semantics: meteorological FROM bearing vs movement arrow direction toward the house (bearing+180 degrees); north stays at image top.
-- Test rain wet/dry/unavailable, card in panel/sections, missing entities, 359-to-0 animation, all unit handling.
-- Prefer small reviewable PRs, include test results and known limitations; preserve scope, do not overwrite the user's other repositories.
-
-
-### PRIVATSPHÄRE – wichtige verbindliche Architekturentscheidung
-- Dieses Repo ist öffentlich. Keine persönlichen Luftbilder, Standortdaten, wiedererkennbaren Grundstückszeichnungen oder auf der privaten Vorlage basierenden Assets in Git-Commits, Issues, PR-Anhängen, Release-Assets, Testfixtures oder Screenshots veröffentlichen.
-- Codex darf die Originalvorlage nur erhalten, wenn der Nutzer sie separat als **privaten Task-Anhang** bereitstellt; nicht über GitHub-Issues oder Commits übertragen.
-- Die Custom Card benötigt ein editierbares Feld `background_image` / `site_image` für eine nutzereigene Bildquelle aus Home Assistant. Bei fehlendem Bild generische, nicht personenbezogene Standardillustration verwenden.
-- Realistisches Grundstücksbild optional **außerhalb des Git-Repositories** auf der privaten HA-Instanz hinterlegen und dort als Bildquelle konfigurieren. `/config/www` bzw. `/local/` ist nicht notwendigerweise zugriffsgeschützt; dies muss vor Auswahl der Speicherstrategie klar dokumentiert und bei externer HA-Erreichbarkeit geprüft werden. Wenn möglich, HA-Authentisierung/Media-Verwaltung nutzen und das Zugriffskonzept testen.
-- Niemals private Bilder in Build-Artefakte einbetten, die mit HACS verteilt werden. Keine Bild-Upload-Funktion implementieren, die private Nutzerbilder unbemerkt an Dritte übermittelt.
+**Release gate:** checks reviewed, privacy and provenance verified, PR ready for user review; **no merge before explicit user approval**.

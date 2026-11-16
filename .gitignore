@@ -1,22 +1,26 @@
-# Private images supplied for the user's Codex task must NEVER be committed.
-# Keep them only as private task attachments or on the user's Home Assistant server.
+# Private local assets: broad patterns are defense in depth, not publication security.
 /private/
 /private-assets/
 /private_assets/
 /bilder/
 /local_assets/
-**/*_PRIVAT.png
-**/*_PRIVAT.jpg
-**/*_PRIVAT.jpeg
-**/*_PRIVAT.webp
-**/*.private.png
-**/*.private.jpg
-**/*.private.jpeg
-**/*.private.webp
-**/grafik(9).png
-**/ecowitt_card_design_reference.png
-**/ecowitt_grundstueck_quadrat_priv.png
-**/beleuchteter_garten_mit_modernem_wohnhaus.png
+**/*privat*.png
+**/*privat*.jpg
+**/*privat*.jpeg
+**/*privat*.webp
+**/*private*.png
+**/*private*.jpg
+**/*private*.jpeg
+**/*private*.webp
+**/*luftbild*.*
+**/*grundstueck*.*
+**/*grundstück*.*
+**/*wohnhaus*.*
+**/*garten*.png
+**/*garten*.jpg
+**/*mockup*.png
+**/*foto*.jpg
+**/grafik*.png
 *.env
 .env
 .DS_Store

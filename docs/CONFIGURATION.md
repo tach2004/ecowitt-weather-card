@@ -66,7 +66,7 @@ Einheiten stammen aus den Sensorattributen. Die Karte gibt keinen °C-, km/h- od
 | `pressure_absolute` | Absoluter Druck aus eigener GW3000-Quelle auf der Hauptleiste und in den Druckdetails |
 | `uv`, `solar` | UV-Index und Solarstrahlung, WS90 |
 
-Die mittlere Richtung ist keine Windrose. Eine Windrose benötigt eine echte Richtungs- und Geschwindigkeitsverteilung; sie wird in diesem Meilenstein nicht aus einem einzelnen Mittelwert erzeugt.
+Die mittlere Richtung ist keine Windrose. Die optional eingebettete Windrose nutzt die historische Richtungs- und Geschwindigkeitsverteilung der ausgewählten HA-Quellen, soweit verfügbar.
 
 ## Details und Historie
 
@@ -136,10 +136,10 @@ device_status:
 
 ### Privates Bild
 
-Empfohlener Speicherort: `/media/ecowitt/Wohnhaus.png`. Kartenfeld:
+Empfohlener Speicherort: `/media/wetter/beispielbild.png`. Kartenfeld:
 
 ```yaml
-site_image: media-source://media_source/local/ecowitt/Wohnhaus.png
+site_image: media-source://media_source/local/wetter/beispielbild.png
 ```
 
 Der Editor kann das lokale HA-Medienverzeichnis über eine WebSocket-Abfrage durchsuchen, sofern der angemeldete Benutzer entsprechende Rechte besitzt. Er berücksichtigt native Ordner-/Bildangaben und bietet ausschließlich lokale HA-Media-IDs an. Überholte Antworten nach einer späteren Auswahl oder beim Entfernen des Editors werden verworfen. Dies ist kein Upload. Ohne Zugriffsberechtigung oder bei inkompatiblen Medienquellen bleibt das Textfeld verwendbar.

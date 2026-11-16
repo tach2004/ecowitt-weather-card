@@ -877,25 +877,6 @@ export class EcowittWeatherCardEditor extends LitElement {
                   : nothing
               }
             </div>
-            ${
-              group === "Wind" &&
-              this.hass?.states["sensor.ecowitt_wind_direction_avg_175da"] &&
-              this._config.entities?.wind_direction_avg !==
-                "sensor.ecowitt_wind_direction_avg_175da"
-                ? html`<button
-                    type="button"
-                    class="suggestion"
-                    @click=${() =>
-                      this._setEntity(
-                        "wind_direction_avg",
-                        "sensor.ecowitt_wind_direction_avg_175da",
-                      )}
-                  >
-                    Vorhandenen bekannten Sensor für die mittlere Richtung
-                    übernehmen: sensor.ecowitt_wind_direction_avg_175da
-                  </button>`
-                : nothing
-            }
           </details>`,
       )}
 
@@ -999,7 +980,7 @@ export class EcowittWeatherCardEditor extends LitElement {
             .value=${
               this._config.site_image ?? this._config.background_image ?? ""
             }
-            placeholder="media-source://media_source/local/ecowitt/Wohnhaus.png"
+            placeholder="media-source://media_source/local/wetter/beispielbild.png"
             @change=${(event: Event) =>
               this._change({
                 site_image: this._value(event),
@@ -1014,8 +995,8 @@ export class EcowittWeatherCardEditor extends LitElement {
 
         <p class="hint">
           Empfohlen: Bild unter
-          <code>/media/ecowitt/Wohnhaus.png</code> speichern und im Feld
-          <code>media-source://media_source/local/ecowitt/Wohnhaus.png</code>
+          <code>/media/wetter/beispielbild.png</code> speichern und im Feld
+          <code>media-source://media_source/local/wetter/beispielbild.png</code>
           verwenden. Schreibweise und Groß-/Kleinschreibung beachten.
         </p>
         <button
