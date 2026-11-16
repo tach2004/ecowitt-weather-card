@@ -34,7 +34,7 @@ export const experienceStyles = css`
     display: flex;
     align-items: baseline;
     gap: 3px;
-    font-size: clamp(0.57rem, 1.1cqi, 0.76rem);
+    font-size: clamp(0.65rem, 1.15cqi, 0.82rem);
     line-height: 1.2;
     font-weight: 500;
     letter-spacing: 0;
@@ -97,7 +97,7 @@ export const experienceStyles = css`
     .climate-temperature-row { gap: 4px; }
     .climate-temperature-row .climate-current-value .unit { margin-left: 1px; }
     .climate-extremes { gap: 2px; }
-    .climate-extreme { font-size: 0.55rem; gap: 2px; }
+    .climate-extreme { font-size: 0.63rem; gap: 2px; }
     .direction-pair .label {
       min-height: 2.7em;
     }
