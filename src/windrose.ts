@@ -116,6 +116,7 @@ export function buildWindroseConfig(
   }
   const configuredSpeeds = supplied.windspeed_entities;
   let speeds: unknown[];
+  let hasAutoGust = false;
   if (configuredSpeeds !== undefined) {
     if (!Array.isArray(configuredSpeeds) || !configuredSpeeds.length)
       throw new Error(
@@ -143,6 +144,27 @@ export function buildWindroseConfig(
         speed_range_beaufort: false,
       },
     ];
+    // Optional real gust source: retain the ordinary wind source and its output
+    // unit; the installed windrose handles conversion from the gust input unit.
+    const gustId = entities?.wind_gust;
+    const gustSourceUnit = gustId
+      ? hass?.states[gustId]?.attributes.unit_of_measurement
+      : undefined;
+    const gustUnit =
+      typeof gustSourceUnit === "string"
+        ? speedUnits[gustSourceUnit]
+        : undefined;
+    if (gustId && gustId !== id && gustUnit) {
+      speeds.push({
+        entity: gustId,
+        name: "Böen",
+        speed_unit: gustUnit,
+        output_speed_unit: unit,
+        output_speed_unit_label: sourceUnit,
+        speed_range_beaufort: false,
+      });
+      hasAutoGust = true;
+    }
   }
   const sources = [direction, ...speeds];
   for (const source of sources) {
@@ -159,6 +181,42 @@ export function buildWindroseConfig(
         "Eine konfigurierte Windrosenquelle ist in Home Assistant nicht vorhanden.",
       );
   }
+  // This selector is native to the separately installed Windrose Card.
+  // Never overwrite explicit speed sources or existing speed-selector buttons.
+  const buttonsSettings = record(supplied.buttons_config)
+    ? supplied.buttons_config
+    : undefined;
+  const nativeButtons = Array.isArray(buttonsSettings?.buttons)
+    ? buttonsSettings.buttons
+    : undefined;
+  const hasManualSpeedSelector = nativeButtons?.some(
+    (button) => record(button) && button.type === "windrose_speed_selector",
+  );
+  const canAddSelectors =
+    hasAutoGust &&
+    !hasManualSpeedSelector &&
+    (supplied.buttons_config === undefined ||
+      (buttonsSettings !== undefined &&
+        (buttonsSettings.buttons === undefined || nativeButtons !== undefined)));
+  const automaticButtons = canAddSelectors
+    ? {
+        ...buttonsSettings,
+        buttons: [
+          {
+            type: "windrose_speed_selector",
+            button_text: "Windgeschwindigkeit",
+            windspeed_entity_index: 0,
+            active: true,
+          },
+          {
+            type: "windrose_speed_selector",
+            button_text: "Böen",
+            windspeed_entity_index: 1,
+          },
+          ...(nativeButtons ?? []),
+        ],
+      }
+    : supplied.buttons_config;
   const reduced = preferences.reducedMotion || preferences.animation === false;
   return {
     title: "",
@@ -166,6 +224,7 @@ export function buildWindroseConfig(
     matching_strategy: { name: "full-time" },
     hide_windspeed_bar: true,
     ...supplied,
+    ...(canAddSelectors ? { buttons_config: automaticButtons } : {}),
     // This wrapper embeds precisely the installed windrose-card, not another element.
     type,
     wind_direction_entity: direction,

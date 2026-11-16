@@ -36,6 +36,187 @@ test("default windrose config uses actual selected sources and local Recorder hi
   assert.equal(speed.output_speed_unit_label, "km/h");
 });
 
+
+test("automatically configured gust adds native speed/gust selectors without changing sources or colors", () => {
+  const copy = structuredClone(hass);
+  copy.states["sensor.demo_gust"] = {
+    entity_id: "sensor.demo_gust",
+    state: "15",
+    attributes: { unit_of_measurement: "km/h" },
+  };
+  const selected = { ...entities, wind_gust: "sensor.demo_gust" };
+  const config = buildWindroseConfig(
+    { config: { hide_windspeed_bar: false } },
+    selected,
+    copy,
+  );
+  assert.equal(config.hide_windspeed_bar, false);
+  const speeds = config.windspeed_entities as Record<string, unknown>[];
+  assert.deepEqual(
+    speeds.map((speed) => speed.entity),
+    [entities.wind_speed, "sensor.demo_gust"],
+  );
+  assert.deepEqual(
+    speeds.map((speed) => speed.output_speed_unit),
+    ["kph", "kph"],
+  );
+  assert.equal(speeds[1].name, "Böen");
+  assert.equal(speeds[0].speed_ranges, undefined);
+  assert.equal(speeds[1].speed_ranges, undefined);
+  assert.deepEqual((config.buttons_config as { buttons: unknown[] }).buttons, [
+    {
+      type: "windrose_speed_selector",
+      button_text: "Windgeschwindigkeit",
+      windspeed_entity_index: 0,
+      active: true,
+    },
+    {
+      type: "windrose_speed_selector",
+      button_text: "Böen",
+      windspeed_entity_index: 1,
+    },
+  ]);
+  // An ordinary wind-only configuration remains unchanged.
+  assert.equal(buildWindroseConfig({}, entities, hass).buttons_config, undefined);
+});
+
+test("gusts use their own real input units but the main speed output unit", () => {
+  const copy = structuredClone(hass);
+  copy.states["sensor.demo_gust"] = {
+    entity_id: "sensor.demo_gust",
+    state: "6",
+    attributes: { unit_of_measurement: "m/s" },
+  };
+  const result = buildWindroseConfig(
+    {},
+    { ...entities, wind_gust: "sensor.demo_gust" },
+    copy,
+  );
+  const gust = (result.windspeed_entities as Record<string, unknown>[])[1];
+  assert.equal(gust.speed_unit, "mps");
+  assert.equal(gust.output_speed_unit, "kph");
+  assert.equal(gust.output_speed_unit_label, "km/h");
+});
+
+test("missing, duplicate and unsupported gusts do not disrupt the original windrose", () => {
+  const selected = { ...entities, wind_gust: "sensor.not_available" };
+  const missing = buildWindroseConfig({}, selected, hass);
+  assert.equal((missing.windspeed_entities as unknown[]).length, 1);
+  assert.equal(missing.buttons_config, undefined);
+  const same = buildWindroseConfig(
+    {},
+    { ...entities, wind_gust: entities.wind_speed },
+    hass,
+  );
+  assert.equal((same.windspeed_entities as unknown[]).length, 1);
+  const invalidHass = structuredClone(hass);
+  invalidHass.states["sensor.demo_gust"] = {
+    entity_id: "sensor.demo_gust",
+    state: "8",
+    attributes: { unit_of_measurement: "°C" },
+  };
+  const invalid = buildWindroseConfig(
+    {},
+    { ...entities, wind_gust: "sensor.demo_gust" },
+    invalidHass,
+  );
+  assert.equal((invalid.windspeed_entities as unknown[]).length, 1);
+  assert.equal(invalid.buttons_config, undefined);
+});
+
+test("auto speed selectors preserve native period buttons and all host timeframe variants", async () => {
+  const { selectedWindrose } = await import("../src/windrose");
+  const copy = structuredClone(hass);
+  copy.states["sensor.demo_gust"] = {
+    entity_id: "sensor.demo_gust",
+    state: "17",
+    attributes: { unit_of_measurement: "km/h" },
+  };
+  const options = {
+    config: {
+      buttons_config: {
+        location: "bottom",
+        buttons: [{ type: "period_selector", button_text: "Heute", preset_period: "today" }],
+      },
+    },
+    variants: [
+      { title: "24 Stunden", config: { data_period: { period_back: "-24h" } } },
+      { title: "7 Tage", config: { data_period: { period_back: "-7d" } } },
+      { title: "360 Tage", config: { data_period: { period_back: "-360d" } } },
+    ],
+  };
+  for (const [index, period] of ["-24h", "-7d", "-360d"].entries()) {
+    const result = buildWindroseConfig(
+      selectedWindrose(options, index),
+      { ...entities, wind_gust: "sensor.demo_gust" },
+      copy,
+    );
+    assert.deepEqual(result.data_period, { period_back: period });
+    const buttons = (result.buttons_config as { buttons: Record<string, unknown>[] }).buttons;
+    assert.equal(buttons[0].type, "windrose_speed_selector");
+    assert.equal(buttons[1].type, "windrose_speed_selector");
+    assert.equal(buttons[2].type, "period_selector");
+    assert.equal((result.buttons_config as { location: string }).location, "bottom");
+  }
+  assert.equal(options.config.buttons_config.buttons.length, 1);
+});
+
+test("explicit native speed sources and speed-selector buttons take precedence", () => {
+  const copy = structuredClone(hass);
+  copy.states["sensor.demo_gust"] = {
+    entity_id: "sensor.demo_gust",
+    state: "17",
+    attributes: { unit_of_measurement: "km/h" },
+  };
+  const mapped = { ...entities, wind_gust: "sensor.demo_gust" };
+  const explicit = {
+    windspeed_entities: [
+      { entity: entities.wind_speed, name: "Eigene Quelle", speed_unit: "kph" },
+    ],
+    buttons_config: { buttons: [{ type: "period_selector", button_text: "Heute" }] },
+  };
+  const first = buildWindroseConfig({ config: explicit }, mapped, copy);
+  assert.deepEqual(first.windspeed_entities, explicit.windspeed_entities);
+  assert.deepEqual(first.buttons_config, explicit.buttons_config);
+  const manualButtons = {
+    buttons: [
+      { type: "windrose_speed_selector", windspeed_entity_index: 0, button_text: "Eigene Wahl" },
+    ],
+  };
+  const second = buildWindroseConfig(
+    { config: { buttons_config: manualButtons } },
+    mapped,
+    copy,
+  );
+  assert.deepEqual(second.buttons_config, manualButtons);
+  assert.equal((second.windspeed_entities as unknown[]).length, 2);
+  const disabledAnimations = buildWindroseConfig(
+    { config: {} },
+    mapped,
+    copy,
+    { reducedMotion: true },
+  );
+  assert.equal(
+    (disabledAnimations.windspeed_entities as unknown[]).length,
+    2,
+  );
+  assert.deepEqual(disabledAnimations.buttons_config, {
+    buttons: [
+      {
+        type: "windrose_speed_selector",
+        button_text: "Windgeschwindigkeit",
+        windspeed_entity_index: 0,
+        active: true,
+      },
+      {
+        type: "windrose_speed_selector",
+        button_text: "Böen",
+        windspeed_entity_index: 1,
+      },
+    ],
+  });
+});
+
 test("supported source units map explicitly to upstream units without guessing or converting values", () => {
   for (const [source, unit] of [
     ["m/s", "mps"],
