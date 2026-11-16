@@ -2205,6 +2205,65 @@ test("optional real HA weather selection and installed windrose preferences surv
   await expect(page.locator(".rose-toggle")).toHaveCount(0);
 });
 
+
+test("outdoor climate shows HA-local Recorder extrema next to the unchanged current temperature", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-11-15T15:00:00Z") });
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.historyRequests = [];
+    win.hass.callApi = async (method: string, path: string) => {
+      win.historyRequests.push({ method, path });
+      return [[...[-1, 1, 4, 9].map((hours, i) => ({
+        entity_id: "sensor.demo_temperature",
+        state: String([7, 3, 12, 8][i]),
+        attributes: { unit_of_measurement: "°C" },
+        last_updated: new Date(Date.parse("2026-11-14T23:00:00Z") + hours * 3600_000).toISOString(),
+      }))]];
+    };
+    const { temperature_min, temperature_max, ...entities } = win.demoConfig.entities;
+    win.setDemoConfig({ ...win.demoConfig, entities });
+    await win.card.updateComplete;
+  });
+  const climate = page.locator(".climate");
+  await expect(climate.locator(".climate-current-value")).toContainText("18,6");
+  const maximum = climate.locator(".climate-extreme.maximum");
+  const minimum = climate.locator(".climate-extreme.minimum");
+  await expect(maximum).toHaveAttribute("data-source", "recorder");
+  await expect(minimum).toHaveAttribute("data-source", "recorder");
+  await expect(maximum).toContainText("12,0");
+  await expect(minimum).toContainText("3,0");
+  await expect.poll(async () => page.evaluate(() => (window as DemoWindow).historyRequests.length)).toBe(1);
+  await update(page, "wind_speed", 3);
+  await expect.poll(async () => page.evaluate(() => (window as DemoWindow).historyRequests.length)).toBe(1);
+  await expect(climate.locator(".trio > div")).toHaveCount(3);
+  await expect(climate.locator('[data-key="humidity"]')).toContainText("76");
+  await expect(climate.locator('[data-key="feels_like"]')).toContainText("18,1");
+  const bounds = await climate.locator('[data-key="temperature"]').evaluate((el) => {
+    const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
+    const extrema = el.querySelector(".climate-extremes")!.getBoundingClientRect();
+    return { right: current.right, left: extrema.left, deltaY: Math.abs(current.y + current.height / 2 - extrema.y - extrema.height / 2) };
+  });
+  expect(bounds.left).toBeGreaterThanOrEqual(bounds.right - 1);
+  expect(bounds.deltaY).toBeLessThan(14);
+  await noOverflow(page);
+});
+
+test("explicitly configured minimum and maximum take priority and require no Recorder history", async ({ page }) => {
+  await ready(page);
+  const climate = page.locator(".climate");
+  const maximum = climate.locator(".climate-extreme.maximum");
+  const minimum = climate.locator(".climate-extreme.minimum");
+  await expect(maximum).toHaveAttribute("data-source", "entity");
+  await expect(minimum).toHaveAttribute("data-source", "entity");
+  await expect(maximum).toContainText("20,3");
+  await expect(minimum).toContainText("12,7");
+  const history = await page.evaluate(() => (window as DemoWindow).historyRequests);
+  expect(history).toHaveLength(0);
+  await noOverflow(page);
+});
+
 test("details identify actual source devices, show both axes, and derive extrema from the HA calendar day", async ({
   page,
 }) => {
