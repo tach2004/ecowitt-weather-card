@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildWindroseConfig, windroseConfigKey } from "../src/windrose";
+import { buildWindroseConfig, prepareEmbeddedSpeedSwitch, windroseConfigKey } from "../src/windrose";
 import type { HomeAssistant } from "../src/types";
 const entities = {
   wind_speed: "sensor.demo_speed",
