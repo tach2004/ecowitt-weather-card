@@ -2402,7 +2402,7 @@ test("embedded windrose automatically receives the gust source and selector butt
   expect(later.corner_info.top_right.label).toBe("Windgeschwindigkeit");
   const host = page.locator("ecowitt-windrose-host");
   await host.locator(".speed-mode button", { hasText: "Böen" }).click();
-  await expect.poll(async () => (await getNativeConfig())?.corner_info?.top_right?.label).toBe("Böen aktuell");
+  await expect.poll(async () => (await getNativeConfig())?.corner_info?.top_right?.label).toBe("Max. Böe heute");
   const selected = await getNativeConfig();
   expect(selected.windspeed_entities[1].use_for_windrose).toBe(true);
   expect(selected.windspeed_entities[1].entity).toBe("sensor.demo_wind_gust");
