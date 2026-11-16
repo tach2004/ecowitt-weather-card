@@ -2,24 +2,6 @@
 
 Diese Erweiterung verwendet die bestehende Ecowitt-Karte weiter. Wettereffekte liegen als dekorative Ebene über dem konfigurierten Bild und an der Regenkachel. Die Windrose wird bei Bedarf innerhalb derselben Karte eingeblendet. Hintergrundbild, Nordausrichtung und die vorhandene Strömungspfeil-Geometrie werden dafür nicht neu gezeichnet oder in eine Bilddatei eingebrannt.
 
-## Aufteilung des Auftrags
-
-Der Korrekturbranch `codex/ha-layout-corrections` und der Erweiterungsbranch `codex/immersive-weather-windrose` behandeln zusammen die elf Punkte des Auftrags. Der zweite Branch ergänzt die Darstellung und Datenfunktionen; er ersetzt die kleinen Korrekturen des ersten Branches nicht.
-
-| Punkt | Umsetzung | Bereich |
-| --- | --- | --- |
-| 1 | Geräteauswahl dauerhaft als `device_roles` speichern und beim erneuten Öffnen des Editors wiederherstellen, einschließlich Gatewayauswahl. Vorhandene Sensoren werden dadurch nicht überschrieben. | Korrekturen |
-| 2 | Wettereffekte direkt im vorhandenen Bild und an Kacheln; nachvollziehbare Quellenpriorität und erklärende Hinweise bei unzureichenden Daten. | Erweiterung |
-| 3 | Überschrift mit gesicherter Breite, Status unter dem Titel auf schmalen Karten; Detailfenster mit begrenztem Inhalts-Scrollbereich. | Korrekturen |
-| 4 | Ursprüngliche Bildkreisgröße, kleine Gradangaben außerhalb und exakt auf ihren Winkelachsen; keine tangentiale Verschiebung. | Korrekturen |
-| 5 | Kurze Rollenlabels wie WS90/WH40/WN31; pro Statuskasten eine Zeile, auf breiten Karten nebeneinander und auf schmalen untereinander. | Korrekturen |
-| 6 | UV-Index auf der Hauptkarte ohne Nachkommastelle anzeigen. | Korrekturen |
-| 7 | SVG-Rand des Feuchtigkeitstropfens vollständig anzeigen. | Korrekturen |
-| 8 | Überholten Hinweis auf eine nicht enthaltene Windrose aus dem Winddetail entfernen. | Korrekturen |
-| 9 | Tatsächlich installierte `custom:windrose-card` optional einbetten und innerhalb der bestehenden Windgrafik umschalten. | Erweiterung |
-| 10 | Menschliche Quellnamen mit belegter Geräteherkunft; Verlauf mit Wert-/Einheiten- und Zeitachsen, native More-Info bleibt erhalten. | Erweiterung |
-| 11 | Fehlende Temperatur-Min-/Max-Sensoren durch echte Recorder-Auswertung des bisherigen HA-Kalendertags ergänzen, mit sichtbaren Abdeckungsgrenzen. | Erweiterung |
-
 ## Lokale Wettereffekte und erforderliche Quellen
 
 Die Karte ruft keine externe Wetter- oder Karten-API auf. Vorhandene Home-Assistant-Zustände und Recorder-Daten genügen. Für die lokale Auswertung sind die folgenden Zuordnungen relevant:
@@ -119,6 +101,6 @@ WINDROSE_UPSTREAM_JS=/absoluter/pfad/windrose-card.js \
   npx tsx --test tests/windrose.integration.test.ts
 ```
 
-Ohne diese Umgebungsvariable wird nur diese gesonderte Upstream-Integrationsprüfung übersprungen; die regulären Adaptertests bleiben aktiv. Die Ergebnisse des abschließenden gemeinsamen Builds und der Browserprüfungen werden im zugehörigen PR dokumentiert.
+Ohne diese Umgebungsvariable wird nur diese gesonderte Upstream-Integrationsprüfung übersprungen; die regulären Adaptertests bleiben aktiv. Build- und Browserprüfungen sind in den GitHub-Actions-Läufen nachvollziehbar.
 
-Private Grundstücksfotos und private HA-Screenshots werden nicht verändert, in Testansichten eingebaut, kopiert oder veröffentlicht. Für sensible Bilder gilt weiterhin: `/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt; eine HA-Media-Quelle und deren Zugriff ohne Anmeldung müssen auf der tatsächlichen Instanz geprüft werden. Es gibt keine Sicherheitsgarantie. Dieser Auftrag erzeugt keine Tags oder Releases und mergt keinen PR.
+Private Grundstücksfotos und private HA-Screenshots werden nicht verändert, in Testansichten eingebaut, kopiert oder veröffentlicht. Für sensible Bilder gilt weiterhin: `/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt; eine HA-Media-Quelle und deren Zugriff ohne Anmeldung müssen auf der tatsächlichen Instanz geprüft werden. Es gibt keine Sicherheitsgarantie. 
