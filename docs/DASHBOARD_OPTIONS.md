@@ -42,6 +42,15 @@ Ein separat installierter Windrose-Fork mit dem Elementnamen `custom:windrose-ca
 
 Die Ecowitt-Karte lädt keinen fremden JavaScript-Code nach. HACS-Ressource und Berechtigungen verwaltet Home Assistant. Nach Ressourcenwechsel Browsercache/Frontend erneuern. Eine nicht geladene Implementierung erhält einen verständlichen Hinweis. Die Ressource des Forks wurde nur als ignoriertes lokales Testmaterial mit synthetischen Daten geprüft und wird nicht mitgeliefert.
 
+
+### Windgeschwindigkeit und Böen ohne doppelte Sensor-IDs
+
+Die Ecowitt-Karte gibt die zugeordneten Entitäten für **aktuelle Windrichtung** (`entities.wind_direction`), **Windgeschwindigkeit** (`entities.wind_speed`) und – falls eine gültige Quelle verfügbar ist – **Böen** (`entities.wind_gust`) an die installierte Windrose weiter. Bei Wind plus Böen erzeugt der Adapter automatisch die nativen Umschaltflächen `Windgeschwindigkeit` und `Böen`. Die Windrose selbst nutzt hierfür `windrose_speed_selector` und berechnet die historische Richtungs-/Geschwindigkeitsverteilung nach der Auswahl neu.
+
+Diese Schaltflächen sind **innerhalb** der Windrose. Das separate Dropdown der Ecowitt-Karte für 24 Stunden, 7 Tage usw. bleibt unverändert und funktioniert unabhängig davon. Die automatische Umschaltung setzt **keine** eigenen `windspeed_entities` und **keine** bereits vom Nutzer angelegten `windrose_speed_selector`-Schaltflächen voraus; explizite native Konfigurationen bleiben erhalten. Andere vorhandene native Schaltflächen werden nicht entfernt.
+
+Die Böenquelle wird nur hinzugefügt, wenn eine eigenständige HA-Entität mit einer von der Windrose unterstützten Einheit existiert. Ihre tatsächliche Quelleneinheit wird an das Plugin übergeben; beide Diagramme verwenden die Einheit der normalen Windgeschwindigkeit als Ausgabe. Wenn eine Böenquelle fehlt oder ihre Einheit nicht unterstützt wird, bleibt die bisherige Windrose mit nur einer Geschwindigkeitsquelle bestehen. Es werden weder neue Messwerte noch eigene Farben oder Klassen erfunden.
+
 ## Welche Wetterquelle hat Vorrang?
 
 Unverändert: positive gültige **WH40-Rate**, danach eine explizit zugeordnete positive **WS90-Rate**, erst danach die optionale `weather.*`-Quelle und die lokale Himmelsabschätzung. Auch bei met.no als HA-Wetterquelle überstimmen die lokalen Raten den regionalen Zustand. NASS allein ist kein Nachweis für gerade fallenden Regen. Die Tropfen in der Regenkachel verwenden jetzt eine deutlichere cyanfarbene Kontur auch im hellen Theme; die Bewegung über dem Bild bleibt geometrisch gleich.

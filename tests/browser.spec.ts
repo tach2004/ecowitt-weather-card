@@ -2289,6 +2289,61 @@ test("details identify actual source devices, show both axes, and derive extrema
   expect(endGap).toBeLessThanOrEqual(1);
 });
 
+
+test("embedded windrose automatically receives the gust source and selector buttons while preserving the host period dropdown", async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    class SyntheticWindrose extends HTMLElement {
+      config: any;
+      setConfig(config: any) {
+        this.config = config;
+      }
+      set hass(_value: unknown) {}
+    }
+    if (!customElements.get("windrose-card"))
+      customElements.define("windrose-card", SyntheticWindrose);
+    const win = window as DemoWindow;
+    win.setDemoConfig({
+      ...win.demoConfig,
+      windrose: {
+        enabled: true,
+        config: {
+          hide_windspeed_bar: false,
+          rose_config: { wind_direction_count: 16 },
+        },
+        variants: [
+          { title: "24 Stunden", config: { data_period: { period_back: "-24h" } } },
+          { title: "60 Tage", config: { data_period: { period_back: "-60d" } } },
+        ],
+      },
+    });
+    await win.card.updateComplete;
+  });
+  await page.locator(".site").click();
+  const getNativeConfig = () =>
+    page.evaluate(() => {
+      const host = (window as DemoWindow).card.shadowRoot?.querySelector("ecowitt-windrose-host");
+      const card = host?.shadowRoot?.querySelector("windrose-card") as any;
+      return card?.config;
+    });
+  await expect.poll(async () => (await getNativeConfig())?.windspeed_entities?.length).toBe(2);
+  const original = await getNativeConfig();
+  expect(original.windspeed_entities.map((source: any) => source.entity)).toEqual([
+    "sensor.demo_wind_speed",
+    "sensor.demo_wind_gust",
+  ]);
+  expect(original.buttons_config.buttons.map((button: any) => button.type)).toEqual([
+    "windrose_speed_selector",
+    "windrose_speed_selector",
+  ]);
+  expect(original.windspeed_entities[0].speed_ranges).toBeUndefined();
+  expect(original.windspeed_entities[1].speed_ranges).toBeUndefined();
+  await page.getByLabel("Windrosenvariante", { exact: true }).selectOption("1");
+  await expect.poll(async () => (await getNativeConfig())?.data_period?.period_back).toBe("-60d");
+  const later = await getNativeConfig();
+  expect(later.buttons_config.buttons[1].button_text).toBe("Böen");
+});
+
 test("installed real windrose flips into the dashboard, retains instance across HA updates and stops on return", async ({
   page,
 }) => {
