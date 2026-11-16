@@ -8,5 +8,5 @@ test("publication guard detects renamed images, embedded payloads and private pa
     ["scripts/audit-public-assets.mjs", "--self-test"],
     { encoding: "utf8" },
   );
-  assert.match(output, /14 checks passed/);
+  assert.match(output, /16 checks passed/);
 });

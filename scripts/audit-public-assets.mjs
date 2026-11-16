@@ -38,7 +38,9 @@ export function inspectSensitiveText(path, value) {
     findings.push("installation-specific entity ID");
   if (/\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b/.test(value))
     findings.push("private IPv4 address");
-  if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(value))
+  const emails = value.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi) || [];
+  // RFC-reserved test domains are fixtures, never real mailbox addresses.
+  if (emails.some((email) => !/\.(?:invalid|test|example)$/i.test(email)))
     findings.push("email address");
   if (/\b(?:lat|latitude|lon|lng|longitude)\s*[:=]\s*[-+]?\d{1,3}\.\d{3,}\b/i.test(value))
     findings.push("location coordinates");
@@ -176,7 +178,9 @@ function selfTest() {
   assert(inspectSensitiveText("fixture", "sensor.generic_example_" + "a1b2c").length);
   assert(inspectSensitiveText("fixture", "192" + ".168.1.10").length);
   assert.equal(inspectSensitiveText("fixture", "sensor.generic, example.invalid").length, 0);
-  console.log("Privacy guard self-test: 14 checks passed.");
+  assert.equal(inspectSensitiveText("fixture", "https://user:pass@ha.example.invalid/").length, 0);
+  assert(inspectSensitiveText("fixture", "reader" + "@mail.sample.org").length);
+  console.log("Privacy guard self-test: 16 checks passed.");
 }
 
 function main() {
