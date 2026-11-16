@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing, type PropertyValues } from "lit";
 import type { HomeAssistant } from "./types";
 import {
   buildWindroseConfig,
+  prepareEmbeddedSpeedSwitch,
   windroseConfigKey,
   windroseElementName,
   type WindroseEntities,
@@ -23,6 +24,8 @@ export class EcowittWindroseHost extends LitElement {
     reducedMotion: { type: Boolean },
     animation: { type: Boolean },
     _message: { state: true },
+    _managedSpeedSwitch: { state: true },
+    _speedMode: { state: true },
   };
   hass?: HomeAssistant;
   entities?: WindroseEntities;
@@ -31,11 +34,17 @@ export class EcowittWindroseHost extends LitElement {
   reducedMotion = false;
   animation = true;
   private _message = "";
+  private _managedSpeedSwitch = false;
+  private _speedMode: "wind" | "gust" = "wind";
   private _card?: InstalledWindrose;
   private _configKey = "";
 
   protected render() {
     return html`<div class="installed-card"></div>
+      ${this._managedSpeedSwitch ? html`<div class="speed-mode" role="group" aria-label="Windrose: Datenquelle">
+        <button type="button" aria-pressed=${this._speedMode === "wind"} @click=${() => this._selectSpeed("wind")}>Windgeschwindigkeit</button>
+        <button type="button" aria-pressed=${this._speedMode === "gust"} @click=${() => this._selectSpeed("gust")}>Böen</button>
+      </div>` : nothing}
       ${
         this._message
           ? html` <div class="setup" role="status">
@@ -58,6 +67,11 @@ export class EcowittWindroseHost extends LitElement {
     super.connectedCallback();
     this.requestUpdate();
   }
+  private _selectSpeed(mode: "wind" | "gust") {
+    if (!this._managedSpeedSwitch || mode === this._speedMode) return;
+    this._speedMode = mode;
+    // The upstream card restarts history queries after switching a source.
+  }
   private _removeCard() {
     this._card?.remove();
     this._card = undefined;
@@ -67,6 +81,7 @@ export class EcowittWindroseHost extends LitElement {
     if (!this.isConnected) return;
     if (!this.active || this.options?.enabled === false) {
       this._removeCard();
+      this._managedSpeedSwitch = false;
       this._message = "";
       return;
     }
@@ -85,13 +100,18 @@ export class EcowittWindroseHost extends LitElement {
           animation: this.animation,
         },
       );
-      const tag = windroseElementName(config.type);
+      const prepared = prepareEmbeddedSpeedSwitch(
+        this.options, config, this.entities, this.hass, this._speedMode,
+      );
+      this._managedSpeedSwitch = prepared.managed;
+      const nativeConfig = prepared.config;
+      const tag = windroseElementName(nativeConfig.type);
       if (!customElements.get(tag)) {
         this._removeCard();
         this._message = `Die installierte Windrose-Karte (${tag}) ist noch nicht geladen. Die HACS-Ressource für diesen Kartentyp prüfen und erneut versuchen.`;
         return;
       }
-      const key = windroseConfigKey(config);
+      const key = windroseConfigKey(nativeConfig);
       const container = this.renderRoot.querySelector(".installed-card");
       if (!container) return;
       if (!this._card || key !== this._configKey) {
@@ -103,7 +123,7 @@ export class EcowittWindroseHost extends LitElement {
           throw new Error(
             "Die geladene Windrose-Karte unterstützt den Lovelace-Konfigurationsvertrag nicht.",
           );
-        card.setConfig(config);
+        card.setConfig(nativeConfig);
         card.hass = this.hass;
         container.append(card);
         this._card = card;
@@ -124,6 +144,24 @@ export class EcowittWindroseHost extends LitElement {
       min-width: 0;
       width: 100%;
       color: var(--primary-text-color, inherit);
+    }
+    .speed-mode {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 6px 0;
+    }
+    .speed-mode button {
+      min-height: 40px;
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      border-color: var(--divider-color, #7b9caa);
+    }
+    .speed-mode button[aria-pressed="true"] {
+      color: var(--primary-color, #00a8c0);
+      background: color-mix(in srgb, var(--primary-color, #00a8c0) 13%, transparent);
+      border-color: var(--primary-color, #00a8c0);
     }
     .installed-card {
       min-width: 0;

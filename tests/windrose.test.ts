@@ -217,6 +217,74 @@ test("explicit native speed sources and speed-selector buttons take precedence",
   });
 });
 
+
+test("embedded native speed view follows live wind and day-max gust without changing historical gust samples", () => {
+  const state = structuredClone(hass);
+  state.states["sensor.demo_gust"] = {
+    entity_id:"sensor.demo_gust",state:"14",attributes:{unit_of_measurement:"km/h"},
+  };
+  state.states["sensor.demo_daily_gust"] = {
+    entity_id:"sensor.demo_daily_gust",state:"44.6",attributes:{unit_of_measurement:"km/h"},
+  };
+  const mapping={...entities,wind_gust:"sensor.demo_gust",wind_gust_max:"sensor.demo_daily_gust"};
+  const options={config:{hide_windspeed_bar:false,buttons_config:{location:"bottom"}}};
+  const original=buildWindroseConfig(options,mapping,state);
+  const normal=prepareEmbeddedSpeedSwitch(options,original,mapping,state,"wind");
+  assert.equal(normal.managed,true);
+  assert.equal(normal.config.buttons_config,undefined);
+  assert.equal((normal.config.corner_info as any).top_left.entity,entities.wind_direction);
+  assert.deepEqual((normal.config.corner_info as any).top_right,{
+    label:"Windgeschwindigkeit",entity:entities.wind_speed,unit:" km/h",precision:1,
+  });
+  const gust=prepareEmbeddedSpeedSwitch(options,original,mapping,state,"gust");
+  assert.equal((gust.config.corner_info as any).top_right.label,"Max. Böe heute");
+  assert.equal((gust.config.corner_info as any).top_right.entity,"sensor.demo_daily_gust");
+  const sources=gust.config.windspeed_entities as any[];
+  assert.equal(sources[0].use_for_windrose,false);
+  assert.equal(sources[1].use_for_windrose,true);
+  assert.equal(sources[1].entity,"sensor.demo_gust");
+  assert.equal(original.windspeed_entities && (original.windspeed_entities as any[])[0].use_for_windrose,undefined);
+  assert.equal((original.buttons_config as any).buttons.length,2);
+});
+
+test("missing daily-max gust is never presented as a fabricated maximum",()=>{
+  const state=structuredClone(hass);
+  state.states["sensor.demo_gust"]={
+    entity_id:"sensor.demo_gust",state:"12",attributes:{unit_of_measurement:"km/h"},
+  };
+  const mapping={...entities,wind_gust:"sensor.demo_gust",wind_gust_max:"sensor.unknown"};
+  const options={config:{}};
+  const config=buildWindroseConfig(options,mapping,state);
+  const selected=prepareEmbeddedSpeedSwitch(options,config,mapping,state,"gust");
+  assert.equal((selected.config.corner_info as any).top_right.label,"Böen aktuell");
+  assert.equal((selected.config.corner_info as any).top_right.entity,"sensor.demo_gust");
+  assert.equal(selected.managed,true);
+});
+
+test("user-managed windrose sources and speed selectors remain untouched",()=>{
+  const state=structuredClone(hass);
+  state.states["sensor.demo_gust"]={
+    entity_id:"sensor.demo_gust",state:"12",attributes:{unit_of_measurement:"km/h"},
+  };
+  const mapping={...entities,wind_gust:"sensor.demo_gust"};
+  const custom={
+    config:{
+      buttons_config:{location:"bottom",buttons:[
+        {type:"windrose_speed_selector",button_text:"My own button",windspeed_entity_index:0}
+      ]},
+    },
+  };
+  const original=buildWindroseConfig(custom,mapping,state);
+  const prepared=prepareEmbeddedSpeedSwitch(custom,original,mapping,state,"gust");
+  assert.equal(prepared.managed,false);
+  assert.strictEqual(prepared.config,original);
+  const explicit={
+    config:{windspeed_entities:[{entity:entities.wind_speed,name:"Custom"}]},
+  };
+  const customSources=buildWindroseConfig(explicit,mapping,state);
+  assert.equal(prepareEmbeddedSpeedSwitch(explicit,customSources,mapping,state,"gust").managed,false);
+});
+
 test("supported source units map explicitly to upstream units without guessing or converting values", () => {
   for (const [source, unit] of [
     ["m/s", "mps"],

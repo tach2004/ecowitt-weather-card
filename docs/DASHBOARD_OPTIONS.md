@@ -43,6 +43,28 @@ Ein separat installierter Windrose-Fork mit dem Elementnamen `custom:windrose-ca
 Die Ecowitt-Karte lädt keinen fremden JavaScript-Code nach. HACS-Ressource und Berechtigungen verwaltet Home Assistant. Nach Ressourcenwechsel Browsercache/Frontend erneuern. Eine nicht geladene Implementierung erhält einen verständlichen Hinweis. Die Ressource des Forks wurde nur als ignoriertes lokales Testmaterial mit synthetischen Daten geprüft und wird nicht mitgeliefert.
 
 
+
+### Windrose: oben rechts automatisch die passende Live-Information
+
+Bei automatisch übernommenen Quellen steuert die Einbettung die Schaltflächen
+**Windgeschwindigkeit / Böen** direkt unter der Windrose. Die historische
+Verteilung verwendet weiterhin normale Windgeschwindigkeiten oder die
+aufgezeichneten **Böenmessungen** im ausgewählten Zeitraum, niemals das über
+längere Zeit wiederholte Tagesmaximum.
+
+Beim Umschalten auf **Böen** zeigt der obere rechte Informationsbereich
+**Max. Böe heute**, falls `entities.wind_gust_max` vorhanden ist und seine
+Geschwindigkeitseinheit unterstützt wird. Andernfalls steht dort
+**Böen aktuell** aus `entities.wind_gust`; ein nicht vorhandenes Tagesmaximum
+wird nicht behauptet. In der normalen Ansicht steht oben rechts
+**Windgeschwindigkeit**. Die Windrichtung links bleibt vorhanden.
+
+Die bestehende Zeitraum-Auswahl der Ecowitt-Karte bleibt separat erhalten;
+andere manuell konfigurierte Windrosen-Geschwindigkeitsquellen oder
+Geschwindigkeitswahlschaltflächen werden nicht ersetzt. Es werden keine
+zusätzlichen Entity-IDs in der Windrosen-YAML benötigt. Die separat installierte
+Windrose wird weder verändert noch live von GitHub nachgeladen.
+
 ### Windgeschwindigkeit und Böen ohne doppelte Sensor-IDs
 
 Die Ecowitt-Karte gibt die zugeordneten Entitäten für **aktuelle Windrichtung** (`entities.wind_direction`), **Windgeschwindigkeit** (`entities.wind_speed`) und – falls eine gültige Quelle verfügbar ist – **Böen** (`entities.wind_gust`) an die installierte Windrose weiter. Bei Wind plus Böen erzeugt der Adapter automatisch die nativen Umschaltflächen `Windgeschwindigkeit` und `Böen`. Die Windrose selbst nutzt hierfür `windrose_speed_selector` und berechnet die historische Richtungs-/Geschwindigkeitsverteilung nach der Auswahl neu.

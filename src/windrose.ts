@@ -258,6 +258,87 @@ export function buildWindroseConfig(
   };
 }
 
+
+/**
+ * The installed card does not emit a public event when its native speed selector
+ * changes. The optional host-owned switch keeps its selected data source and
+ * corner label in sync without reaching into the installed card's internals.
+ * Manual upstream speed sources/selectors are never replaced.
+ */
+export function prepareEmbeddedSpeedSwitch(
+  options: WindroseOptions | undefined,
+  config: Record<string, unknown>,
+  entities: WindroseEntities | undefined,
+  hass: HomeAssistant,
+  mode: "wind" | "gust",
+): { config: Record<string, unknown>; managed: boolean } {
+  const supplied = record(options?.config) ? options.config : {};
+  const explicitSpeeds = supplied.windspeed_entities !== undefined;
+  const manuallyConfiguredButtons = record(supplied.buttons_config) &&
+    Array.isArray(supplied.buttons_config.buttons)
+      ? supplied.buttons_config.buttons
+      : [];
+  const manualSelector = manuallyConfiguredButtons.some(
+    (button) => record(button) && button.type === "windrose_speed_selector",
+  );
+  const speeds = config.windspeed_entities;
+  const eligible = !explicitSpeeds && !manualSelector &&
+    Array.isArray(speeds) && speeds.length === 2 &&
+    record(speeds[0]) && record(speeds[1]) &&
+    speeds[0].entity === entities?.wind_speed &&
+    speeds[1].entity === entities?.wind_gust;
+  if (!eligible) return { config, managed: false };
+  const result = { ...config };
+  const activeIndex = mode === "gust" ? 1 : 0;
+  result.windspeed_entities = speeds.map((source, index) => ({
+    ...source as Record<string, unknown>,
+    use_for_windrose: index === activeIndex,
+  }));
+  // Keep unrelated native buttons; an empty button array is rejected upstream.
+  const buttonSettings = record(config.buttons_config) ? config.buttons_config : {};
+  const otherButtons = Array.isArray(buttonSettings.buttons)
+    ? buttonSettings.buttons.filter(
+        (button) => !(record(button) && button.type === "windrose_speed_selector"),
+      )
+    : [];
+  if (otherButtons.length)
+    result.buttons_config = { ...buttonSettings, buttons: otherButtons };
+  else delete result.buttons_config;
+
+  const directionId = entities?.wind_direction;
+  const baseCorners = record(config.corner_info) ? config.corner_info : {};
+  const configuredLeft = record(baseCorners.top_left) ? baseCorners.top_left : undefined;
+  const configuredRight = record(baseCorners.top_right) ? baseCorners.top_right : undefined;
+  const maximumId = entities?.wind_gust_max;
+  const validMax = Boolean(maximumId &&
+    hass.states[maximumId] &&
+    typeof hass.states[maximumId].attributes.unit_of_measurement === "string" &&
+    speedUnits[hass.states[maximumId].attributes.unit_of_measurement as string]);
+  const shownId = mode === "wind"
+    ? entities!.wind_speed!
+    : validMax ? maximumId! : entities!.wind_gust!;
+  const unit = hass.states[shownId]?.attributes.unit_of_measurement;
+  result.corner_info = {
+    ...baseCorners,
+    ...(!configuredLeft && directionId ? {
+      top_left: { label: "Windrichtung", entity: directionId, unit: " °", precision: 0 },
+    } : {}),
+    top_right: {
+      ...(configuredRight ? {
+        color: configuredRight.color,
+        label_text_size: configuredRight.label_text_size,
+        value_text_size: configuredRight.value_text_size,
+      } : {}),
+      label: mode === "wind" ? "Windgeschwindigkeit"
+        : validMax ? "Max. Böe heute" : "Böen aktuell",
+      entity: shownId,
+      unit: typeof unit === "string" ? " " + unit : "",
+      precision: 1,
+    },
+  };
+  return { config: result, managed: true };
+}
+
 /** Stable comparison prevents HA state updates from reinitializing Recorder queries. */
 export function windroseConfigKey(config: Record<string, unknown>): string {
   const canonical = (value: unknown): unknown => {

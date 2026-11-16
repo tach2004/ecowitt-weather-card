@@ -2391,16 +2391,24 @@ test("embedded windrose automatically receives the gust source and selector butt
     "sensor.demo_wind_speed",
     "sensor.demo_wind_gust",
   ]);
-  expect(original.buttons_config.buttons.map((button: any) => button.type)).toEqual([
-    "windrose_speed_selector",
-    "windrose_speed_selector",
-  ]);
+  expect(original.buttons_config).toBeUndefined();
+  await expect(page.locator("ecowitt-windrose-host").locator(".speed-mode button")).toHaveCount(2);
+  expect(original.corner_info.top_right.entity).toBe("sensor.demo_wind_speed");
   expect(original.windspeed_entities[0].speed_ranges).toBeUndefined();
   expect(original.windspeed_entities[1].speed_ranges).toBeUndefined();
   await page.getByLabel("Windrosenvariante", { exact: true }).selectOption("1");
   await expect.poll(async () => (await getNativeConfig())?.data_period?.period_back).toBe("-60d");
   const later = await getNativeConfig();
-  expect(later.buttons_config.buttons[1].button_text).toBe("Böen");
+  expect(later.corner_info.top_right.label).toBe("Windgeschwindigkeit");
+  const host = page.locator("ecowitt-windrose-host");
+  await host.locator(".speed-mode button", { hasText: "Böen" }).click();
+  await expect.poll(async () => (await getNativeConfig())?.corner_info?.top_right?.label).toBe("Böen aktuell");
+  const selected = await getNativeConfig();
+  expect(selected.windspeed_entities[1].use_for_windrose).toBe(true);
+  expect(selected.windspeed_entities[1].entity).toBe("sensor.demo_wind_gust");
+  await expect.poll(async () => (await getNativeConfig())?.data_period?.period_back).toBe("-60d");
+  await host.locator(".speed-mode button", { hasText: "Windgeschwindigkeit" }).click();
+  await expect.poll(async () => (await getNativeConfig())?.corner_info?.top_right?.entity).toBe("sensor.demo_wind_speed");
 });
 
 test("installed real windrose flips into the dashboard, retains instance across HA updates and stops on return", async ({
