@@ -321,6 +321,7 @@ test("record-style current details preserve selected entities, live readings and
   await expect(dialog.locator(".chart").first()).toBeVisible();
   await expect(tiles.first().getByRole("button", { name: "Sensor in HA öffnen" })).toBeVisible();
   await dialog.locator(".close").click();
+  await setStatusDevices(page, 3);
   await page.locator('[data-detail="sensors"]:visible').first().click();
   await expect(dialog.locator(".device-detail-summary").first()).toBeVisible();
   await expect(dialog.locator(".sensor-row.sensor-record-tile").first()).toBeVisible();
