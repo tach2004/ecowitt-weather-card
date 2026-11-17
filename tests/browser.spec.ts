@@ -262,7 +262,8 @@ test("weather record button opens a separate themed view with local Recorder max
   await button.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText("Wetterrekorde");
-  await expect(dialog.locator('.record-date input[type="date"]')).toHaveCount(2);
+  await expect(dialog.locator("ecowitt-record-date-selector")).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "Kalender und Zeitraum auswählen" })).toBeVisible();
   await expect(dialog.locator(".record-tile")).toHaveCount(9);
   await expect(dialog.locator(".record-number").first()).not.toHaveText("—");
   await expect(dialog).toContainText("Höchster Tagesregen");
@@ -279,26 +280,53 @@ test("weather record button opens a separate themed view with local Recorder max
   await expect(dialog).not.toBeVisible();
 });
 
-test("record date controls query the selected HA-local calendar range and do not invent past records", async ({ page }) => {
+test("energy-style record calendar presets and custom selections use local recorder dates", async ({ page }) => {
   await ready(page);
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
   const dialog = page.getByRole("dialog");
+  const picker = dialog.locator("ecowitt-record-date-selector");
   await expect(dialog.locator(".record-tile")).toHaveCount(9);
-  const today = await dialog.getByLabel("Zeitraum bis").inputValue();
-  const past = new Date(Date.parse(`${today}T12:00:00Z`) - 3 * 86400000)
-    .toISOString().slice(0, 10);
-  await dialog.getByLabel("Zeitraum von").fill(past);
-  await dialog.getByRole("button", { name: "Auswerten" }).click();
+  await picker.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).click();
+  await expect(picker.locator(".picker-presets button")).toHaveCount(10);
+  await expect(picker.getByRole("button", { name: "Diese Woche" })).toBeVisible();
+  await picker.getByRole("button", { name: "Gestern", exact: true }).click();
+  await picker.getByRole("button", { name: "Auswählen" }).click();
   await expect(dialog.locator(".record-tile")).toHaveCount(9);
-  const paths = await page.evaluate(() => (window as DemoWindow).historyRequests.map(x => x.path));
-  const last = new URL(paths[paths.length - 1], "http://fixture.invalid/");
-  expect(last.pathname).toContain("history/period/");
-  expect(last.searchParams.get("filter_entity_id")).toContain("sensor.demo_uv");
-  await dialog.getByLabel("Zeitraum bis").fill(past);
-  await dialog.getByRole("button", { name: "Auswerten" }).click();
+  const requests = () => page.evaluate(() =>
+    (window as DemoWindow).historyRequests.map(x => x.path));
+  const yesterdayUrl = new URL((await requests()).at(-1)!, "http://fixture.invalid/");
+  expect(yesterdayUrl.pathname).toContain("history/period/");
+  expect(yesterdayUrl.searchParams.get("filter_entity_id")).toContain("sensor.demo_uv");
+  await picker.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).click();
+  await expect(picker.locator(".picker-days button")).toHaveCount(42);
+  await picker.getByRole("button", { name: "Abbrechen" }).click();
+  await expect(picker.locator(".picker-days button")).toHaveCount(0);
+  const before = (await requests()).length;
+  await picker.getByRole("button", { name: "Vorheriger Zeitraum" }).click();
+  await expect.poll(async () => (await requests()).length).toBeGreaterThan(before);
+  await picker.getByRole("button", { name: "Jetzt" }).click();
   await expect(dialog.locator(".record-tile")).toHaveCount(9);
-  await expect(dialog.locator(".record-number").first()).toHaveText("—");
-  await expect(dialog).toContainText("Aufzeichnungen");
+});
+
+test("record-style current details preserve selected entities, live readings and graphs", async ({ page }) => {
+  await ready(page);
+  await page.locator('[data-detail="temperature"]:visible').first().click();
+  const dialog = page.getByRole("dialog");
+  const tiles = dialog.locator(".detail-reading.detail-record-tile");
+  await expect(tiles).toHaveCount(7);
+  await expect(tiles.locator(".detail-card-title").first()).toContainText("Temperatur");
+  await expect(tiles.locator(".detail-source-name").first()).toContainText("WS90");
+  await expect(tiles.locator(".detail-card-value").first()).toContainText("18");
+  await expect(dialog.getByText("Verlauf · letzte", { exact: false })).toBeVisible();
+  await expect(dialog.locator(".chart").first()).toBeVisible();
+  await expect(tiles.first().getByRole("button", { name: "Sensor in HA öffnen" })).toBeVisible();
+  await dialog.locator(".close").click();
+  await page.locator('[data-detail="sensors"]:visible').first().click();
+  await expect(dialog.locator(".device-detail-summary").first()).toBeVisible();
+  await expect(dialog.locator(".sensor-row.sensor-record-tile").first()).toBeVisible();
+  await expect(dialog.locator(".sensor-tile-title").first()).toBeVisible();
+  await expect(dialog.locator(".sensor-tile-value").first()).not.toBeEmpty();
+  await expect(dialog.locator(".sensor-row").first().getByRole("button", { name: "Sensor in HA öffnen" })).toBeVisible();
 });
 
 test("mobile Companion records retain working fixed overlay, scroll and close controls", async ({ browser }) => {
@@ -320,6 +348,12 @@ test("mobile Companion records retain working fixed overlay, scroll and close co
       const dialog = page.getByRole("dialog");
       await expect(dialog).toContainText("Wetterrekorde");
       await expect(page.locator(".companion-overlay")).toBeVisible();
+      await expect(dialog.locator(".record-tile")).toHaveCount(9);
+      const calendar = dialog.locator("ecowitt-record-date-selector");
+      await calendar.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).tap();
+      await expect(calendar.getByRole("button", { name: "Letzte 30 Tage" })).toBeVisible();
+      await calendar.getByRole("button", { name: "Letzte 30 Tage" }).tap();
+      await calendar.getByRole("button", { name: "Auswählen" }).tap();
       await expect(dialog.locator(".record-tile")).toHaveCount(9);
       const geometry = await dialog.evaluate(el => {
         const r = el.getBoundingClientRect();

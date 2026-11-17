@@ -825,6 +825,106 @@ export const cardStyles = css`
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
+  /* Current readings: same visual hierarchy as the weather record tiles.
+     No changes to the record tiles, sensor values or history graphs. */
+  .detail-reading.detail-record-tile,
+  .sensor-row.sensor-record-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 9px;
+    min-width: 0;
+    min-height: 144px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--record-accent);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--record-accent) 9%, var(--surface));
+  }
+  .detail-card-title, .sensor-tile-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    color: var(--primary-text-color, #edf5fc);
+    font-size: 0.89rem;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .detail-card-title .icon, .sensor-tile-title .icon {
+    width: 21px;
+    height: 21px;
+    flex: 0 0 auto;
+    color: var(--record-accent);
+  }
+  .detail-card-value {
+    display: block;
+    min-width: 0;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .detail-record-tile .detail-card-value .value {
+    font-size: clamp(1.45rem, 4.5vw, 1.95rem);
+    font-weight: 750;
+  }
+  .detail-record-tile .detail-card-value .unit {
+    font-size: 0.53em;
+    font-weight: 500;
+  }
+  .detail-card-meta {
+    display: grid;
+    gap: 7px;
+    margin-top: auto;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.77rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .detail-source-name {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--primary-text-color, #edf5fc);
+    line-height: 1.45;
+  }
+  .detail-card-meta .entity-id,
+  .sensor-record-tile .entity-id {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .detail-card-meta .text-button,
+  .sensor-row.sensor-record-tile .text-button {
+    display: inline-block;
+    align-self: flex-start;
+    width: auto;
+    min-height: 44px;
+    padding: 10px 0;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--cyan);
+    text-align: left;
+  }
+  .sensor-readings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .sensor-row.sensor-record-tile .sensor-tile-value {
+    font-size: clamp(1.45rem, 4.5vw, 1.95rem);
+    font-weight: 750;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .sensor-row.sensor-record-tile .status-note {
+    font-size: 0.77rem;
+    line-height: 1.45;
+    color: var(--muted);
+  }
   .detail-reading {
     padding: 13px;
     border: 1px solid var(--line);

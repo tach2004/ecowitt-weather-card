@@ -38,6 +38,7 @@ import {
 } from "./types";
 import { normalizeConfig, sameConfig } from "./config";
 import { buildHistoryCharts } from "./chart";
+import "./record-date-selector";
 import "./editor";
 
 type Detail = "wind" | "rain" | "temperature" | "pressure" | "sun" | "sensors" | "records";
@@ -1204,34 +1205,21 @@ export class EcowittWeatherCard extends LitElement {
       { key: "light", name: "Sonne & UV", symbol: "sun" },
       { key: "pressure", name: "Luftdruck", symbol: "pressure" },
     ] as const;
-    const dateInput = (field: "from" | "to") => html`<label class="record-date">
-      <span>${field === "from" ? "Von" : "Bis"}</span>
-      <input
-        type="date"
-        .value=${field === "from" ? this._recordsFrom : this._recordsTo}
-        aria-label=${field === "from" ? "Zeitraum von" : "Zeitraum bis"}
-        @change=${(event: Event) => {
-          const value = (event.currentTarget as HTMLInputElement).value;
-          if (field === "from") this._recordsFrom = value;
-          else this._recordsTo = value;
-          this._recordsRequest++;
-          this._records = undefined;
-          this._recordsLoading = false;
-        }}
-      />
-    </label>`;
     return html`<div class="records-page">
       <p class="detail-caption">
         Höchstwerte deiner ausgewählten Messquellen im frei wählbaren Zeitraum.
         Nur vorhandene Recorder-Daten, keine geschätzten Wetterrekorde.
       </p>
-      <form class="records-range" @submit=${(event: Event) => {
-        event.preventDefault();
-        void this._loadRecords();
-      }}>
-        ${dateInput("from")}${dateInput("to")}
-        <button class="records-apply" type="submit">Auswerten</button>
-      </form>
+      <ecowitt-record-date-selector
+        .startDate=${this._recordsFrom}
+        .endDate=${this._recordsTo}
+        .today=${haLocalDate(Date.now(), zone)}
+        @record-range-selected=${(event: CustomEvent<{ from: string; to: string }>) => {
+          this._recordsFrom = event.detail.from;
+          this._recordsTo = event.detail.to;
+          void this._loadRecords();
+        }}
+      ></ecowitt-record-date-selector>
       ${this._recordsLoading
         ? html`<p class="notice" role="status">Rekorde werden aus Home Assistant geladen …</p>`
         : records
@@ -1402,6 +1390,20 @@ export class EcowittWeatherCard extends LitElement {
       }
     </dialog>`;
   }
+  /** Theme-aware colour groups shared by readings; measurement semantics unchanged. */
+  private _readingAppearance(key: MetricKey) {
+    if (key.startsWith("wind_"))
+      return { symbol: "wind", color: "#209bb7" };
+    if (key.startsWith("rain_"))
+      return { symbol: "rain", color: "#326bd5" };
+    if (key === "pressure" || key === "pressure_absolute")
+      return { symbol: "pressure", color: "#6a83ad" };
+    if (key === "uv" || key === "solar" || key === "solar_lux")
+      return { symbol: "sun", color: "#b88117" };
+    if (key === "humidity")
+      return { symbol: "humidity", color: "#209bb7" };
+    return { symbol: "temperature", color: "#d77940" };
+  }
   private _detailReading(key: MetricKey) {
     const r = this._reading(key);
     const id = this._config.entities?.[key];
@@ -1411,15 +1413,35 @@ export class EcowittWeatherCard extends LitElement {
       !id && (key === "temperature_min" || key === "temperature_max");
     const dailyValue =
       key === "temperature_min" ? this._daily?.min : this._daily?.max;
-    return html`<div class="detail-reading" data-key=${key}>
-      <span class="label"
-        >${autoDaily ? `${label} · Recorder` : id ? this._source(id, label) : label}</span
-      >
-      ${autoDaily ? html`<span class="value">${dailyValue != null ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(dailyValue) : "—"}${dailyValue != null ? html`<span class="unit">${this._daily?.unit}</span>` : nothing}</span><span class="status-note">${this._loading ? "Tageswerte werden geladen …" : dailyValue != null ? "Aufgezeichnet heute · bisher" : "Keine belastbaren Tageswerte"}</span>` : this._value(key)}
-      ${autoDaily && this._config.entities?.temperature ? html`<span class="status-note">${this._source(this._config.entities.temperature, "Außentemperatur")}</span>` : nothing}
-      ${r.note && !autoDaily ? html`<span class="status-note">${r.note}</span>` : nothing}
-      ${id || (autoDaily && this._config.entities?.temperature) ? html`<button class="text-button" @click=${() => this._moreInfo(id || this._config.entities!.temperature!)}>Sensor in HA öffnen</button>` : nothing}
-    </div>`;
+    const appearance = this._readingAppearance(key);
+    return html`<article class="detail-reading detail-record-tile" data-key=${key}
+      style=${`--record-accent: ${appearance.color}`}>
+      <div class="detail-card-title">
+        ${icon(appearance.symbol)}<span>${label}${autoDaily ? " · Recorder" : ""}</span>
+      </div>
+      <div class="detail-card-value">
+        ${autoDaily
+          ? html`<span class="value">${dailyValue != null ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(dailyValue) : "—"}${dailyValue != null ? html`<span class="unit">${this._daily?.unit}</span>` : nothing}</span>`
+          : this._value(key)}
+      </div>
+      <div class="detail-card-meta">
+        <div class="detail-source-name">
+          ${autoDaily && this._config.entities?.temperature
+            ? this._source(this._config.entities.temperature, "Außentemperatur")
+            : id ? this._source(id, label) : "Keine Sensorquelle ausgewählt"}
+        </div>
+        ${autoDaily
+          ? html`<span class="status-note">${this._loading ? "Tageswerte werden geladen …" : dailyValue != null ? "Aufgezeichnet heute · bisher" : "Keine belastbaren Tageswerte"}</span>`
+          : nothing}
+        ${r.note && !autoDaily
+          ? html`<span class="status-note">${r.note}</span>` : nothing}
+        ${id || (autoDaily && this._config.entities?.temperature)
+          ? html`<button class="text-button"
+              @click=${() => this._moreInfo(id || this._config.entities!.temperature!)}>
+              Sensor in HA öffnen
+            </button>` : nothing}
+      </div>
+    </article>`;
   }
   private _sensorDetails() {
     // One raw source row per entity, even when an older config lists it again.
@@ -1456,7 +1478,7 @@ export class EcowittWeatherCard extends LitElement {
         extras.length
           ? html`<details class="sensor-group" ?open=${!devices.length}>
               <summary>Zusatzsensoren · ${extras.length}</summary>
-              ${extras.map((id) => this._sensorRow(id))}
+              <div class="sensor-readings-grid">${extras.map((id) => this._sensorRow(id))}</div>
             </details>`
           : nothing
       }
@@ -1464,13 +1486,13 @@ export class EcowittWeatherCard extends LitElement {
         diagnostic.length
           ? html`<details class="sensor-group">
               <summary>Weitere Diagnosen · ${diagnostic.length}</summary>
-              ${diagnostic.map((id) => this._sensorRow(id))}
+              <div class="sensor-readings-grid">${diagnostic.map((id) => this._sensorRow(id))}</div>
             </details>`
           : nothing
       }
       <details class="sensor-group">
         <summary>Zugeordnete Wetterquellen · ${weatherSources.length}</summary>
-        ${weatherSources.map(([key, id]) => (id ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label) : nothing))}
+        <div class="sensor-readings-grid">${weatherSources.map(([key, id]) => (id ? this._sensorRow(id, METRICS.find((m) => m.key === key)?.label) : nothing))}</div>
       </details>`;
   }
 
@@ -1507,7 +1529,7 @@ export class EcowittWeatherCard extends LitElement {
           ${indicators.connection.label}</span
         >
       </div>
-      ${sourceIds.map((id) => this._sensorRow(id))}
+      <div class="sensor-readings-grid">${sourceIds.map((id) => this._sensorRow(id))}</div>
     </section>`;
   }
   private _sensorRow(id: string, label?: string) {
@@ -1518,19 +1540,26 @@ export class EcowittWeatherCard extends LitElement {
       updated && Number.isFinite(updated.getTime())
         ? updated.toLocaleString("de-DE")
         : "Kein Aktualisierungszeitpunkt verfügbar";
-    return html`<div class="sensor-row" data-entity-id=${id}>
-      <span class="label">${this._source(id, label)}</span
-      ><strong
-        >${
-          entity
-            ? `${Number.isFinite(Number(entity.state)) && entity.state.trim() !== "" ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(Number(entity.state)) : entity.state} ${entity.attributes.unit_of_measurement ?? ""}`
-            : "Nicht verfügbar"
-        }</strong
-      ><span class="status-note">${time}</span
-      ><button class="text-button" @click=${() => this._moreInfo(id)}>
+    const key = (Object.entries(this._config.entities ?? {})
+      .find(([, sourceId]) => sourceId === id)?.[0]) as MetricKey | undefined;
+    const appearance = key
+      ? this._readingAppearance(key)
+      : { symbol: "sensors", color: "#209bb7" };
+    return html`<article class="sensor-row sensor-record-tile"
+      data-entity-id=${id}
+      style=${`--record-accent: ${appearance.color}`}>
+      <div class="sensor-tile-title">
+        ${icon(appearance.symbol)}
+        <span class="label">${this._source(id, label)}</span>
+      </div>
+      <strong class="sensor-tile-value">${entity
+        ? `${Number.isFinite(Number(entity.state)) && entity.state.trim() !== "" ? new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(Number(entity.state)) : entity.state} ${entity.attributes.unit_of_measurement ?? ""}`
+        : "Nicht verfügbar"}</strong>
+      <span class="status-note">${time}</span>
+      <button class="text-button" @click=${() => this._moreInfo(id)}>
         Sensor in HA öffnen
       </button>
-    </div>`;
+    </article>`;
   }
   private _chart(series: HistorySeries) {
     const key = graphKeys[this._detail!].find(
