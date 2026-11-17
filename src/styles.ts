@@ -67,6 +67,13 @@ export const cardStyles = css`
     width: 100%;
     padding: 0 0 18px;
   }
+  /* Preserve the title width with two actions on small screens without
+     reducing button hit targets or weakening existing layout tests. */
+  @media (max-width: 600px) {
+    .station-header {
+      column-gap: 4px;
+    }
+  }
   .station-header > .station-icon {
     grid-column: 1;
     grid-row: 1;
