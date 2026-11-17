@@ -889,6 +889,13 @@ export const cardStyles = css`
     color: var(--primary-text-color, #edf5fc);
     line-height: 1.45;
   }
+  .detail-reading .detail-source-name.label {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--primary-text-color, #edf5fc);
+    line-height: 1.45;
+    min-height: 0;
+  }
   .detail-card-meta .entity-id,
   .sensor-record-tile .entity-id {
     font-size: 0.72rem;

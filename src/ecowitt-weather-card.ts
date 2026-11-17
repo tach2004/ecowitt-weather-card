@@ -1425,7 +1425,7 @@ export class EcowittWeatherCard extends LitElement {
           : this._value(key)}
       </div>
       <div class="detail-card-meta">
-        <div class="detail-source-name">
+        <div class="detail-source-name label">
           ${autoDaily && this._config.entities?.temperature
             ? this._source(this._config.entities.temperature, "Außentemperatur")
             : id ? this._source(id, label) : "Keine Sensorquelle ausgewählt"}

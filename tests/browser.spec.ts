@@ -290,7 +290,7 @@ test("energy-style record calendar presets and custom selections use local recor
   await expect(picker.locator(".picker-presets button")).toHaveCount(10);
   await expect(picker.getByRole("button", { name: "Diese Woche" })).toBeVisible();
   await picker.getByRole("button", { name: "Gestern", exact: true }).click();
-  await picker.getByRole("button", { name: "Auswählen" }).click();
+  await picker.getByRole("button", { name: "Auswählen", exact: true }).click();
   await expect(dialog.locator(".record-tile")).toHaveCount(9);
   const requests = () => page.evaluate(() =>
     (window as DemoWindow).historyRequests.map(x => x.path));
@@ -314,7 +314,7 @@ test("record-style current details preserve selected entities, live readings and
   const dialog = page.getByRole("dialog");
   const tiles = dialog.locator(".detail-reading.detail-record-tile");
   await expect(tiles).toHaveCount(7);
-  await expect(tiles.locator(".detail-card-title").first()).toContainText("Temperatur");
+  await expect(tiles.locator(".detail-card-title").first()).toContainText("Außentemperatur");
   await expect(tiles.locator(".detail-source-name").first()).toContainText("WS90");
   await expect(tiles.locator(".detail-card-value").first()).toContainText("18");
   await expect(dialog.getByText("Verlauf · letzte", { exact: false })).toBeVisible();
@@ -353,7 +353,7 @@ test("mobile Companion records retain working fixed overlay, scroll and close co
       await calendar.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).tap();
       await expect(calendar.getByRole("button", { name: "Letzte 30 Tage" })).toBeVisible();
       await calendar.getByRole("button", { name: "Letzte 30 Tage" }).tap();
-      await calendar.getByRole("button", { name: "Auswählen" }).tap();
+      await calendar.getByRole("button", { name: "Auswählen", exact: true }).tap();
       await expect(dialog.locator(".record-tile")).toHaveCount(9);
       const geometry = await dialog.evaluate(el => {
         const r = el.getBoundingClientRect();
