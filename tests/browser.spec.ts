@@ -315,7 +315,7 @@ test("record-style current details preserve selected entities, live readings and
   const tiles = dialog.locator(".detail-reading.detail-record-tile");
   await expect(tiles).toHaveCount(7);
   await expect(tiles.locator(".detail-card-title").first()).toContainText("Außentemperatur");
-  await expect(tiles.locator(".detail-source-name").first()).toContainText("WS90");
+  await expect(tiles.locator(".detail-source-name").first()).toContainText("WN32");
   await expect(tiles.locator(".detail-card-value").first()).toContainText("18");
   await expect(dialog.getByText("Verlauf · letzte", { exact: false })).toBeVisible();
   await expect(dialog.locator(".chart").first()).toBeVisible();
