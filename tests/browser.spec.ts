@@ -2250,6 +2250,29 @@ test("outdoor climate shows HA-local Recorder extrema next to the unchanged curr
   await noOverflow(page);
 });
 
+test("day extrema are slightly larger without overlapping the main temperature on phone and desktop", async ({ page }) => {
+  for (const width of [320, 402, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await ready(page);
+    const climate = page.locator(".climate");
+    const extrema = climate.locator(".climate-extreme");
+    await expect(extrema).toHaveCount(2);
+    const sizes = await extrema.evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)));
+    expect(sizes.every((value) => value >= 10)).toBe(true);
+    const bounds = await climate.locator('[data-key="temperature"]').evaluate((el) => {
+      const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
+      const max = el.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
+      const min = el.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
+      const cell = el.getBoundingClientRect();
+      return { nonoverlap: max.left >= current.right - 1, vertical: min.top >= max.bottom - 1, fits: Math.max(max.right,min.right) <= cell.right + 1 };
+    });
+    expect(bounds.nonoverlap).toBe(true);
+    expect(bounds.vertical).toBe(true);
+    expect(bounds.fits).toBe(true);
+    await noOverflow(page);
+  }
+});
+
 test("explicitly configured minimum and maximum take priority and require no Recorder history", async ({ page }) => {
   await ready(page);
   const climate = page.locator(".climate");
