@@ -562,6 +562,39 @@ export const cardStyles = css`
   .setup-missing strong {
     color: var(--primary-text-color, #f2f8fc);
   }
+  /* Avoid native showModal() recentering after asynchronous history updates
+     in the iOS Companion WebView. A popover provides an independent top layer. */
+  .companion-overlay[popover] {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+    background: #02101bb8;
+    overscroll-behavior: contain;
+  }
+  .companion-overlay > dialog.ios-companion {
+    position: absolute;
+    inset: max(72px, calc(env(safe-area-inset-top, 0px) + 12px)) 6px
+      max(12px, env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    width: min(760px, calc(100vw - 12px));
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    margin: 0 auto;
+    border-radius: 18px;
+  }
+  .companion-overlay dialog.ios-companion .dialog-head {
+    padding: 12px 16px;
+  }
   dialog {
     padding: 0;
     border: 1px solid var(--line);
@@ -1193,11 +1226,6 @@ export const cardStyles = css`
        unexpected native-dialog positioning. Applies to every detail view. */
     .dialog-head {
       padding: 24px 16px 12px;
-    }
-    /* Home Assistant iOS WebView may paint the status bar above the
-       native modal even when its safe-area inset is reported as zero. */
-    dialog.ios-companion .dialog-head {
-      padding-top: 84px;
     }
     .detail-content {
       padding: 14px;
