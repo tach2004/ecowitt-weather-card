@@ -22,6 +22,10 @@ import {
   type Reading,
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
+import {
+  RECORD_DEFINITIONS, daysBeforeDate, haLocalDate, loadWeatherRecords,
+  type WeatherRecordsResult,
+} from "./records";
 import { resolveImage } from "./image";
 import { observeWeather, type WeatherObservation } from "./weather";
 import { deviceIndicators } from "./device-status";
@@ -36,7 +40,7 @@ import { normalizeConfig, sameConfig } from "./config";
 import { buildHistoryCharts } from "./chart";
 import "./editor";
 
-type Detail = "wind" | "rain" | "temperature" | "pressure" | "sun" | "sensors";
+type Detail = "wind" | "rain" | "temperature" | "pressure" | "sun" | "sensors" | "records";
 
 function isIOSCompanionApp(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -51,6 +55,7 @@ const detailNames: Record<Detail, string> = {
   pressure: "Luftdruck",
   sun: "Sonne & UV",
   sensors: "Sensoren & Diagnosen",
+  records: "Wetterrekorde",
 };
 const detailKeys: Record<Detail, MetricKey[]> = {
   wind: [
@@ -83,6 +88,7 @@ const detailKeys: Record<Detail, MetricKey[]> = {
   pressure: ["pressure_absolute", "pressure"],
   sun: ["uv", "solar", "solar_lux"],
   sensors: [],
+  records: [],
 };
 const graphKeys: Record<Detail, MetricKey[]> = {
   wind: ["wind_speed", "wind_gust"],
@@ -91,6 +97,7 @@ const graphKeys: Record<Detail, MetricKey[]> = {
   pressure: ["pressure_absolute", "pressure"],
   sun: ["uv", "solar"],
   sensors: [],
+  records: [],
 };
 const required: MetricKey[] = [
   "temperature",
@@ -118,6 +125,7 @@ const paths: Record<string, string> = {
   station:
     "M12 12v9 M7 21h10 M8 8a6 6 0 0 0 0 8 M16 8a6 6 0 0 1 0 8 M5 5a10 10 0 0 0 0 14 M19 5a10 10 0 0 1 0 14 M11 10h2v2h-2z",
   sensors: "M4 6h16 M4 12h16 M4 18h16 M8 4v4 M16 10v4 M10 16v4",
+  records: "M7 3h10v4a5 5 0 0 1-10 0V3 M7 4H4v3a4 4 0 0 0 4 4 M17 4h3v3a4 4 0 0 1-4 4 M12 12v5 M8 21h8 M9 17h6v4",
 };
 const icon = (name: string) =>
   svg`<svg class="icon" data-icon=${name} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${paths[name] ?? paths.unknown}/></svg>`;
@@ -139,6 +147,10 @@ export class EcowittWeatherCard extends LitElement {
     _daily: { state: true },
     _dailyOverview: { state: true },
     _sourceRegistry: { state: true },
+    _records: { state: true },
+    _recordsLoading: { state: true },
+    _recordsFrom: { state: true },
+    _recordsTo: { state: true },
   };
   static styles = [
     cardStyles,
@@ -150,6 +162,11 @@ export class EcowittWeatherCard extends LitElement {
   private _config: CardConfig = { type: "custom:ecowitt-weather-card" };
   private _detail?: Detail;
   private _detailTrigger?: HTMLElement;
+  private _records?: WeatherRecordsResult;
+  private _recordsLoading = false;
+  private _recordsFrom = "";
+  private _recordsTo = "";
+  private _recordsRequest = 0;
   private _history?: HistoryResult;
   private _loading = false;
   private _imageUrl = "";
@@ -217,6 +234,8 @@ export class EcowittWeatherCard extends LitElement {
       this._imageNeedsHass = false;
     }
     this._historyRequest++;
+    this._recordsRequest++;
+    this._records = undefined;
     clearTimeout(this._flipTimer);
     this._flipped = this._roseActive = false;
     this._daily = undefined;
@@ -437,6 +456,15 @@ export class EcowittWeatherCard extends LitElement {
           </p>
         </div>
         ${this._headerDevices()}
+        <button
+          class="records-trigger"
+          data-detail="records"
+          aria-label="Wetterrekorde öffnen"
+          title="Wetterrekorde"
+          @click=${() => this._openDetail("records")}
+        >
+          ${icon("records")}
+        </button>
         <button
           class="diagnostics"
           data-detail="sensors"
@@ -1070,7 +1098,7 @@ export class EcowittWeatherCard extends LitElement {
     this._history = undefined;
     this._daily = undefined;
     void this._loadSourceRegistry();
-    this._loading = detail !== "sensors";
+    this._loading = detail !== "sensors" && detail !== "records";
     const request = ++this._historyRequest;
     await this.updateComplete;
     if (
@@ -1088,6 +1116,16 @@ export class EcowittWeatherCard extends LitElement {
       dialog.querySelector<HTMLButtonElement>(".close")?.focus({ preventScroll: true });
     } else if (!dialog.open) {
       dialog.showModal();
+    }
+    if (detail === "records") {
+      if (!this._recordsFrom || !this._recordsTo) {
+        const zone = this.hass?.config?.time_zone || "UTC";
+        const today = haLocalDate(Date.now(), zone);
+        this._recordsTo = today;
+        this._recordsFrom = daysBeforeDate(today, 6);
+      }
+      void this._loadRecords();
+      return;
     }
     if (detail === "sensors") return;
     const keys = graphKeys[detail];
@@ -1116,6 +1154,8 @@ export class EcowittWeatherCard extends LitElement {
     }
   }
   private _closeDetail() {
+    this._recordsRequest++;
+    this._recordsLoading = false;
     const companion = this._usesCompanionPopover();
     const overlay = this._companionPopover();
     if (overlay?.isConnected && overlay.matches(":popover-open")) {
@@ -1138,6 +1178,114 @@ export class EcowittWeatherCard extends LitElement {
       }),
     );
   }
+  private async _loadRecords() {
+    const request = ++this._recordsRequest;
+    this._recordsLoading = true;
+    this._records = undefined;
+    const hass = this.hass;
+    if (!hass) {
+      this._recordsLoading = false;
+      return;
+    }
+    const result = await loadWeatherRecords(
+      hass, this._config.entities ?? {}, this._recordsFrom, this._recordsTo,
+    );
+    if (request !== this._recordsRequest || this._detail !== "records") return;
+    this._records = result;
+    this._recordsLoading = false;
+  }
+
+  private _recordDetails() {
+    const records = this._records;
+    const zone = this.hass?.config?.time_zone || "UTC";
+    const groups = [
+      { key: "wind", name: "Wind", symbol: "wind" },
+      { key: "rain", name: "Niederschlag", symbol: "rain" },
+      { key: "light", name: "Sonne & UV", symbol: "sun" },
+      { key: "pressure", name: "Luftdruck", symbol: "pressure" },
+    ] as const;
+    const dateInput = (field: "from" | "to") => html`<label class="record-date">
+      <span>${field === "from" ? "Von" : "Bis"}</span>
+      <input
+        type="date"
+        .value=${field === "from" ? this._recordsFrom : this._recordsTo}
+        aria-label=${field === "from" ? "Zeitraum von" : "Zeitraum bis"}
+        @change=${(event: Event) => {
+          const value = (event.currentTarget as HTMLInputElement).value;
+          if (field === "from") this._recordsFrom = value;
+          else this._recordsTo = value;
+          this._recordsRequest++;
+          this._records = undefined;
+          this._recordsLoading = false;
+        }}
+      />
+    </label>`;
+    return html`<div class="records-page">
+      <p class="detail-caption">
+        Höchstwerte deiner ausgewählten Messquellen im frei wählbaren Zeitraum.
+        Nur vorhandene Recorder-Daten, keine geschätzten Wetterrekorde.
+      </p>
+      <form class="records-range" @submit=${(event: Event) => {
+        event.preventDefault();
+        void this._loadRecords();
+      }}>
+        ${dateInput("from")}${dateInput("to")}
+        <button class="records-apply" type="submit">Auswerten</button>
+      </form>
+      ${this._recordsLoading
+        ? html`<p class="notice" role="status">Rekorde werden aus Home Assistant geladen …</p>`
+        : records
+          ? html`<p class="records-coverage" role="status">${records.message}</p>`
+          : html`<p class="detail-caption">Zeitraum auswählen und auf Auswerten tippen.</p>`}
+      ${records && (records.status === "ok" || records.status === "empty")
+        ? groups.map(group => html`<section class="record-group">
+            <h3>${icon(group.symbol)} ${group.name}</h3>
+            <div class="records-grid">
+              ${RECORD_DEFINITIONS.filter(def => def.group === group.key).map(def => {
+                const item = records.records.find(entry => entry.key === def.key);
+                const valid = item?.state === "ok" && item.value !== null &&
+                  item.timestamp !== null;
+                const digits = def.key === "solar_lux" || def.key === "solar" ? 0 : 1;
+                const text = valid
+                  ? item!.value!.toLocaleString("de-DE", { maximumFractionDigits: digits })
+                  : "—";
+                const date = valid
+                  ? new Intl.DateTimeFormat("de-DE", {
+                      timeZone: zone, dateStyle: "medium", timeStyle: "short",
+                    }).format(item!.timestamp!)
+                  : "";
+                const message = item?.state === "missing"
+                  ? "Keine passende HA-Entität zugeordnet"
+                  : item?.state === "unit-conflict"
+                    ? "Einheitenwechsel im Zeitraum – keine Vergleichbarkeit"
+                    : "Keine gültigen Aufzeichnungen im Zeitraum";
+                return html`<article class="record-tile"
+                  style=${`--record-accent: ${def.color}`}>
+                  <div class="record-title">${icon(def.icon)}<span>${def.title}</span></div>
+                  <div class="record-number">${text}
+                    ${valid && item?.unit ? html`<small>${item.unit}</small>` : nothing}
+                  </div>
+                  <div class="record-meta">
+                    ${valid ? html`<time>${date}</time>` : message}
+                    ${valid && item?.entityId ? html`<span class="record-source">
+                      ${this._source(item.entityId)}
+                    </span>` : nothing}
+                  </div>
+                </article>`;
+              })}
+            </div>
+          </section>`)
+        : nothing}
+      ${records?.status === "ok" ? html`<p class="detail-caption">
+        Tagesregen ist der höchste gespeicherte Stand von „Regen heute“,
+        nicht die Regenmenge einer gleitenden 24-Stunden-Periode.
+        Ein Böen-Tagesmaximum wird bevorzugt, sofern es zugeordnet ist;
+        andernfalls werden die aufgezeichneten Böen verwendet.
+        Die angezeigten Zeitpunkte sind Recorder-Zeitstempel.
+      </p>` : nothing}
+    </div>`;
+  }
+
   private _renderDialog() {
     const detail = this._detail;
     return html`<dialog
@@ -1176,9 +1324,11 @@ export class EcowittWeatherCard extends LitElement {
               </div>
               <div class="detail-content">
                 ${
-                  detail === "sensors"
-                    ? this._sensorDetails()
-                    : html`
+                  detail === "records"
+                    ? this._recordDetails()
+                    : detail === "sensors"
+                      ? this._sensorDetails()
+                      : html`
                         <h3 class="detail-section-title">
                           Messwerte & Quellen
                         </h3>
