@@ -1153,9 +1153,15 @@ export const cardStyles = css`
     }
   }
   @media (max-width: 480px) {
+    /* Leave room for the mobile status bar, even when its safe-area inset is 0. */
     dialog {
+      --detail-safe-top: max(
+        64px,
+        calc(env(safe-area-inset-top, 0px) + 12px)
+      );
       width: calc(100vw - 12px);
-      max-height: calc(100dvh - 12px);
+      max-height: calc(100dvh - var(--detail-safe-top) - 8px);
+      margin-block: var(--detail-safe-top) 8px;
       border-radius: 18px;
     }
     .dialog-head {
