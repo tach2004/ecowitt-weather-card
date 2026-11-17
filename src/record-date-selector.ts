@@ -1,5 +1,4 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
 import {
   RECORD_PRESETS, dateMs, monthCells, monthStart, prettyRange,
   rangeForPreset, shiftDateRange, shiftDay, shiftMonth,
@@ -7,16 +6,25 @@ import {
 } from "./record-date-range";
 
 /** Local, self-contained HA Energy-style selector; never changes the Energy dashboard's range. */
-@customElement("ecowitt-record-date-selector")
 export class EcowittRecordDateSelector extends LitElement {
-  @property({ type: String }) startDate = "";
-  @property({ type: String }) endDate = "";
-  @property({ type: String }) today = "";
-  @state() private _open = false;
-  @state() private _month = "";
-  @state() private _draft: DateRange = { from: "", to: "" };
-  @state() private _selectingEnd = false;
-  @state() private _preset: RecordPreset | "" = "";
+  static properties = {
+    startDate: { type: String },
+    endDate: { type: String },
+    today: { type: String },
+    _open: { state: true },
+    _month: { state: true },
+    _draft: { state: true },
+    _selectingEnd: { state: true },
+    _preset: { state: true },
+  };
+  startDate = "";
+  endDate = "";
+  today = "";
+  private _open = false;
+  private _month = "";
+  private _draft: DateRange = { from: "", to: "" };
+  private _selectingEnd = false;
+  private _preset: RecordPreset | "" = "";
   private get _range(): DateRange {
     return { from: this.startDate, to: this.endDate };
   }
@@ -197,3 +205,6 @@ export class EcowittRecordDateSelector extends LitElement {
     }
   `;
 }
+
+if (!customElements.get("ecowitt-record-date-selector"))
+  customElements.define("ecowitt-record-date-selector", EcowittRecordDateSelector);
