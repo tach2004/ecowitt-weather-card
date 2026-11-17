@@ -149,6 +149,7 @@ export class EcowittWeatherCard extends LitElement {
   hass?: HomeAssistant;
   private _config: CardConfig = { type: "custom:ecowitt-weather-card" };
   private _detail?: Detail;
+  private _detailTrigger?: HTMLElement;
   private _history?: HistoryResult;
   private _loading = false;
   private _imageUrl = "";
@@ -226,8 +227,7 @@ export class EcowittWeatherCard extends LitElement {
     this._registryRequest++;
     this._registryRequested = false;
     this._sourceRegistry = undefined;
-    this._detail = undefined;
-    this._dialog()?.close();
+    this._closeDetail();
   }
   getCardSize() {
     return 12;
@@ -534,7 +534,18 @@ export class EcowittWeatherCard extends LitElement {
               </div>
             `
       }
-      ${this._renderDialog()}
+      ${this._usesCompanionPopover()
+        ? html`<div
+            class="companion-overlay"
+            popover="manual"
+            @click=${(event: MouseEvent) => {
+              if (event.target === event.currentTarget) this._closeDetail();
+            }}
+            @keydown=${this._onCompanionKeydown}
+          >
+            ${this._renderDialog()}
+          </div>`
+        : this._renderDialog()}
     </ha-card>`;
   }
 
@@ -988,6 +999,36 @@ export class EcowittWeatherCard extends LitElement {
   private _dialog() {
     return this.renderRoot?.querySelector<HTMLDialogElement>("dialog");
   }
+  private _usesCompanionPopover(): boolean {
+    return (
+      isIOSCompanionApp() &&
+      typeof HTMLElement.prototype.showPopover === "function"
+    );
+  }
+  private _companionPopover() {
+    return this.renderRoot?.querySelector<HTMLElement>(".companion-overlay");
+  }
+  private _onCompanionKeydown(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this._closeDetail();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = [...(this._dialog()?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    ) ?? [])].filter((element) => element.getClientRects().length > 0);
+    if (!controls.length) return;
+    const active = (this.renderRoot as ShadowRoot).activeElement;
+    const first = controls[0], last = controls[controls.length - 1];
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
   private _source(id: string, metricLabel?: string) {
     return sourceLabel(
       this.hass,
@@ -1021,6 +1062,10 @@ export class EcowittWeatherCard extends LitElement {
     }
   }
   private async _openDetail(detail: Detail) {
+    if (!this._detail) {
+      const active = (this.renderRoot as ShadowRoot).activeElement;
+      this._detailTrigger = active instanceof HTMLElement ? active : undefined;
+    }
     this._detail = detail;
     this._history = undefined;
     this._daily = undefined;
@@ -1036,7 +1081,14 @@ export class EcowittWeatherCard extends LitElement {
       return;
     const dialog = this._dialog();
     if (!dialog?.isConnected) return;
-    if (!dialog.open) dialog.showModal();
+    if (this._usesCompanionPopover()) {
+      const overlay = this._companionPopover();
+      if (!overlay?.isConnected) return;
+      if (!overlay.matches(":popover-open")) overlay.showPopover();
+      dialog.querySelector<HTMLButtonElement>(".close")?.focus({ preventScroll: true });
+    } else if (!dialog.open) {
+      dialog.showModal();
+    }
     if (detail === "sensors") return;
     const keys = graphKeys[detail];
     const ids = keys.flatMap((key) =>
@@ -1064,9 +1116,17 @@ export class EcowittWeatherCard extends LitElement {
     }
   }
   private _closeDetail() {
-    this._dialog()?.close();
+    const companion = this._usesCompanionPopover();
+    const overlay = this._companionPopover();
+    if (overlay?.isConnected && overlay.matches(":popover-open")) {
+      overlay.hidePopover();
+    }
+    if (!companion) this._dialog()?.close();
     this._detail = undefined;
     this._historyRequest++;
+    const trigger = this._detailTrigger;
+    this._detailTrigger = undefined;
+    if (companion && trigger?.isConnected) trigger.focus({ preventScroll: true });
   }
   private _moreInfo(entityId: string) {
     this._closeDetail();
@@ -1082,6 +1142,8 @@ export class EcowittWeatherCard extends LitElement {
     const detail = this._detail;
     return html`<dialog
       class=${isIOSCompanionApp() ? "ios-companion" : ""}
+      ?open=${this._usesCompanionPopover() && Boolean(detail)}
+      aria-modal=${this._usesCompanionPopover() ? "true" : nothing}
       aria-labelledby="detail-title"
       @cancel=${() => this._closeDetail()}
       @click=${(event: MouseEvent) => {

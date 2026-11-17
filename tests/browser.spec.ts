@@ -1786,7 +1786,12 @@ test("iOS companion detail dismissal has a reachable fallback without changing S
           );
           if (companion) {
             expect(className).toContain("ios-companion");
-            expect(headerPadding).toBeGreaterThanOrEqual(84);
+            await expect(page.locator(".companion-overlay")).toBeVisible();
+            const panel = await dialog.boundingBox();
+            const close = await dialog.locator(".close").boundingBox();
+            expect(panel!.y).toBeGreaterThanOrEqual(71);
+            expect(close!.y).toBeGreaterThanOrEqual(80);
+            expect(headerPadding).toBeGreaterThanOrEqual(12);
             const backup = dialog.locator(".companion-dialog-dismiss");
             await expect(backup).toBeVisible();
             const bounds = await backup.boundingBox();
@@ -1806,6 +1811,79 @@ test("iOS companion detail dismissal has a reachable fallback without changing S
     } finally {
       await context.close();
     }
+  }
+});
+
+test("iOS Companion overlay stays anchored when Recorder content grows", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 3,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.11.0 (iOS) Mobile/HomeAssistant, like Safari",
+  });
+  try {
+    const page = await context.newPage();
+    await withNativeHaCard(page);
+    for (const view of ["panel", "sections"]) {
+      await ready(page, `/?view=${view}`);
+      for (const detail of ["wind", "rain", "temperature", "pressure", "sun", "sensors"]) {
+        await page.locator(`[data-detail="${detail}"]:visible`).first().tap();
+        const overlay = page.locator(".companion-overlay");
+        const dialog = page.getByRole("dialog");
+        await expect(overlay).toBeVisible();
+        expect(await overlay.evaluate(el => el.matches(":popover-open"))).toBe(true);
+        await expect(dialog).toBeVisible();
+        const measure = () => dialog.evaluate(el => {
+          const frame = el.getBoundingClientRect();
+          const close = el.querySelector<HTMLButtonElement>(".close")!.getBoundingClientRect();
+          return { top: frame.top, bottom: frame.bottom, closeTop: close.top };
+        });
+        const before = await measure();
+        expect(before.top).toBeGreaterThanOrEqual(71);
+        expect(before.closeTop).toBeGreaterThanOrEqual(80);
+        expect(before.bottom).toBeLessThanOrEqual(862);
+        if (detail !== "sensors")
+          await expect(dialog.getByText("Recorder-Verlauf wird geladen …")).toHaveCount(0);
+        const after = await measure();
+        expect(after.top).toBeCloseTo(before.top, 0);
+        expect(after.bottom).toBeCloseTo(before.bottom, 0);
+        await dialog.locator(".detail-content").evaluate(el => { el.scrollTop = el.scrollHeight; });
+        await dialog.getByRole("button", { name: "Schließen" }).first().tap();
+        await expect(dialog).not.toBeVisible();
+        await expect(overlay).not.toBeVisible();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("iOS Companion overlay closes on Escape and backdrop tap", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.11.0 (iOS) Mobile/HomeAssistant, like Safari",
+  });
+  try {
+    const page = await context.newPage();
+    await ready(page);
+    const trigger = page.locator('[data-detail="temperature"]:visible').first();
+    await trigger.tap();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".close")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    await trigger.tap();
+    await expect(dialog).toBeVisible();
+    await page.locator(".companion-overlay").tap({ position: { x: 2, y: 2 } });
+    await expect(dialog).not.toBeVisible();
+  } finally {
+    await context.close();
   }
 });
 
