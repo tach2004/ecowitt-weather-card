@@ -1680,6 +1680,60 @@ test("iPhone touch emulation can tap stacked device statuses and weather details
   }
 });
 
+test("iPhone portrait detail close stays below the status bar and can be tapped", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 3,
+  });
+  try {
+    const page = await context.newPage();
+    await withNativeHaCard(page);
+    for (const view of ["panel", "sections"]) {
+      for (const viewport of [
+        { width: 402, height: 874 },
+        { width: 320, height: 700 },
+      ]) {
+        await page.setViewportSize(viewport);
+        await ready(page, `/?view=${view}`);
+        await page.locator('[data-detail="temperature"]:visible').first().tap();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toBeVisible();
+        const bounds = await dialog.evaluate((element) => {
+          const frame = element.getBoundingClientRect();
+          const close = element.querySelector<HTMLButtonElement>(".close")!
+            .getBoundingClientRect();
+          const content = element.querySelector(".detail-content")!
+            .getBoundingClientRect();
+          return {
+            dialogTop: frame.top,
+            dialogBottom: frame.bottom,
+            closeTop: close.top,
+            closeBottom: close.bottom,
+            closeWidth: close.width,
+            closeHeight: close.height,
+            contentTop: content.top,
+          };
+        });
+        expect(bounds.dialogTop).toBeGreaterThanOrEqual(63);
+        expect(bounds.dialogBottom).toBeLessThanOrEqual(viewport.height - 7);
+        expect(bounds.closeTop).toBeGreaterThan(bounds.dialogTop + 10);
+        expect(bounds.closeWidth).toBeGreaterThanOrEqual(44);
+        expect(bounds.closeHeight).toBeGreaterThanOrEqual(44);
+        expect(bounds.contentTop).toBeGreaterThan(bounds.closeBottom);
+        await dialog.getByRole("button", { name: "Schließen" }).tap();
+        await expect(dialog).not.toBeVisible();
+      }
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test("320px metrics contain long German labels with wider fallback fonts", async ({
   page,
 }) => {
