@@ -605,6 +605,24 @@ export const cardStyles = css`
     flex-shrink: 0;
     font-size: 1.5rem;
   }
+  /* In the iOS Companion App, retain a reachable dismissal action if
+     WebKit maps touches on the native dialog header to the status bar. */
+  dialog.ios-companion .companion-dialog-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 16px max(12px, env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: var(--surface);
+  }
+  dialog.ios-companion .companion-dialog-dismiss {
+    min-width: 120px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--soft);
+  }
   .detail-content {
     flex: 0 1 auto;
     min-height: 0;
@@ -1175,6 +1193,11 @@ export const cardStyles = css`
        unexpected native-dialog positioning. Applies to every detail view. */
     .dialog-head {
       padding: 24px 16px 12px;
+    }
+    /* Home Assistant iOS WebView may paint the status bar above the
+       native modal even when its safe-area inset is reported as zero. */
+    dialog.ios-companion .dialog-head {
+      padding-top: 84px;
     }
     .detail-content {
       padding: 14px;

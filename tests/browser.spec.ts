@@ -1748,6 +1748,67 @@ test("iPhone modal close stays clear of system bar in every detail view", async 
   }
 });
 
+test("iOS companion detail dismissal has a reachable fallback without changing Safari", async ({
+  browser,
+}) => {
+  const companionUserAgent =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.11.0 (iOS) Mobile/HomeAssistant, like Safari";
+  const safariUserAgent =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1";
+  for (const companion of [true, false]) {
+    const context = await browser.newContext({
+      baseURL: "http://127.0.0.1:4173",
+      viewport: { width: 402, height: 874 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 3,
+      userAgent: companion ? companionUserAgent : safariUserAgent,
+    });
+    try {
+      const page = await context.newPage();
+      await withNativeHaCard(page);
+      for (const view of ["panel", "sections"]) {
+        await ready(page, `/?view=${view}`);
+        for (const detail of [
+          "wind",
+          "rain",
+          "temperature",
+          "pressure",
+          "sun",
+          "sensors",
+        ]) {
+          await page.locator(`[data-detail="${detail}"]:visible`).first().tap();
+          const dialog = page.getByRole("dialog");
+          await expect(dialog).toBeVisible();
+          const className = await dialog.getAttribute("class");
+          const headerPadding = await dialog.locator(".dialog-head").evaluate(
+            (el) => parseFloat(getComputedStyle(el).paddingTop),
+          );
+          if (companion) {
+            expect(className).toContain("ios-companion");
+            expect(headerPadding).toBeGreaterThanOrEqual(84);
+            const backup = dialog.locator(".companion-dialog-dismiss");
+            await expect(backup).toBeVisible();
+            const bounds = await backup.boundingBox();
+            expect(bounds).not.toBeNull();
+            expect(bounds!.height).toBeGreaterThanOrEqual(44);
+            expect(bounds!.y).toBeGreaterThan(160);
+            await backup.tap();
+          } else {
+            expect(className).not.toContain("ios-companion");
+            expect(headerPadding).toBe(24);
+            await expect(dialog.locator(".companion-dialog-footer")).toHaveCount(0);
+            await dialog.getByRole("button", { name: "Schließen" }).tap();
+          }
+          await expect(dialog).not.toBeVisible();
+        }
+      }
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test("320px metrics contain long German labels with wider fallback fonts", async ({
   page,
 }) => {

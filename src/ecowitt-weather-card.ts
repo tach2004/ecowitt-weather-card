@@ -37,6 +37,13 @@ import { buildHistoryCharts } from "./chart";
 import "./editor";
 
 type Detail = "wind" | "rain" | "temperature" | "pressure" | "sun" | "sensors";
+
+function isIOSCompanionApp(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/i.test(ua) &&
+    /Home Assistant\/|Mobile\/HomeAssistant/i.test(ua);
+}
 const detailNames: Record<Detail, string> = {
   wind: "Wind",
   rain: "Regen",
@@ -1074,6 +1081,7 @@ export class EcowittWeatherCard extends LitElement {
   private _renderDialog() {
     const detail = this._detail;
     return html`<dialog
+      class=${isIOSCompanionApp() ? "ios-companion" : ""}
       aria-labelledby="detail-title"
       @cancel=${() => this._closeDetail()}
       @click=${(event: MouseEvent) => {
@@ -1166,7 +1174,18 @@ export class EcowittWeatherCard extends LitElement {
                         </button>
                       `
                 }
-              </div>`
+              </div>
+              ${isIOSCompanionApp()
+                ? html`<div class="companion-dialog-footer">
+                    <button
+                      type="button"
+                      class="companion-dialog-dismiss"
+                      @click=${this._closeDetail}
+                    >
+                      Schließen
+                    </button>
+                  </div>`
+                : nothing}`
           : nothing
       }
     </dialog>`;
