@@ -1153,19 +1153,28 @@ export const cardStyles = css`
     }
   }
   @media (max-width: 480px) {
-    /* Leave room for the mobile status bar, even when its safe-area inset is 0. */
+    /* A modal is in the browser top layer: anchor it explicitly below the
+       mobile system bar instead of relying on its default centered margins.
+       Some embedded WebViews report a zero safe-area inset. */
     dialog {
       --detail-safe-top: max(
-        64px,
+        72px,
         calc(env(safe-area-inset-top, 0px) + 12px)
       );
+      --detail-safe-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+      position: fixed;
+      inset: var(--detail-safe-top) 6px var(--detail-safe-bottom);
+      margin: 0 auto;
       width: calc(100vw - 12px);
-      max-height: calc(100dvh - var(--detail-safe-top) - 8px);
-      margin-block: var(--detail-safe-top) 8px;
+      max-height: calc(
+        100dvh - var(--detail-safe-top) - var(--detail-safe-bottom)
+      );
       border-radius: 18px;
     }
+    /* Keep the actual close button below the top edge even in WebViews with
+       unexpected native-dialog positioning. Applies to every detail view. */
     .dialog-head {
-      padding: 12px 16px;
+      padding: 24px 16px 12px;
     }
     .detail-content {
       padding: 14px;
