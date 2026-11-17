@@ -1,5 +1,5 @@
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators.js";
 import {
   RECORD_PRESETS, dateMs, monthCells, monthStart, prettyRange,
   rangeForPreset, shiftDateRange, shiftDay, shiftMonth,
