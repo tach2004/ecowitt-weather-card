@@ -252,6 +252,93 @@ test("stale sources are clearly labeled", async ({ page }) => {
   );
 });
 
+test("weather record button opens a separate themed view with local Recorder maxima", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 950 });
+  await ready(page);
+  const button = page.getByRole("button", { name: "Wetterrekorde öffnen" });
+  await expect(button).toBeVisible();
+  await expect(button).toHaveAttribute("data-detail", "records");
+  const requestsBefore = await page.evaluate(() => (window as DemoWindow).historyRequests.length);
+  await button.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Wetterrekorde");
+  await expect(dialog.locator('.record-date input[type="date"]')).toHaveCount(2);
+  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-number").first()).not.toHaveText("—");
+  await expect(dialog).toContainText("Höchster Tagesregen");
+  await expect(dialog).toContainText("UV-Index");
+  await expect(dialog).not.toContainText("Luftfeuchte ·");
+  await expect(dialog.locator(".records-grid").first()).toBeVisible();
+  const req = await page.evaluate((start) => {
+    const win = window as DemoWindow;
+    return win.historyRequests.slice(start).map(item => item.path);
+  }, requestsBefore);
+  expect(req.some(path => path.includes("history/period/") &&
+    path.includes("filter_entity_id=") && path.includes("demo_rain_today"))).toBe(true);
+  await dialog.getByRole("button", { name: "Schließen" }).first().click();
+  await expect(dialog).not.toBeVisible();
+});
+
+test("record date controls query the selected HA-local calendar range and do not invent past records", async ({ page }) => {
+  await ready(page);
+  await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  const today = await dialog.getByLabel("Zeitraum bis").inputValue();
+  const past = new Date(Date.parse(`${today}T12:00:00Z`) - 3 * 86400000)
+    .toISOString().slice(0, 10);
+  await dialog.getByLabel("Zeitraum von").fill(past);
+  await dialog.getByRole("button", { name: "Auswerten" }).click();
+  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  const paths = await page.evaluate(() => (window as DemoWindow).historyRequests.map(x => x.path));
+  const last = new URL(paths[paths.length - 1], "http://fixture.invalid/");
+  expect(last.pathname).toContain("history/period/");
+  expect(last.searchParams.get("filter_entity_id")).toContain("sensor.demo_uv");
+  await dialog.getByLabel("Zeitraum bis").fill(past);
+  await dialog.getByRole("button", { name: "Auswerten" }).click();
+  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-number").first()).toHaveText("—");
+  await expect(dialog).toContainText("Aufzeichnungen");
+});
+
+test("mobile Companion records retain working fixed overlay, scroll and close controls", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true, hasTouch: true, deviceScaleFactor: 3,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.11.0 (iOS) Mobile/HomeAssistant, like Safari",
+  });
+  try {
+    const page = await context.newPage();
+    for (const view of ["panel", "sections"]) {
+      await ready(page, `/?view=${view}`);
+      const open = page.getByRole("button", { name: "Wetterrekorde öffnen" });
+      const rect = await open.boundingBox();
+      expect(rect!.width).toBeGreaterThanOrEqual(44);
+      expect(rect!.height).toBeGreaterThanOrEqual(44);
+      await open.tap();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toContainText("Wetterrekorde");
+      await expect(page.locator(".companion-overlay")).toBeVisible();
+      await expect(dialog.locator(".record-tile")).toHaveCount(9);
+      const geometry = await dialog.evaluate(el => {
+        const r = el.getBoundingClientRect();
+        const content = el.querySelector(".detail-content")!;
+        return { top: r.top, bottom: r.bottom,
+          contentWidth: content.clientWidth, scrollWidth: content.scrollWidth };
+      });
+      expect(geometry.top).toBeGreaterThanOrEqual(71);
+      expect(geometry.bottom).toBeLessThanOrEqual(874);
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.contentWidth + 1);
+      await dialog.locator(".detail-content").evaluate(el => { el.scrollTop = el.scrollHeight; });
+      await dialog.locator(".close").tap();
+      await expect(dialog).not.toBeVisible();
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test("details request local HA history lazily and support keyboard dismissal", async ({
   page,
 }) => {

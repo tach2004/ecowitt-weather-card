@@ -60,7 +60,7 @@ export const cardStyles = css`
   }
   .station-header {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 44px;
+    grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
     align-items: center;
     gap: 12px;
     min-width: 0;
@@ -81,8 +81,12 @@ export const cardStyles = css`
     overflow-wrap: break-word;
     word-break: normal;
   }
-  .station-header > .diagnostics {
+  .station-header > .records-trigger {
     grid-column: 3;
+    grid-row: 1;
+  }
+  .station-header > .diagnostics {
+    grid-column: 4;
     grid-row: 1;
   }
 
@@ -107,7 +111,8 @@ export const cardStyles = css`
     color: var(--muted);
     font-size: 0.85rem;
   }
-  .diagnostics {
+  .diagnostics,
+  .records-trigger {
     margin-left: auto;
     min-width: 44px;
     min-height: 44px;
@@ -656,6 +661,137 @@ export const cardStyles = css`
     border-radius: 12px;
     background: var(--soft);
   }
+  /* Recorded extrema: date inputs use the platform's accessible calendar
+     picker and HA theme variables; no extra frontend dependencies. */
+  .records-page {
+    display: grid;
+    gap: 16px;
+  }
+  .records-page > .detail-caption {
+    margin: 0;
+  }
+  .records-range {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--soft);
+  }
+  .record-date {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .record-date input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--primary-text-color, #edf5fc);
+    color-scheme: light dark;
+  }
+  .record-date input:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 2px;
+  }
+  .records-apply {
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 1px solid var(--cyan);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--cyan) 17%, var(--surface));
+    color: var(--primary-text-color, #edf5fc);
+    font-weight: 650;
+  }
+  .records-coverage {
+    padding: 12px 14px;
+    margin: 0;
+    border-left: 3px solid var(--cyan);
+    border-radius: 8px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+  }
+  .record-group {
+    min-width: 0;
+  }
+  .record-group h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.02rem;
+    margin: 4px 0 10px;
+  }
+  .record-group h3 .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--cyan);
+  }
+  .records-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+    gap: 10px;
+  }
+  .record-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+    min-height: 144px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--record-accent);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--record-accent) 9%, var(--surface));
+  }
+  .record-title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .record-title .icon {
+    width: 21px;
+    height: 21px;
+    flex: 0 0 auto;
+    color: var(--record-accent);
+  }
+  .record-number {
+    font-size: clamp(1.45rem, 4.5vw, 1.95rem);
+    font-weight: 750;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .record-number small {
+    font-size: 0.53em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .record-meta {
+    display: grid;
+    gap: 6px;
+    margin-top: auto;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  .record-source {
+    font-size: 0.68rem;
+  }
   .detail-content {
     flex: 0 1 auto;
     min-height: 0;
@@ -1057,8 +1193,16 @@ export const cardStyles = css`
   .status-connection.bad i {
     background: #df674e;
   }
-  .diagnostics {
+  .diagnostics,
+  .records-trigger {
     margin-left: 0;
+  }
+  .records-trigger {
+    color: var(--cyan);
+  }
+  .records-trigger .icon {
+    width: 23px;
+    height: 23px;
   }
   .degree-ring {
     position: absolute;
@@ -1145,15 +1289,18 @@ export const cardStyles = css`
   }
   @container weather (min-width:1200px) {
     .station-header {
-      grid-template-columns: 42px minmax(180px, 1fr) max-content 44px;
+      grid-template-columns: 42px minmax(180px, 1fr) max-content 44px 44px;
     }
     .header-devices {
       grid-column: 3;
       grid-row: 1;
       margin: 0;
     }
-    .station-header > .diagnostics {
+    .station-header > .records-trigger {
       grid-column: 4;
+    }
+    .station-header > .diagnostics {
+      grid-column: 5;
     }
   }
   @container weather (max-width:359px) {
@@ -1204,6 +1351,12 @@ export const cardStyles = css`
     }
   }
   @media (max-width: 480px) {
+    .records-range {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .records-apply {
+      width: 100%;
+    }
     /* A modal is in the browser top layer: anchor it explicitly below the
        mobile system bar instead of relying on its default centered margins.
        Some embedded WebViews report a zero safe-area inset. */
