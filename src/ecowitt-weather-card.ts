@@ -23,7 +23,7 @@ import {
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
 import {
-  RECORD_DEFINITIONS, daysBeforeDate, haLocalDate, loadWeatherRecords,
+  RECORD_DEFINITIONS, haLocalDate, loadWeatherRecords,
   type WeatherRecordsResult,
 } from "./records";
 import { resolveImage } from "./image";
@@ -39,6 +39,7 @@ import {
 import { normalizeConfig, sameConfig } from "./config";
 import { buildHistoryCharts } from "./chart";
 import "./record-date-selector";
+import { selectWeatherDetailExtras, type WeatherDetail } from "./detail-extras";
 import "./editor";
 
 type Detail = "wind" | "rain" | "temperature" | "pressure" | "sun" | "sensors" | "records";
@@ -1123,7 +1124,7 @@ export class EcowittWeatherCard extends LitElement {
         const zone = this.hass?.config?.time_zone || "UTC";
         const today = haLocalDate(Date.now(), zone);
         this._recordsTo = today;
-        this._recordsFrom = daysBeforeDate(today, 6);
+        this._recordsFrom = today;
       }
       void this._loadRecords();
       return;
@@ -1323,6 +1324,7 @@ export class EcowittWeatherCard extends LitElement {
                         <div class="detail-grid">
                           ${detailKeys[detail].filter((key) => this._config.entities?.[key] || ["temperature", "humidity", "temperature_min", "temperature_max", "wind_speed", "wind_gust", "wind_direction", "rain_today", "rain_rate", "rain_wet", "pressure", "uv", "solar"].includes(key)).map((key) => this._detailReading(key))}
                         </div>
+                        ${this._weatherExtraReadings(detail)}
                         ${detail === "temperature" && this._daily ? html`<p class="daily-coverage">${this._daily.date ? `${this._daily.date} · ${this._daily.timeZone}. ` : ""}${this._daily.note}</p>` : nothing}
                         <details class="detail-explanation">
                           <summary>Messungen richtig einordnen</summary>
@@ -1443,6 +1445,24 @@ export class EcowittWeatherCard extends LitElement {
       </div>
     </article>`;
   }
+  /** Selected additional measurements also appear with the matching weather detail.
+   * They remain in Sensoren & Diagnosen, and do not alter existing graphs.
+   */
+  private _weatherExtraReadings(detail: Detail) {
+    if (detail === "sensors" || detail === "records") return nothing;
+    const ids = selectWeatherDetailExtras(
+      this._config, this.hass?.states ?? {}, detail,
+    );
+    if (!ids.length) return nothing;
+    return html`<section class="weather-extra-readings"
+      aria-label="Zusätzliche Messwerte">
+      <h3 class="detail-section-title">Zusätzliche Messwerte · ${ids.length}</h3>
+      <div class="sensor-readings-grid">
+        ${ids.map((id) => this._sensorRow(id, undefined, detail))}
+      </div>
+    </section>`;
+  }
+
   private _sensorDetails() {
     // One raw source row per entity, even when an older config lists it again.
     const seen = new Set<string>();
@@ -1532,7 +1552,7 @@ export class EcowittWeatherCard extends LitElement {
       <div class="sensor-readings-grid">${sourceIds.map((id) => this._sensorRow(id))}</div>
     </section>`;
   }
-  private _sensorRow(id: string, label?: string) {
+  private _sensorRow(id: string, label?: string, group?: WeatherDetail) {
     const entity = this.hass?.states[id];
     const timestamp = entityFreshness(entity).timestamp;
     const updated = timestamp !== undefined ? new Date(timestamp) : null;
@@ -1544,7 +1564,12 @@ export class EcowittWeatherCard extends LitElement {
       .find(([, sourceId]) => sourceId === id)?.[0]) as MetricKey | undefined;
     const appearance = key
       ? this._readingAppearance(key)
-      : { symbol: "sensors", color: "#209bb7" };
+      : group === "rain" ? this._readingAppearance("rain_today")
+        : group === "temperature" ? this._readingAppearance("temperature")
+        : group === "wind" ? this._readingAppearance("wind_speed")
+        : group === "pressure" ? this._readingAppearance("pressure")
+        : group === "sun" ? this._readingAppearance("solar")
+        : { symbol: "sensors", color: "#209bb7" };
     return html`<article class="sensor-row sensor-record-tile"
       data-entity-id=${id}
       style=${`--record-accent: ${appearance.color}`}>

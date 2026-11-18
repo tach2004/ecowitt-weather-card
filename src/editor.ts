@@ -360,8 +360,10 @@ export class EcowittWeatherCardEditor extends LitElement {
     return html`<section class="checkbox-list device-extras">
       <strong>Optionale zusätzliche Messwerte</strong>
       <p class="hint">
-        Messwerte dieses Geräts erscheinen in den Sensor-Details. Bereits
-        gespeicherte Zusatz- und Diagnoseauswahlen bleiben erhalten.
+        Messwerte dieses Geräts erscheinen weiterhin in den Sensor-Details.
+        Eindeutig zuordenbare Wetterwerte werden zusätzlich in den passenden
+        Detailseiten für Regen, Außenklima, Wind, Sonne oder Luftdruck gezeigt.
+        Bereits gespeicherte Auswahlen bleiben erhalten.
       </p>
       ${
         all.length

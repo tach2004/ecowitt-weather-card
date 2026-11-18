@@ -252,6 +252,156 @@ test("stale sources are clearly labeled", async ({ page }) => {
   );
 });
 
+test("record date selector initially displays today, not a seven-day range", async ({ page }) => {
+  await ready(page);
+  await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+  const selector = page.getByRole("dialog").locator("ecowitt-record-date-selector");
+  await expect(selector).toBeVisible();
+  const dates = await selector.evaluate((element) => {
+    const picker = element as any;
+    return { from: picker.startDate, to: picker.endDate, today: picker.today };
+  });
+  expect(dates.from).toBe(dates.today);
+  expect(dates.to).toBe(dates.today);
+  await selector.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).click();
+  await selector.getByRole("button", { name: "Letzte 7 Tage" }).click();
+  await selector.getByRole("button", { name: "Auswählen", exact: true }).click();
+  const chosen = await selector.evaluate((element) => {
+    const picker = element as any;
+    return { from: picker.startDate, to: picker.endDate };
+  });
+  expect(chosen.from).not.toBe(chosen.to);
+});
+
+test("selected per-device extra rain, temperature and other weather sources appear only in matching detail cards", async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const now = new Date().toISOString();
+    const extras = [
+      ["sensor.demo_hourly_precipitation", "Beispiel Stündliche Regenmenge", "2.4", "mm", "precipitation"],
+      ["sensor.demo_total_precipitation", "Beispiel Gesamte Regenmenge", "64.2", "mm", "precipitation"],
+      ["sensor.demo_room_temp", "Beispiel Temperatur", "19.6", "°C", "temperature"],
+      ["sensor.demo_extra_wind", "Beispiel Windböe", "26", "km/h", "wind_speed"],
+      ["sensor.demo_extra_pressure", "Beispiel Luftdruck", "1010", "hPa", "atmospheric_pressure"],
+      ["sensor.demo_extra_sun", "Beispiel Solarstrahlung", "355", "W/m²", "irradiance"],
+      ["sensor.demo_extra_battery", "Beispiel Batterie", "92", "%", "battery"],
+      ["sensor.demo_unknown_channel", "Beispiel Messkanal", "80", "%", ""],
+      ["sensor.demo_unselected_precipitation", "Nicht zugeordnete Regenmenge", "500", "mm", "precipitation"],
+    ] as const;
+    for (const [id, friendlyName, value, unit, deviceClass] of extras) {
+      win.hass.states[id] = {
+        entity_id: id, state: value,
+        last_changed: now, last_updated: now,
+        attributes: {
+          friendly_name: friendlyName,
+          unit_of_measurement: unit,
+          ...(deviceClass ? { device_class: deviceClass } : {}),
+        },
+      };
+    }
+    win.setDemoConfig({
+      ...win.demoConfig,
+      device_status: [
+        {
+          device_id: "demo-rain", role: "WH40", name: "Beispiel Regenmesser",
+          extra_entities: [
+            "sensor.demo_hourly_precipitation",
+            "sensor.demo_total_precipitation",
+            "sensor.demo_extra_battery",
+            "sensor.demo_unknown_channel",
+          ],
+        },
+        {
+          device_id: "demo-climate", role: "WN31", name: "Beispiel Klimasensor",
+          extra_entities: [
+            "sensor.demo_room_temp", "sensor.demo_extra_wind",
+            "sensor.demo_extra_pressure", "sensor.demo_extra_sun",
+          ],
+        },
+      ],
+      extra_entities: ["sensor.demo_room_temp"],
+    });
+    await win.card.updateComplete;
+  });
+  const testCases = [
+    { detail: "rain", ids: ["sensor.demo_hourly_precipitation", "sensor.demo_total_precipitation"] },
+    { detail: "temperature", ids: ["sensor.demo_room_temp"] },
+    { detail: "wind", ids: ["sensor.demo_extra_wind"] },
+    { detail: "pressure", ids: ["sensor.demo_extra_pressure"] },
+    { detail: "sun", ids: ["sensor.demo_extra_sun"] },
+  ] as const;
+  for (const item of testCases) {
+    await page.locator(`[data-detail="${item.detail}"]:visible`).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".weather-extra-readings")).toBeVisible();
+    const rows = dialog.locator(".weather-extra-readings .sensor-row");
+    await expect(rows).toHaveCount(item.ids.length);
+    for (const id of item.ids) {
+      const tile = dialog.locator(`.weather-extra-readings .sensor-row[data-entity-id="${id}"]`);
+      await expect(tile).toHaveCount(1);
+      await expect(tile.getByRole("button", { name: "Sensor in HA öffnen" })).toBeVisible();
+    }
+    await expect(dialog.locator(".weather-extra-readings .sensor-row[data-entity-id='sensor.demo_extra_battery']")).toHaveCount(0);
+    await expect(dialog.locator(".weather-extra-readings .sensor-row[data-entity-id='sensor.demo_unknown_channel']")).toHaveCount(0);
+    await expect(dialog.locator(".weather-extra-readings .sensor-row[data-entity-id='sensor.demo_unselected_precipitation']")).toHaveCount(0);
+    await expect(dialog.locator(".history-heading")).toBeVisible();
+    await dialog.locator(".close").click();
+  }
+  await page.locator('[data-detail="sensors"]:visible').first().click();
+  const diagnostic = page.getByRole("dialog");
+  await expect(diagnostic.locator(".weather-extra-readings")).toHaveCount(0);
+  await expect(diagnostic.locator('.sensor-row[data-entity-id="sensor.demo_hourly_precipitation"]')).toHaveCount(1);
+  await expect(diagnostic.locator('.sensor-row[data-entity-id="sensor.demo_total_precipitation"]')).toHaveCount(1);
+  await expect(diagnostic.locator('.sensor-row[data-entity-id="sensor.demo_room_temp"]')).toHaveCount(1);
+  await expect(diagnostic.locator('.sensor-row[data-entity-id="sensor.demo_extra_battery"]')).toHaveCount(1);
+});
+
+test("mobile Companion App rain detail keeps fixed overlay when showing a device's extra rain measurements", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true, hasTouch: true, deviceScaleFactor: 3,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 27_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Home Assistant/2026.11.0 (iOS) Mobile/HomeAssistant, like Safari",
+  });
+  try {
+    const page = await context.newPage();
+    await ready(page);
+    await page.evaluate(async () => {
+      const win = window as DemoWindow;
+      const now = new Date().toISOString();
+      win.hass.states["sensor.demo_extra_rain"] = {
+        entity_id: "sensor.demo_extra_rain", state: "3.1",
+        last_changed: now, last_updated: now,
+        attributes: {
+          friendly_name: "Beispiel stündliche Regenmenge",
+          unit_of_measurement: "mm", device_class: "precipitation",
+        },
+      };
+      win.setDemoConfig({
+        ...win.demoConfig,
+        device_status: [{
+          device_id: "demo-wh40", role: "WH40",
+          extra_entities: ["sensor.demo_extra_rain"],
+        }],
+      });
+      await win.card.updateComplete;
+    });
+    await page.locator('[data-detail="rain"]:visible').first().tap();
+    const dialog = page.getByRole("dialog");
+    await expect(page.locator(".companion-overlay")).toBeVisible();
+    await expect(dialog.locator(".weather-extra-readings .sensor-row")).toHaveCount(1);
+    await expect(dialog.locator(".weather-extra-readings .sensor-tile-value")).toContainText("3,1");
+    const position = await dialog.evaluate(el => el.getBoundingClientRect().top);
+    expect(position).toBeGreaterThanOrEqual(71);
+    await dialog.locator(".detail-content").evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await dialog.locator(".close").tap();
+    await expect(dialog).not.toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test("weather record button opens a separate themed view with local Recorder maxima", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 950 });
   await ready(page);
