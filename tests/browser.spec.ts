@@ -338,7 +338,7 @@ test("selected per-device extra rain, temperature and other weather sources appe
     const rows = dialog.locator(".weather-extra-readings .sensor-row");
     await expect(rows).toHaveCount(item.ids.length);
     for (const id of item.ids) {
-      const tile = rows.locator(`[data-entity-id="${id}"]`);
+      const tile = dialog.locator(`.weather-extra-readings .sensor-row[data-entity-id="${id}"]`);
       await expect(tile).toHaveCount(1);
       await expect(tile.getByRole("button", { name: "Sensor in HA öffnen" })).toBeVisible();
     }
