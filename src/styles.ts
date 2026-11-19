@@ -1460,8 +1460,8 @@ export const cardStyles = css`
       flex: 1 1 0;
       min-width: 0;
       justify-content: space-between;
-      gap: 2px;
-      padding: 6px 3px;
+      gap: 0;
+      padding: 6px 2px;
       font-size: 0.5rem;
     }
     .header-devices .device-chip > strong {
