@@ -1121,6 +1121,97 @@ test("source-grounded device status shows battery percent, raw dBm and real conn
   await expect(page.getByRole("dialog")).toContainText("Test WS90");
 });
 
+test("saved per-device status fields stay selected through registry and HA re-renders", async ({ page }) => {
+  await ready(page, "/?editor=1");
+  const saved = await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const configured = [
+      {
+        device_id: "demo-ws90", role: "WS90", name: "Beispiel Windstation",
+        show_on_main: true,
+        battery: "sensor.demo_ws90_battery_status",
+        signal: "sensor.demo_ws90_signal_status",
+        connection: "binary_sensor.demo_ws90_online_status",
+      },
+      {
+        device_id: "demo-wn32", role: "WN32", name: "Beispiel Außensensor",
+        show_on_main: true,
+        battery: "sensor.demo_wn32_battery_status",
+        signal: "sensor.demo_wn32_signal_status",
+        connection: "binary_sensor.demo_wn32_online_status",
+      },
+    ];
+    const now = new Date().toISOString();
+    for (const device of configured) {
+      for (const kind of ["battery", "signal", "online"] as const) {
+        const id = kind === "online" ? device.connection : kind === "battery" ? device.battery : device.signal;
+        win.hass.states[id] = {
+          entity_id: id, state: kind === "online" ? "on" : kind === "battery" ? "100" : "76",
+          last_changed: now, last_updated: now,
+          attributes: {
+            friendly_name: `Beispiel ${kind}`,
+            device_class: kind === "online" ? "connectivity" : kind === "battery" ? "battery" : "signal_strength",
+            ...(kind === "online" ? {} : { unit_of_measurement: "%" }),
+          },
+        };
+      }
+    }
+    win.editor.hass = { ...win.hass, states: { ...win.hass.states } };
+    win.editor.setConfig({ ...win.demoConfig, device_status: configured });
+    await win.editor.updateComplete;
+    return configured;
+  });
+  const editor = page.locator("ecowitt-weather-card-editor");
+  await editor.locator("summary").filter({ hasText: "Zusatzsensoren & Diagnosen" }).click();
+  const section = editor.locator(".device-editor");
+  await expect(section).toBeVisible();
+
+  for (const device of saved) {
+    const group = section.locator(`.device-config[data-device-id="${device.device_id}"]`);
+    await expect(group).toHaveCount(1);
+    await expect(group.locator('select[data-device-field="battery"]')).toHaveValue(device.battery);
+    await expect(group.locator('select[data-device-field="signal"]')).toHaveValue(device.signal);
+    await expect(group.locator('select[data-device-field="connection"]')).toHaveValue(device.connection);
+  }
+
+  // The browser can reset a native select while options are reconstructed
+  // asynchronously. Re-rendering with identical config must restore the
+  // displayed selection; it must never overwrite the saved values.
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const root = win.editor.shadowRoot as ShadowRoot;
+    for (const select of root.querySelectorAll<HTMLSelectElement>(".device-config select[data-device-field]")) {
+      select.value = "";
+    }
+    win.editor.requestUpdate();
+    await win.editor.updateComplete;
+  });
+  for (const device of saved) {
+    const group = section.locator(`.device-config[data-device-id="${device.device_id}"]`);
+    for (const field of ["battery", "signal", "connection"] as const) {
+      await expect(group.locator(`select[data-device-field="${field}"]`)).toHaveValue(device[field]);
+    }
+  }
+
+  // Even a previously configured entity temporarily absent from HA must
+  // remain explicitly selected, rather than showing "Nicht zugeordnet".
+  await page.evaluate(async (id) => {
+    const win = window as DemoWindow;
+    delete win.hass.states[id];
+    win.editor.hass = { ...win.hass, states: { ...win.hass.states } };
+    await win.editor.updateComplete;
+  }, saved[1].battery);
+  await expect(section.locator(
+    '.device-config[data-device-id="demo-wn32"] select[data-device-field="battery"]',
+  )).toHaveValue(saved[1].battery);
+
+  const persisted = await page.evaluate(() => (window as DemoWindow).editor._config.device_status);
+  for (const expected of saved) {
+    const actual = persisted.find((item: any) => item.device_id === expected.device_id);
+    expect(actual).toMatchObject(expected);
+  }
+});
+
 test("device editor uses one checklist and preserves legacy config while saving new device extras", async ({
   page,
 }) => {
