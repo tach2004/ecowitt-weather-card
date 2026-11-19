@@ -2280,6 +2280,7 @@ test("header actions stay accessible without moving desktop weather panels", asy
         records: box(".records-trigger"), diagnosis: box(".diagnostics"),
         climate: box(".weather > .climate"), mainLayout: box(".main-layout"),
         devices,
+        absoluteActions: getComputedStyle(root.querySelector(".header-actions")!).position === "absolute",
       };
     });
     expect(layout.devices).toHaveLength(5);
@@ -2290,7 +2291,9 @@ test("header actions stay accessible without moving desktop weather panels", asy
       expect(action.top).toBeLessThan(layout.climate.top);
     }
     expect(layout.records.right).toBeLessThan(layout.diagnosis.left);
-    if (width >= 1100) {
+    if (width >= 1280) expect(layout.absoluteActions).toBe(true);
+    if (width <= 1024) expect(layout.absoluteActions).toBe(false);
+    if (layout.absoluteActions) {
       const lastStatusBottom = Math.max(...layout.devices.map(el => el.bottom));
       expect(layout.records.top).toBeGreaterThanOrEqual(lastStatusBottom);
       expect(layout.records.bottom).toBeLessThanOrEqual(layout.climate.top);
@@ -2305,9 +2308,17 @@ test("header actions stay accessible without moving desktop weather panels", asy
   }
 });
 
-test("mobile status bars move after all weather content and action buttons stay in the first row", async ({ page }) => {
-  await withNativeHaCard(page);
-  for (const width of [320, 402, 600]) {
+test("mobile status bars move after all weather content and action buttons stay in the first row", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:4173",
+    viewport: { width: 402, height: 874 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    const page = await context.newPage();
+    await withNativeHaCard(page);
+    for (const width of [320, 402, 600]) {
     await page.setViewportSize({ width, height: 874 });
     await ready(page);
     await setStatusDevices(page, 5);
@@ -2346,6 +2357,9 @@ test("mobile status bars move after all weather content and action buttons stay 
     await page.getByRole("button", { name: "Sensoren und Diagnosen öffnen" }).tap();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("dialog").getByRole("button", { name: "Schließen" }).first().tap();
+    }
+  } finally {
+    await context.close();
   }
 });
 
