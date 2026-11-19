@@ -2273,7 +2273,8 @@ test("header actions stay accessible without moving desktop weather panels", asy
       };
       const devices = [...root.querySelectorAll(".device-chip")].map(el => {
         const r = el.getBoundingClientRect();
-        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+          scrollOverflow: (el as HTMLElement).scrollWidth - (el as HTMLElement).clientWidth };
       });
       return {
         card: box("ha-card"), title: box(".station-heading"),
@@ -2284,6 +2285,11 @@ test("header actions stay accessible without moving desktop weather panels", asy
       };
     });
     expect(layout.devices).toHaveLength(5);
+    for (const chip of layout.devices) {
+      expect(chip.left).toBeGreaterThanOrEqual(layout.card.left - 1);
+      expect(chip.right).toBeLessThanOrEqual(layout.card.right + 1);
+      expect(chip.scrollOverflow).toBeLessThanOrEqual(1);
+    }
     for (const action of [layout.records, layout.diagnosis]) {
       expect(action.right).toBeLessThanOrEqual(layout.card.right);
       expect(action.left).toBeGreaterThanOrEqual(layout.card.left);
@@ -2291,7 +2297,6 @@ test("header actions stay accessible without moving desktop weather panels", asy
       expect(action.top).toBeLessThan(layout.climate.top);
     }
     expect(layout.records.right).toBeLessThan(layout.diagnosis.left);
-    console.log("SYNTHETIC_LAYOUT", width, JSON.stringify(layout));
     if (width >= 1280) expect(layout.absoluteActions).toBe(true);
     if (width <= 1024) expect(layout.absoluteActions).toBe(false);
     if (layout.absoluteActions) {
