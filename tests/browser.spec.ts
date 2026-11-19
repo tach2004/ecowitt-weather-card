@@ -1745,13 +1745,13 @@ test("device status chips use original readable sizes and only configured indica
     }
     expect(appearance[0].batteryWidth).toBeCloseTo(21, 0);
     expect(appearance[0].signalWidth).toBeCloseTo(16, 0);
-    expect(appearance[3].right - appearance[3].left).toBeLessThan(
-      appearance[0].right - appearance[0].left,
-    );
-    expect(appearance[4].right - appearance[4].left).toBeLessThan(
-      appearance[3].right - appearance[3].left,
-    );
     if (width >= 901) {
+      expect(appearance[3].right - appearance[3].left).toBeLessThan(
+        appearance[0].right - appearance[0].left,
+      );
+      expect(appearance[4].right - appearance[4].left).toBeLessThan(
+        appearance[3].right - appearance[3].left,
+      );
       await expect(gateway.locator(".status-connection-compact")).toBeVisible();
       await expect(gateway.locator(".status-connection-compact")).toHaveText("OK");
       await expect(gateway.locator(".status-connection-full")).toBeHidden();
@@ -1767,6 +1767,12 @@ test("device status chips use original readable sizes and only configured indica
       expect(bounds.diagnostics.bottom).toBeLessThanOrEqual(bounds.climate.top);
       expect(bounds.records.right).toBeLessThanOrEqual(bounds.card.right);
     } else {
+      // Deliberately full-width mobile rows retain the original layout.
+      for (const chip of appearance) {
+        expect(chip.right - chip.left).toBeCloseTo(
+          appearance[0].right - appearance[0].left, 0,
+        );
+      }
       await expect(gateway.locator(".status-connection-full")).toBeVisible();
       await expect(gateway.locator(".status-connection-full")).toContainText("Verbunden");
       await expect(gateway.locator(".status-connection-compact")).toBeHidden();
