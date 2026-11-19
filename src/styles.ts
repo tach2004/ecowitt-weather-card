@@ -1445,41 +1445,35 @@ export const cardStyles = css`
     }
   }
   @container weather (min-width:901px) {
-    /* Many device chips must fit *inside* the card, never drive the grid
-       beyond its available width or push the action buttons off-screen. */
+    /* Restore the original readable chip typography and icon sizing.
+       Each chip sizes to its mapped indicators; extra chips wrap instead
+       of compressing the labels or extending beyond the card. */
     .header-devices {
       display: flex;
+      flex-wrap: wrap;
       justify-content: flex-end;
+      align-items: center;
       min-width: 0;
       max-width: 100%;
-      gap: 4px;
+      gap: 6px;
     }
     .header-devices .device-chip,
     .header-devices .device-placeholder {
       width: auto;
-      flex: 1 1 0;
+      flex: 0 0 auto;
       min-width: 0;
       justify-content: space-between;
-      gap: 0;
-      padding: 6px 2px;
-      font-size: 0.5rem;
+      gap: 8px;
+      padding: 7px 10px;
+      font-size: 0.69rem;
     }
     .header-devices .device-chip > strong {
-      font-size: 0.66rem;
+      font-size: 0.78rem;
     }
-    /* Compact desktop chips retain the status and its full hover title
-       without requiring clipped labels or microscopic typography. */
+    /* Retain the shorter connection text on desktop, not the tiny
+       battery/signal text and icons introduced by the previous change. */
     .header-devices .status-connection-full { display: none; }
     .header-devices .status-connection-compact { display: inline; }
-    .header-devices .status-battery,
-    .header-devices .status-signal,
-    .header-devices .status-connection {
-      gap: 2px;
-      font-size: 0.60rem;
-    }
-    .header-devices .battery-glyph { width: 13px; height: 12px; }
-    .header-devices .status-signal .icon { width: 11px; height: 12px; }
-    .header-devices .status-connection i { width: 6px; height: 6px; }
   }
   @container weather (min-width:1200px) {
     /* Give the separate action row exactly one 44px hit-target height.

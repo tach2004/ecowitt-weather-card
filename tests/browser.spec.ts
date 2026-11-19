@@ -1690,6 +1690,100 @@ async function setStatusDevices(page: Page, count: number, longNames = false) {
   );
 }
 
+test("device status chips use original readable sizes and only configured indicators", async ({ page }) => {
+  await withNativeHaCard(page);
+  for (const width of [402, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await ready(page);
+    await setStatusDevices(page, 5);
+    await page.evaluate(async () => {
+      const win = window as DemoWindow;
+      const devices = win.card._config.device_status.map((device: any, index: number) =>
+        index === 3
+          ? { ...device, battery: "", signal: undefined }
+          : index === 4
+            ? { ...device, battery: "", signal: "", connection: "" }
+            : device,
+      );
+      // An assigned but unavailable entity must still show an unknown
+      // status rather than disappearing as though it had not been configured.
+      win.hass.states["sensor.demo_status_1_signal"].state = "unavailable";
+      win.setDemoConfig({ ...win.demoConfig, device_status: devices });
+      await win.card.updateComplete;
+    });
+    const chips = page.locator(".header-devices .device-chip");
+    await expect(chips).toHaveCount(5);
+    const gateway = chips.nth(3);
+    const unassigned = chips.nth(4);
+    await expect(gateway.locator(".status-battery, .status-signal")).toHaveCount(0);
+    await expect(gateway.locator(".status-connection")).toHaveCount(1);
+    await expect(unassigned.locator(".status-battery, .status-signal, .status-connection")).toHaveCount(0);
+    await expect(unassigned.locator("strong")).toHaveText("WN32");
+    await expect(chips.nth(1).locator(".status-signal")).toContainText("—");
+    await expect(chips.nth(0).locator(".status-battery")).toContainText("%");
+
+    const appearance = await chips.evaluateAll((items) => {
+      const box = (node: Element) => {
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      };
+      return items.map((node) => ({
+        ...box(node),
+        width: node.clientWidth,
+        overflow: node.scrollWidth - node.clientWidth,
+        font: parseFloat(getComputedStyle(node).fontSize),
+        headingFont: parseFloat(getComputedStyle(node.querySelector("strong")!).fontSize),
+        batteryWidth: node.querySelector(".battery-glyph")?.getBoundingClientRect().width,
+        signalWidth: node.querySelector(".status-signal .icon")?.getBoundingClientRect().width,
+      }));
+    });
+    const rem = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
+    for (const chip of appearance) {
+      expect(chip.overflow).toBeLessThanOrEqual(1);
+      expect(chip.font / rem).toBeCloseTo(0.69, 2);
+      expect(chip.headingFont / rem).toBeCloseTo(0.78, 2);
+    }
+    expect(appearance[0].batteryWidth).toBeCloseTo(21, 0);
+    expect(appearance[0].signalWidth).toBeCloseTo(16, 0);
+    if (width >= 901) {
+      expect(appearance[3].right - appearance[3].left).toBeLessThan(
+        appearance[0].right - appearance[0].left,
+      );
+      expect(appearance[4].right - appearance[4].left).toBeLessThan(
+        appearance[3].right - appearance[3].left,
+      );
+      await expect(gateway.locator(".status-connection-compact")).toBeVisible();
+      await expect(gateway.locator(".status-connection-compact")).toHaveText("OK");
+      await expect(gateway.locator(".status-connection-full")).toBeHidden();
+      const bounds = await page.locator("ecowitt-weather-card").evaluate((host) => {
+        const root = host.shadowRoot!;
+        const r = (selector: string) => root.querySelector(selector)!.getBoundingClientRect();
+        return {
+          card: r("ha-card"), records: r(".records-trigger"),
+          diagnostics: r(".diagnostics"), climate: r(".weather > .climate"),
+        };
+      });
+      expect(bounds.records.bottom).toBeLessThanOrEqual(bounds.climate.top);
+      expect(bounds.diagnostics.bottom).toBeLessThanOrEqual(bounds.climate.top);
+      expect(bounds.records.right).toBeLessThanOrEqual(bounds.card.right);
+    } else {
+      // Deliberately full-width mobile rows retain the original layout.
+      for (const chip of appearance) {
+        expect(chip.right - chip.left).toBeCloseTo(
+          appearance[0].right - appearance[0].left, 0,
+        );
+      }
+      await expect(gateway.locator(".status-connection-full")).toBeVisible();
+      await expect(gateway.locator(".status-connection-full")).toContainText("Verbunden");
+      await expect(gateway.locator(".status-connection-compact")).toBeHidden();
+      const footer = await page.locator(".header-devices").boundingBox();
+      const metrics = await page.locator(".metrics").boundingBox();
+      expect(footer!.y).toBeGreaterThan(metrics!.y + metrics!.height);
+    }
+    await noOverflow(page);
+  }
+});
+
 for (const width of [320, 402, 874, 1440])
   for (const count of [1, 3])
     for (const theme of ["light", "dark"]) {
