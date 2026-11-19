@@ -29,7 +29,9 @@ export interface WeatherRecord {
   unit: string;
   timestamp: number | null;
   samples: number;
-  state: "ok" | "missing" | "empty" | "unit-conflict";
+  /** Number of selected calendar days whose daily reset was not demonstrated. */
+  unverifiedDays?: number;
+  state: "ok" | "partial" | "uncertain" | "missing" | "empty" | "unit-conflict";
 }
 export interface WeatherRecordsResult {
   status: "ok" | "empty" | "unavailable" | "error";
@@ -93,12 +95,9 @@ export function selectedRecordSources(
   states: HomeAssistant["states"],
 ): WeatherRecord[] {
   return RECORD_DEFINITIONS.map(({ key }) => {
-    // A configured daily maximum gust is preferred; otherwise use the actual gust.
-    const id = key === "wind_gust_max"
-      ? [configured.wind_gust_max, configured.wind_gust].find(
-          candidate => candidate && states[candidate],
-        )
-      : configured[key];
+    // The gateway daily gust maximum must stay its own measured HA sensor.
+    // Sampling wind_gust periodically cannot reconstruct the true peak.
+    const id = configured[key];
     return {
       key, entityId: id && states[id] ? id : null,
       value: null, unit: "", timestamp: null, samples: 0,
@@ -114,6 +113,59 @@ function acceptable(key: MetricKey, row: HassEntity) {
     return null;
   if (value < 0) return null; // All displayed records are nonnegative physical metrics.
   return { value, unit };
+}
+
+interface RecordedValue {
+  value: number;
+  unit: string;
+  timestamp: number;
+}
+
+/** Daily counters/maxima may still expose yesterday's terminal value at 00:00.
+ * Only begin counting a day after observing a reset (a decrease), an initial
+ * zero, or a first reading below yesterday's last recorded value.
+ * Values preceding a detected reset remain context, never today's extrema.
+ * Do not guess a fixed reset time or synthesize max gusts from 7-second samples.
+ */
+function confirmedDailyReadings(
+  all: RecordedValue[],
+  start: number,
+  end: number,
+  zone: string,
+): { verified: RecordedValue[]; unverifiedDays: number } {
+  const days = new Map<string, RecordedValue[]>();
+  for (const reading of all) {
+    if (reading.timestamp < start || reading.timestamp >= end) continue;
+    const day = haLocalDate(reading.timestamp, zone);
+    const readings = days.get(day) ?? [];
+    readings.push(reading);
+    days.set(day, readings);
+  }
+  const verified: RecordedValue[] = [];
+  let unverifiedDays = 0;
+  for (const [day, readings] of days) {
+    const midnight = haMidnight(day, zone);
+    const previous = all.filter(reading => reading.timestamp < midnight).at(-1);
+    const first = readings[0];
+    const alreadyReset = first.value === 0 ||
+      (previous?.unit === first.unit &&
+        (previous.value === 0 || first.value < previous.value));
+    if (alreadyReset) {
+      verified.push(...readings);
+      continue;
+    }
+    const resetAt = readings.findIndex((reading, i) =>
+      i > 0 && reading.unit === readings[i - 1].unit &&
+      reading.value < readings[i - 1].value,
+    );
+    if (resetAt === -1) {
+      // No evidence that a positive first value belongs to this day.
+      unverifiedDays++;
+      continue;
+    }
+    verified.push(...readings.slice(resetAt));
+  }
+  return { verified, unverifiedDays };
 }
 
 /** Include only states recorded inside the selected HA-local calendar dates.
@@ -159,8 +211,12 @@ export async function loadWeatherRecords(
 
   const ids = [...new Set(records.flatMap(r => r.entityId ? [r.entityId] : []))];
   const query = new URLSearchParams({
-    filter_entity_id: ids.join(","), end_time: new Date(end).toISOString(),
+    filter_entity_id: ids.join(","),
+    end_time: new Date(end).toISOString(),
+    significant_changes_only: "0",
   });
+  // Intentionally retain HA's preceding initial state as comparison context.
+  // Its timestamp is never eligible as a record if it predates the selection.
   let response: unknown;
   try {
     response = await hass.callApi<unknown>(
@@ -184,7 +240,7 @@ export async function loadWeatherRecords(
     if (typeof state.entity_id !== "string" || !ids.includes(state.entity_id))
       continue;
     const timestamp = Date.parse(state.last_updated ?? state.last_changed ?? "");
-    if (!Number.isFinite(timestamp) || timestamp < start || timestamp >= end)
+    if (!Number.isFinite(timestamp) || timestamp >= end)
       continue;
     const list = byId.get(state.entity_id) ?? [];
     list.push(state);
@@ -193,27 +249,37 @@ export async function loadWeatherRecords(
   for (const record of records) {
     if (!record.entityId) continue;
     const rows = byId.get(record.entityId) ?? [];
-    const entries = rows.flatMap(row => {
+    const all = rows.flatMap(row => {
       const data = acceptable(record.key, row);
       if (!data) return [];
       return [{ ...data, timestamp: Date.parse(row.last_updated ?? row.last_changed ?? "") }];
-    });
-    const units = [...new Set(entries.map(entry => entry.unit))];
+    }).sort((a, b) => a.timestamp - b.timestamp);
+    const inRange = all.filter(entry => entry.timestamp >= start && entry.timestamp < end);
+    const units = [...new Set(inRange.map(entry => entry.unit))];
     if (units.length > 1) {
       record.state = "unit-conflict";
       continue;
     }
+    const isDaily = record.key === "rain_today" || record.key === "wind_gust_max";
+    const daily = isDaily
+      ? confirmedDailyReadings(all, start, end, timeZone)
+      : { verified: inRange, unverifiedDays: 0 };
+    const entries = daily.verified;
     record.samples = entries.length;
-    if (!entries.length) continue;
+    record.unverifiedDays = daily.unverifiedDays;
+    if (!entries.length) {
+      if (daily.unverifiedDays) record.state = "uncertain";
+      continue;
+    }
     const max = entries.reduce((best, entry) =>
       entry.value > best.value ? entry : best);
     record.value = max.value;
     record.unit = max.unit;
     record.timestamp = max.timestamp;
-    record.state = "ok";
+    record.state = daily.unverifiedDays ? "partial" : "ok";
   }
   return {
-    ...base, start, end, status: records.some(r => r.state === "ok") ? "ok" : "empty",
-    message: "Nur tatsächlich aufgezeichnete Recorder-Messwerte. Lücken und die Aufbewahrungsfrist können die wahren Höchstwerte verbergen.",
+    ...base, start, end, status: records.some(r => r.state === "ok" || r.state === "partial") ? "ok" : "empty",
+    message: "Nur Recorder-Messwerte. Tagesmaxima und Tageszähler werden erst nach erkennbarer Rücksetzung berücksichtigt. Fehlende Rücksetz-Nachweise und Aufzeichnungslücken können Rekorde verbergen.",
   };
 }

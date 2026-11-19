@@ -1232,7 +1232,7 @@ export class EcowittWeatherCard extends LitElement {
             <div class="records-grid">
               ${RECORD_DEFINITIONS.filter(def => def.group === group.key).map(def => {
                 const item = records.records.find(entry => entry.key === def.key);
-                const valid = item?.state === "ok" && item.value !== null &&
+                const valid = (item?.state === "ok" || item?.state === "partial") && item.value !== null &&
                   item.timestamp !== null;
                 const digits = def.key === "solar_lux" || def.key === "solar" ? 0 : 1;
                 const text = valid
@@ -1247,20 +1247,31 @@ export class EcowittWeatherCard extends LitElement {
                   ? "Keine passende HA-Entität zugeordnet"
                   : item?.state === "unit-conflict"
                     ? "Einheitenwechsel im Zeitraum – keine Vergleichbarkeit"
-                    : "Keine gültigen Aufzeichnungen im Zeitraum";
-                return html`<article class="record-tile"
-                  style=${`--record-accent: ${def.color}`}>
-                  <div class="record-title">${icon(def.icon)}<span>${def.title}</span></div>
-                  <div class="record-number">${text}
+                    : item?.state === "uncertain"
+                      ? "Tageswechsel nicht nachgewiesen – kein verlässlicher Rekord"
+                      : "Keine gültigen Aufzeichnungen im Zeitraum";
+                return html`<button type="button" class="record-tile"
+                  data-record-key=${def.key}
+                  style=${`--record-accent: ${def.color}`}
+                  ?disabled=${!item?.entityId}
+                  aria-label=${item?.entityId
+                    ? `${def.title}: Sensor in HA öffnen`
+                    : `${def.title}: keine Sensorquelle`}
+                  @click=${() => { if (item?.entityId) this._moreInfo(item.entityId); }}>
+                  <span class="record-title">${icon(def.icon)}<span>${def.title}</span></span>
+                  <span class="record-number">${text}
                     ${valid && item?.unit ? html`<small>${item.unit}</small>` : nothing}
-                  </div>
-                  <div class="record-meta">
+                  </span>
+                  <span class="record-meta">
                     ${valid ? html`<time>${date}</time>` : message}
-                    ${valid && item?.entityId ? html`<span class="record-source">
+                    ${item?.state === "partial" ? html`<span class="record-note">
+                      Unvollständig: ${item.unverifiedDays} Kalendertag(e) ohne bestätigten Tageswechsel
+                    </span>` : nothing}
+                    ${item?.entityId ? html`<span class="record-source">
                       ${this._source(item.entityId)}
                     </span>` : nothing}
-                  </div>
-                </article>`;
+                  </span>
+                </button>`;
               })}
             </div>
           </section>`)
@@ -1268,8 +1279,8 @@ export class EcowittWeatherCard extends LitElement {
       ${records?.status === "ok" ? html`<p class="detail-caption">
         Tagesregen ist der höchste gespeicherte Stand von „Regen heute“,
         nicht die Regenmenge einer gleitenden 24-Stunden-Periode.
-        Ein Böen-Tagesmaximum wird bevorzugt, sofern es zugeordnet ist;
-        andernfalls werden die aufgezeichneten Böen verwendet.
+        Für die stärkste Böe wird ausschließlich der konfigurierte
+        Tageshöchstwert-Sensor verwendet, keine Berechnung aus Einzelböen.
         Die angezeigten Zeitpunkte sind Recorder-Zeitstempel.
       </p>` : nothing}
     </div>`;

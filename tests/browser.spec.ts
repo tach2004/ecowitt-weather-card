@@ -430,6 +430,42 @@ test("weather record button opens a separate themed view with local Recorder max
   await expect(dialog).not.toBeVisible();
 });
 
+test("clicking a weather-record tile opens its configured HA sensor", async ({ page }) => {
+  await ready(page);
+  const expected = await page.evaluate(() => (window as DemoWindow).demoConfig.entities.wind_speed);
+  await page.evaluate(() => {
+    document.addEventListener("hass-more-info", (event) => {
+      (window as any).__selectedRecordEntity = (event as CustomEvent).detail.entityId;
+    }, { once: true });
+  });
+  await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  const wind = dialog.locator('[data-record-key="wind_speed"]');
+  await expect(wind).toHaveAttribute("type", "button");
+  await wind.click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).__selectedRecordEntity)).toBe(expected);
+  await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+  const another = page.getByRole("dialog").locator('[data-record-key="wind_speed"]');
+  await another.focus();
+  await another.press("Enter");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+});
+
+test("record tiles without a configured sensor cannot open unrelated entities", async ({ page }) => {
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.setDemoConfig({
+      ...win.demoConfig, entities: { ...win.demoConfig.entities, solar: "" },
+    });
+    await win.card.updateComplete;
+  });
+  await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+  await expect(page.getByRole("dialog").locator('[data-record-key="solar"]')).toBeDisabled();
+});
+
 test("energy-style record calendar presets and custom selections use local recorder dates", async ({ page }) => {
   await ready(page);
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
