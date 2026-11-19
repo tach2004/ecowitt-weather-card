@@ -1458,21 +1458,21 @@ export const cardStyles = css`
       flex: 1 1 0;
       min-width: 0;
       justify-content: space-between;
-      gap: 3px;
-      padding: 6px 4px;
-      font-size: 0.55rem;
+      gap: 2px;
+      padding: 6px 3px;
+      font-size: 0.5rem;
     }
     .header-devices .device-chip > strong {
-      font-size: 0.62rem;
+      font-size: 0.58rem;
     }
     .header-devices .status-battery,
     .header-devices .status-signal,
     .header-devices .status-connection {
-      gap: 2px;
-      font-size: 0.55rem;
+      gap: 1px;
+      font-size: 0.5rem;
     }
-    .header-devices .battery-glyph { width: 14px; height: 12px; }
-    .header-devices .status-signal .icon { width: 12px; height: 12px; }
+    .header-devices .battery-glyph { width: 13px; height: 12px; }
+    .header-devices .status-signal .icon { width: 11px; height: 12px; }
     .header-devices .status-connection i { width: 6px; height: 6px; }
   }
   @container weather (min-width:1200px) {
