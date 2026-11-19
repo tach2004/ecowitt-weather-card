@@ -2291,6 +2291,7 @@ test("header actions stay accessible without moving desktop weather panels", asy
       expect(action.top).toBeLessThan(layout.climate.top);
     }
     expect(layout.records.right).toBeLessThan(layout.diagnosis.left);
+    console.log("SYNTHETIC_LAYOUT", width, JSON.stringify(layout));
     if (width >= 1280) expect(layout.absoluteActions).toBe(true);
     if (width <= 1024) expect(layout.absoluteActions).toBe(false);
     if (layout.absoluteActions) {
