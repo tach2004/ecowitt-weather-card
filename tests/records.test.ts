@@ -43,6 +43,7 @@ test("queries only actually configured sources and ignores the prior boundary st
     sample("wind_speed", 23, "km/h", "2026-11-17T09:30:00Z"),
     sample("wind_speed", "unavailable", "km/h", "2026-11-17T10:00:00Z"),
     sample("rain_today", 8, "mm", "2026-11-16T22:00:00Z"),
+    sample("rain_today", 0, "mm", "2026-11-16T23:00:10Z"),
     sample("rain_today", 12, "mm", "2026-11-17T08:20:00Z"),
     sample("uv", 4.1, "UV Index", "2026-11-17T10:30:00Z"),
   ];
@@ -59,6 +60,7 @@ test("queries only actually configured sources and ignores the prior boundary st
   assert.equal(req.searchParams.get("filter_entity_id"),
     "sensor.demo_wind_speed,sensor.demo_rain_today,sensor.demo_uv");
   assert.equal(req.searchParams.has("minimal_response"), false);
+  assert.equal(req.searchParams.get("significant_changes_only"), "0");
   assert.equal(result.records.find(r => r.key === "wind_speed")?.value, 23);
   assert.equal(result.records.find(r => r.key === "wind_speed")?.samples, 2);
   assert.equal(result.records.find(r => r.key === "rain_today")?.value, 12);
@@ -66,7 +68,7 @@ test("queries only actually configured sources and ignores the prior boundary st
   assert.equal(result.records.find(r => r.key === "solar")?.state, "missing");
 });
 
-test("prefer explicitly configured daily gust peak and fall back to measured gusts", async () => {
+test("daily gust records require the configured gateway maximum, never a sampled gust fallback", async () => {
   const sources = {
     "sensor.demo_wind_gust_max": sample("wind_gust_max", 32, "km/h", current),
     "sensor.demo_wind_gust": sample("wind_gust", 25, "km/h", current),
@@ -76,7 +78,82 @@ test("prefer explicitly configured daily gust peak and fall back to measured gus
     "sensor.demo_wind_gust_max");
   delete (sources as Record<string,HassEntity>)["sensor.demo_wind_gust_max"];
   assert.equal(selectedRecordSources(configs, sources).find(r => r.key === "wind_gust_max")?.entityId,
-    "sensor.demo_wind_gust");
+    null);
+});
+
+test("midnight carryover from previous daily gust and rain is never a new-day record", async () => {
+  const calls: string[] = [];
+  const rows = [
+    sample("wind_gust_max", 42.8, "km/h", "2026-11-18T22:58:00Z"),
+    sample("wind_gust_max", 42.8, "km/h", "2026-11-18T23:00:00Z"),
+    sample("wind_gust_max", 0, "km/h", "2026-11-18T23:00:14Z"),
+    sample("wind_gust_max", 37.1, "km/h", "2026-11-19T04:50:00Z"),
+    sample("rain_today", 8.1, "mm", "2026-11-18T22:58:00Z"),
+    sample("rain_today", 8.1, "mm", "2026-11-18T23:00:00Z"),
+    sample("rain_today", 0, "mm", "2026-11-18T23:00:21Z"),
+    sample("rain_today", 0.6, "mm", "2026-11-19T03:00:00Z"),
+  ];
+  const result = await loadWeatherRecords(
+    fixture(rows, calls),
+    { wind_gust_max: "sensor.demo_wind_gust_max", rain_today: "sensor.demo_rain_today" },
+    "2026-11-19", "2026-11-19", Date.parse("2026-11-19T06:00:00Z"),
+  );
+  const gust = result.records.find(r => r.key === "wind_gust_max")!;
+  const rain = result.records.find(r => r.key === "rain_today")!;
+  assert.equal(gust.value, 37.1);
+  assert.equal(gust.timestamp, Date.parse("2026-11-19T04:50:00Z"));
+  assert.equal(gust.state, "ok");
+  assert.equal(rain.value, 0.6);
+  assert.equal(rain.state, "ok");
+  assert.equal(gust.unverifiedDays, 0);
+  assert.equal(calls.length, 1);
+});
+
+test("when reset was missed but first day's value is below yesterday, daily max remains usable", async () => {
+  const rows = [
+    sample("wind_gust_max", 42.8, "km/h", "2026-11-18T22:58:00Z"),
+    sample("wind_gust_max", 13.5, "km/h", "2026-11-19T00:14:00Z"),
+    sample("wind_gust_max", 37.1, "km/h", "2026-11-19T05:00:00Z"),
+  ];
+  const result = await loadWeatherRecords(
+    fixture(rows, []), { wind_gust_max: "sensor.demo_wind_gust_max" },
+    "2026-11-19", "2026-11-19", Date.parse("2026-11-19T06:00:00Z"),
+  );
+  assert.equal(result.records.find(r => r.key === "wind_gust_max")?.value, 37.1);
+});
+
+test("unverified retained daily values do not become invented records", async () => {
+  const old = sample("rain_today", 8.1, "mm", "2026-11-18T22:58:00Z");
+  const unchanged = sample("rain_today", 8.1, "mm", "2026-11-18T23:00:00Z");
+  const result = await loadWeatherRecords(
+    fixture([old, unchanged], []), { rain_today: "sensor.demo_rain_today" },
+    "2026-11-19", "2026-11-19", Date.parse("2026-11-19T06:00:00Z"),
+  );
+  const rain = result.records.find(r => r.key === "rain_today")!;
+  assert.equal(rain.value, null);
+  assert.equal(rain.state, "uncertain");
+  assert.equal(rain.unverifiedDays, 1);
+  assert.equal(result.status, "empty");
+});
+
+test("multi-day counter evaluation excludes unverified days and explicitly marks partial coverage", async () => {
+  const rows = [
+    sample("rain_today", 5, "mm", "2026-11-16T22:58:00Z"),
+    sample("rain_today", 0, "mm", "2026-11-16T23:01:00Z"),
+    sample("rain_today", 3.2, "mm", "2026-11-17T19:00:00Z"),
+    sample("rain_today", 3.2, "mm", "2026-11-17T23:00:00Z"),
+    sample("rain_today", 0, "mm", "2026-11-18T23:01:00Z"),
+    sample("rain_today", 0.6, "mm", "2026-11-19T04:00:00Z"),
+  ];
+  const result = await loadWeatherRecords(
+    fixture(rows, []), { rain_today: "sensor.demo_rain_today" },
+    "2026-11-17", "2026-11-19", Date.parse("2026-11-19T05:00:00Z"),
+  );
+  const rain = result.records.find(r => r.key === "rain_today")!;
+  assert.equal(rain.value, 3.2);
+  assert.equal(rain.state, "partial");
+  assert.equal(rain.unverifiedDays, 1);
+  assert.equal(result.status, "ok");
 });
 
 test("never compare incompatible units, negative readings, future or invalid values", async () => {

@@ -749,6 +749,12 @@ export const cardStyles = css`
     gap: 10px;
   }
   .record-tile {
+    appearance: none;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
     gap: 9px;
@@ -760,6 +766,10 @@ export const cardStyles = css`
     border-radius: 13px;
     background: color-mix(in srgb, var(--record-accent) 9%, var(--surface));
   }
+  .record-tile:disabled { cursor: default; }
+  .record-tile:not(:disabled):hover { border-color: var(--record-accent); }
+  .record-tile:focus-visible { outline: 3px solid var(--record-accent); outline-offset: 3px; }
+  .record-note { color: var(--record-accent); font-weight: 600; }
   .record-title {
     display: flex;
     align-items: center;
