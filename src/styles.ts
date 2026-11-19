@@ -127,12 +127,12 @@ export const cardStyles = css`
       grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
     }
   }
-  @container weather (min-width:1100px) {
+  @container weather (min-width:1200px) {
     .header-actions {
       display: flex;
       position: absolute;
       z-index: 2;
-      top: calc(100% - 21px);
+      top: calc(100% - 44px);
       right: 0;
       gap: 8px;
       align-items: center;
@@ -1443,25 +1443,50 @@ export const cardStyles = css`
     }
   }
   @container weather (min-width:901px) {
+    /* Many device chips must fit *inside* the card, never drive the grid
+       beyond its available width or push the action buttons off-screen. */
     .header-devices {
       display: flex;
       justify-content: flex-end;
+      min-width: 0;
+      max-width: 100%;
+      gap: 4px;
     }
-    .device-chip,
-    .device-placeholder {
+    .header-devices .device-chip,
+    .header-devices .device-placeholder {
       width: auto;
-      flex: 0 0 auto;
-      justify-content: flex-start;
+      flex: 1 1 0;
+      min-width: 0;
+      justify-content: space-between;
+      gap: 3px;
+      padding: 6px 4px;
+      font-size: 0.55rem;
     }
+    .header-devices .device-chip > strong {
+      font-size: 0.62rem;
+    }
+    .header-devices .status-battery,
+    .header-devices .status-signal,
+    .header-devices .status-connection {
+      gap: 2px;
+      font-size: 0.55rem;
+    }
+    .header-devices .battery-glyph { width: 14px; height: 12px; }
+    .header-devices .status-signal .icon { width: 12px; height: 12px; }
+    .header-devices .status-connection i { width: 6px; height: 6px; }
   }
-  @container weather (min-width:1100px) {
+  @container weather (min-width:1200px) {
+    /* Give the separate action row exactly one 44px hit-target height.
+       No weather panel grid properties or positions are changed. */
     .station-header {
-      grid-template-columns: 42px minmax(180px, 1fr) max-content;
+      grid-template-columns: 42px minmax(190px, 0.27fr) minmax(0, 1fr);
+      padding-bottom: 44px;
     }
     .header-devices {
       grid-column: 3;
       grid-row: 1;
       margin: 0;
+      max-width: 100%;
     }
   }
   @container weather (max-width:359px) {
