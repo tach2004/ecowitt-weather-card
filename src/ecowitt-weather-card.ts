@@ -450,31 +450,35 @@ export class EcowittWeatherCard extends LitElement {
     );
     return html`<ha-card data-theme=${this._config.theme_mode || "auto"}>
       <div class="station-header">
-        <div class="station-icon">${icon("station")}</div>
-        <div class="station-heading">
-          <h1>${this._config.title || "Wetterstation"}</h1>
-          <p class="subtitle">
-            ${this._config.subtitle || "Ecowitt · Wetter vor Ort"}
-          </p>
+        <div class="station-intro">
+          <div class="station-icon">${icon("station")}</div>
+          <div class="station-heading">
+            <h1>${this._config.title || "Wetterstation"}</h1>
+            <p class="subtitle">
+              ${this._config.subtitle || "Ecowitt · Wetter vor Ort"}
+            </p>
+          </div>
+          <div class="header-actions" aria-label="Wetterstation-Aktionen">
+            <button
+              class="records-trigger"
+              data-detail="records"
+              aria-label="Wetterrekorde öffnen"
+              title="Wetterrekorde"
+              @click=${() => this._openDetail("records")}
+            >
+              ${icon("records")}
+            </button>
+            <button
+              class="diagnostics"
+              data-detail="sensors"
+              aria-label="Sensoren und Diagnosen öffnen"
+              @click=${() => this._openDetail("sensors")}
+            >
+              ${icon("sensors")}
+            </button>
+          </div>
         </div>
         ${this._headerDevices()}
-        <button
-          class="records-trigger"
-          data-detail="records"
-          aria-label="Wetterrekorde öffnen"
-          title="Wetterrekorde"
-          @click=${() => this._openDetail("records")}
-        >
-          ${icon("records")}
-        </button>
-        <button
-          class="diagnostics"
-          data-detail="sensors"
-          aria-label="Sensoren und Diagnosen öffnen"
-          @click=${() => this._openDetail("sensors")}
-        >
-          ${icon("sensors")}
-        </button>
       </div>
       ${
         !hasEntities
@@ -642,8 +646,9 @@ export class EcowittWeatherCard extends LitElement {
         title=${indicator.connection.detail}
         class="status-connection ${indicator.connection.state}"
       >
-        <i aria-hidden="true"></i
-        >${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}
+        <i aria-hidden="true"></i>
+        <span class="status-connection-full">${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}</span>
+        <span class="status-connection-compact" aria-hidden="true">${indicator.connection.state === "ok" ? "OK" : indicator.connection.state === "bad" ? "!" : "—"}</span>
       </span>
     </button>`;
   }

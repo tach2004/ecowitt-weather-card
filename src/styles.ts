@@ -42,7 +42,8 @@ export const cardStyles = css`
     outline-offset: 3px;
   }
   ha-card {
-    display: block;
+    display: flex;
+    flex-direction: column;
     max-width: 100%;
     margin: auto;
     overflow: hidden;
@@ -58,7 +59,12 @@ export const cardStyles = css`
     padding: 20px;
     box-shadow: var(--ha-card-box-shadow, 0 14px 50px #0002);
   }
+  /* A single device-status list can be moved to the card's end on
+     narrow containers, without duplicating any interactive device controls. */
   .station-header {
+    display: contents;
+  }
+  .station-intro {
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
     align-items: center;
@@ -67,14 +73,11 @@ export const cardStyles = css`
     width: 100%;
     padding: 0 0 18px;
   }
-  /* Preserve the title width with two actions on small screens without
-     reducing button hit targets or weakening existing layout tests. */
+  /* Preserve the title width on small screens and every button's tap target. */
   @media (max-width: 600px) {
-    .station-header {
-      column-gap: 4px;
-    }
+    .station-intro { column-gap: 4px; }
   }
-  .station-header > .station-icon {
+  .station-icon {
     grid-column: 1;
     grid-row: 1;
   }
@@ -88,13 +91,52 @@ export const cardStyles = css`
     overflow-wrap: break-word;
     word-break: normal;
   }
-  .station-header > .records-trigger {
+  .header-actions { display: contents; }
+  .header-actions > .records-trigger {
     grid-column: 3;
     grid-row: 1;
   }
-  .station-header > .diagnostics {
+  .header-actions > .diagnostics {
     grid-column: 4;
     grid-row: 1;
+  }
+  /* The weather panels keep their exact existing layout and spacing.
+     On wider cards the actions float in the current gap, out of flow. */
+  @container weather (min-width:760px) {
+    ha-card { display: block; }
+    .station-header {
+      position: relative;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      width: 100%;
+      padding: 0 0 18px;
+    }
+    .station-intro { display: contents; }
+    /* Medium-width cards retain the buttons in the title row: there is
+       not enough vertical gap below the extra status row for 44px targets. */
+    .header-actions { display: contents; }
+    .header-actions > .records-trigger { grid-column: 3; grid-row: 1; }
+    .header-actions > .diagnostics { grid-column: 4; grid-row: 1; }
+    .header-devices { order: initial; }
+  }
+  @container weather (min-width:760px) and (max-width:1099px) {
+    .station-header {
+      grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
+    }
+  }
+  @container weather (min-width:1200px) {
+    .header-actions {
+      display: flex;
+      position: absolute;
+      z-index: 2;
+      top: calc(100% - 44px);
+      right: 0;
+      gap: 8px;
+      align-items: center;
+    }
   }
 
   .station-icon {
@@ -1243,6 +1285,7 @@ export const cardStyles = css`
     color: #172b3e;
   }
   .header-devices {
+    order: 10;
     grid-column: 1 / -1;
     grid-row: 2;
     display: grid;
@@ -1317,6 +1360,8 @@ export const cardStyles = css`
   .status-connection.bad i {
     background: #df674e;
   }
+  /* Full connection wording stays on phones and in device details. */
+  .status-connection-compact { display: none; }
   .diagnostics,
   .records-trigger {
     margin-left: 0;
@@ -1400,31 +1445,54 @@ export const cardStyles = css`
     }
   }
   @container weather (min-width:901px) {
+    /* Many device chips must fit *inside* the card, never drive the grid
+       beyond its available width or push the action buttons off-screen. */
     .header-devices {
       display: flex;
       justify-content: flex-end;
+      min-width: 0;
+      max-width: 100%;
+      gap: 4px;
     }
-    .device-chip,
-    .device-placeholder {
+    .header-devices .device-chip,
+    .header-devices .device-placeholder {
       width: auto;
-      flex: 0 0 auto;
-      justify-content: flex-start;
+      flex: 1 1 0;
+      min-width: 0;
+      justify-content: space-between;
+      gap: 0;
+      padding: 6px 2px;
+      font-size: 0.5rem;
     }
+    .header-devices .device-chip > strong {
+      font-size: 0.66rem;
+    }
+    /* Compact desktop chips retain the status and its full hover title
+       without requiring clipped labels or microscopic typography. */
+    .header-devices .status-connection-full { display: none; }
+    .header-devices .status-connection-compact { display: inline; }
+    .header-devices .status-battery,
+    .header-devices .status-signal,
+    .header-devices .status-connection {
+      gap: 2px;
+      font-size: 0.60rem;
+    }
+    .header-devices .battery-glyph { width: 13px; height: 12px; }
+    .header-devices .status-signal .icon { width: 11px; height: 12px; }
+    .header-devices .status-connection i { width: 6px; height: 6px; }
   }
   @container weather (min-width:1200px) {
+    /* Give the separate action row exactly one 44px hit-target height.
+       No weather panel grid properties or positions are changed. */
     .station-header {
-      grid-template-columns: 42px minmax(180px, 1fr) max-content 44px 44px;
+      grid-template-columns: 42px minmax(190px, 0.27fr) minmax(0, 1fr);
+      padding-bottom: 44px;
     }
     .header-devices {
       grid-column: 3;
       grid-row: 1;
       margin: 0;
-    }
-    .station-header > .records-trigger {
-      grid-column: 4;
-    }
-    .station-header > .diagnostics {
-      grid-column: 5;
+      max-width: 100%;
     }
   }
   @container weather (max-width:359px) {

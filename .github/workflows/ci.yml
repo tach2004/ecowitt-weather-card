@@ -24,7 +24,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      # The ubuntu-latest runner already provides Chromium's runtime libraries.
+      # Avoid apt package downloads here: unstable Ubuntu mirrors can block all
+      # browser tests before they start. Test failures still fail the job.
+      - name: Download Chromium for browser tests
+        run: npx playwright install chromium
       - run: npm run test:browser
       - name: Check public assets and Git history
         run: node scripts/audit-public-assets.mjs
