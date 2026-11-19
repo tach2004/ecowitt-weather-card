@@ -76,6 +76,38 @@ export class EcowittWeatherCardEditor extends LitElement {
       this._registryState === "idle"
     )
       void this._loadRegistry();
+    this._syncDeviceFieldSelections();
+  }
+  /** Native selects can lose their displayed value when options are created
+   * or changed after the saved config is rendered. Lit may skip reapplying an
+   * unchanged property, so reconcile against config after the DOM is complete.
+   * Never modify config or infer an entity from the HA registry here.
+   */
+  private _syncDeviceFieldSelections(): void {
+    const configured = new Map(
+      (this._config.device_status || []).map((device) => [
+        device.device_id,
+        device,
+      ]),
+    );
+    for (const container of this.renderRoot.querySelectorAll<HTMLElement>(
+      ".device-config",
+    )) {
+      const device = configured.get(container.dataset.deviceId || "");
+      for (const select of container.querySelectorAll<HTMLSelectElement>(
+        "select[data-device-field]",
+      )) {
+        const key = select.dataset.deviceField;
+        if (key !== "battery" && key !== "signal" && key !== "connection")
+          continue;
+        const saved = device?.[key] || "";
+        // A stored entity is always rendered as an option even when HA no
+        // longer exposes its state; it must never silently become unassigned.
+        if (select.value !== saved && [...select.options].some(
+          (option) => option.value === saved,
+        )) select.value = saved;
+      }
+    }
   }
   private async _loadRegistry(): Promise<void> {
     this._registryState = "loading";
@@ -569,14 +601,14 @@ export class EcowittWeatherCardEditor extends LitElement {
       >${title}
       <select
         aria-label=${`${title} · ${device.name || device.role}`}
-        .value=${device[key] || ""}
+        data-device-field=${key}
         @change=${(event: Event) =>
           this._editDevice(device, { [key]: this._value(event) || undefined })}
       >
         <option value="">Nicht zugeordnet</option>
         ${ids.map(
           (id) =>
-            html`<option value=${id} .selected=${device[key] === id}>
+            html`<option value=${id}>
               ${this._label(id)}
             </option>`,
         )}
