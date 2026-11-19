@@ -1643,7 +1643,7 @@ async function setStatusDevices(page: Page, count: number, longNames = false) {
     async ({ count, longNames }) => {
       const win = window as DemoWindow;
       const now = new Date().toISOString();
-      const roles = ["WS90", "WH40", "WN31"];
+      const roles = ["WS90", "WH40", "WN31", "GW3000", "WN32"];
       const devices = roles.slice(0, count).map((role, index) => {
         const base = `sensor.demo_status_${index}`;
         for (const [suffix, state, unit, device_class] of [
@@ -2258,6 +2258,96 @@ async function withNativeHaCard(page: Page) {
     );
   });
 }
+
+test("header actions stay accessible without moving desktop weather panels", async ({ page }) => {
+  await withNativeHaCard(page);
+  for (const width of [874, 1024, 1120, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1050 });
+    await ready(page);
+    await setStatusDevices(page, 5);
+    const layout = await page.locator("ecowitt-weather-card").evaluate((host) => {
+      const root = host.shadowRoot!;
+      const box = (selector: string) => {
+        const r = root.querySelector(selector)!.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+      };
+      const devices = [...root.querySelectorAll(".device-chip")].map(el => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+      });
+      return {
+        card: box("ha-card"), title: box(".station-heading"),
+        records: box(".records-trigger"), diagnosis: box(".diagnostics"),
+        climate: box(".weather > .climate"), mainLayout: box(".main-layout"),
+        devices,
+      };
+    });
+    expect(layout.devices).toHaveLength(5);
+    for (const action of [layout.records, layout.diagnosis]) {
+      expect(action.right).toBeLessThanOrEqual(layout.card.right);
+      expect(action.left).toBeGreaterThanOrEqual(layout.card.left);
+      expect(action.bottom - action.top).toBeGreaterThanOrEqual(44);
+      expect(action.top).toBeLessThan(layout.climate.top);
+    }
+    expect(layout.records.right).toBeLessThan(layout.diagnosis.left);
+    if (width >= 1100) {
+      const lastStatusBottom = Math.max(...layout.devices.map(el => el.bottom));
+      expect(layout.records.top).toBeGreaterThanOrEqual(lastStatusBottom);
+      expect(layout.records.bottom).toBeLessThanOrEqual(layout.climate.top);
+      expect(layout.diagnosis.bottom).toBeLessThanOrEqual(layout.climate.top);
+      expect(layout.records.top).toBeGreaterThan(layout.title.top);
+    } else {
+      // At medium desktop widths there is no 44px gap after the second
+      // status row: actions stay in the heading rather than covering panels.
+      expect(layout.records.bottom).toBeLessThanOrEqual(layout.devices[0].top);
+    }
+    await noOverflow(page);
+  }
+});
+
+test("mobile status bars move after all weather content and action buttons stay in the first row", async ({ page }) => {
+  await withNativeHaCard(page);
+  for (const width of [320, 402, 600]) {
+    await page.setViewportSize({ width, height: 874 });
+    await ready(page);
+    await setStatusDevices(page, 5);
+    const layout = await page.locator("ecowitt-weather-card").evaluate((host) => {
+      const root = host.shadowRoot!;
+      const box = (selector: string) => {
+        const r = root.querySelector(selector)!.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+      };
+      const devices = [...root.querySelectorAll(".header-devices .device-chip")].map(el => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom };
+      });
+      return {
+        heading: box(".station-heading"), records: box(".records-trigger"),
+        diagnosis: box(".diagnostics"), summary: box(".mobile-summary"),
+        metrics: box(".metrics"), footer: box(".footer"),
+        status: box(".header-devices"), devices, card: box("ha-card"),
+      };
+    });
+    expect(layout.devices).toHaveLength(5);
+    expect(layout.records.top).toBeLessThan(layout.summary.top);
+    expect(layout.diagnosis.top).toBeLessThan(layout.summary.top);
+    expect(Math.abs(layout.records.top - layout.heading.top)).toBeLessThan(15);
+    expect(Math.abs(layout.records.top - layout.diagnosis.top)).toBeLessThan(1);
+    expect(layout.status.top).toBeGreaterThanOrEqual(layout.metrics.bottom);
+    expect(layout.status.top).toBeGreaterThanOrEqual(layout.footer.bottom);
+    expect(layout.status.bottom).toBeLessThanOrEqual(layout.card.bottom);
+    for (let i = 1; i < layout.devices.length; i++) {
+      expect(layout.devices[i].top).toBeGreaterThan(layout.devices[i - 1].bottom);
+    }
+    await noOverflow(page);
+    await page.getByRole("button", { name: "Wetterrekorde öffnen" }).tap();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Schließen" }).first().tap();
+    await page.getByRole("button", { name: "Sensoren und Diagnosen öffnen" }).tap();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Schließen" }).first().tap();
+  }
+});
 
 test("native HA card keeps a full title and single-line device chips at real card widths", async ({
   page,

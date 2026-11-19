@@ -42,7 +42,8 @@ export const cardStyles = css`
     outline-offset: 3px;
   }
   ha-card {
-    display: block;
+    display: flex;
+    flex-direction: column;
     max-width: 100%;
     margin: auto;
     overflow: hidden;
@@ -58,7 +59,12 @@ export const cardStyles = css`
     padding: 20px;
     box-shadow: var(--ha-card-box-shadow, 0 14px 50px #0002);
   }
+  /* A single device-status list can be moved to the card's end on
+     narrow containers, without duplicating any interactive device controls. */
   .station-header {
+    display: contents;
+  }
+  .station-intro {
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
     align-items: center;
@@ -67,14 +73,11 @@ export const cardStyles = css`
     width: 100%;
     padding: 0 0 18px;
   }
-  /* Preserve the title width with two actions on small screens without
-     reducing button hit targets or weakening existing layout tests. */
+  /* Preserve the title width on small screens and every button's tap target. */
   @media (max-width: 600px) {
-    .station-header {
-      column-gap: 4px;
-    }
+    .station-intro { column-gap: 4px; }
   }
-  .station-header > .station-icon {
+  .station-icon {
     grid-column: 1;
     grid-row: 1;
   }
@@ -88,13 +91,52 @@ export const cardStyles = css`
     overflow-wrap: break-word;
     word-break: normal;
   }
-  .station-header > .records-trigger {
+  .header-actions { display: contents; }
+  .header-actions > .records-trigger {
     grid-column: 3;
     grid-row: 1;
   }
-  .station-header > .diagnostics {
+  .header-actions > .diagnostics {
     grid-column: 4;
     grid-row: 1;
+  }
+  /* The weather panels keep their exact existing layout and spacing.
+     On wider cards the actions float in the current gap, out of flow. */
+  @container weather (min-width:760px) {
+    ha-card { display: block; }
+    .station-header {
+      position: relative;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      width: 100%;
+      padding: 0 0 18px;
+    }
+    .station-intro { display: contents; }
+    /* Medium-width cards retain the buttons in the title row: there is
+       not enough vertical gap below the extra status row for 44px targets. */
+    .header-actions { display: contents; }
+    .header-actions > .records-trigger { grid-column: 3; grid-row: 1; }
+    .header-actions > .diagnostics { grid-column: 4; grid-row: 1; }
+    .header-devices { order: initial; }
+  }
+  @container weather (min-width:760px) and (max-width:1099px) {
+    .station-header {
+      grid-template-columns: 42px minmax(0, 1fr) 44px 44px;
+    }
+  }
+  @container weather (min-width:1100px) {
+    .header-actions {
+      display: flex;
+      position: absolute;
+      z-index: 2;
+      top: calc(100% - 21px);
+      right: 0;
+      gap: 8px;
+      align-items: center;
+    }
   }
 
   .station-icon {
@@ -1243,6 +1285,7 @@ export const cardStyles = css`
     color: #172b3e;
   }
   .header-devices {
+    order: 10;
     grid-column: 1 / -1;
     grid-row: 2;
     display: grid;
@@ -1411,20 +1454,14 @@ export const cardStyles = css`
       justify-content: flex-start;
     }
   }
-  @container weather (min-width:1200px) {
+  @container weather (min-width:1100px) {
     .station-header {
-      grid-template-columns: 42px minmax(180px, 1fr) max-content 44px 44px;
+      grid-template-columns: 42px minmax(180px, 1fr) max-content;
     }
     .header-devices {
       grid-column: 3;
       grid-row: 1;
       margin: 0;
-    }
-    .station-header > .records-trigger {
-      grid-column: 4;
-    }
-    .station-header > .diagnostics {
-      grid-column: 5;
     }
   }
   @container weather (max-width:359px) {
