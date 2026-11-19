@@ -1479,7 +1479,7 @@ export const cardStyles = css`
     /* Give the separate action row exactly one 44px hit-target height.
        No weather panel grid properties or positions are changed. */
     .station-header {
-      grid-template-columns: 42px minmax(180px, 0.18fr) minmax(0, 1fr);
+      grid-template-columns: 42px minmax(190px, 0.27fr) minmax(0, 1fr);
       padding-bottom: 44px;
     }
     .header-devices {
