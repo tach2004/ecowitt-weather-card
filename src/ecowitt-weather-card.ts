@@ -613,21 +613,19 @@ export class EcowittWeatherCard extends LitElement {
     const indicator = deviceIndicators(this.hass, device, {
       staleAfterMinutes: this._config.stale_after_minutes,
     });
+    const statusTitle = [
+      device.battery?.trim() ? `Batterie: ${indicator.battery.label}` : null,
+      device.signal?.trim() ? `Signal: ${indicator.signal.label}` : null,
+      device.connection?.trim() ? `Verbindung: ${indicator.connection.label}` : null,
+    ].filter(Boolean).join(", ");
     return html`<button
       type="button"
       class="device-chip ${compact ? "compact" : "full"}"
-      title=${
-        "Batterie: " +
-        indicator.battery.label +
-        ", Signal: " +
-        indicator.signal.label +
-        ", Verbindung: " +
-        indicator.connection.label
-      }
+      title=${statusTitle || device.name || device.role}
       @click=${() => this._openDetail("sensors")}
     >
       <strong title=${device.name || device.role}>${device.role}</strong>
-      <span
+      ${device.battery?.trim() ? html`<span
         title=${indicator.battery.detail}
         class="status-battery ${
           indicator.battery.percent !== undefined &&
@@ -638,18 +636,17 @@ export class EcowittWeatherCard extends LitElement {
       >
         ${this._batteryGlyph(indicator.battery.percent)}
         ${indicator.battery.state === "unknown" ? "—" : indicator.battery.label}
-      </span>
-      <span title=${indicator.signal.detail} class="status-signal"
-        >${icon("signal")}${indicator.signal.state === "unknown" ? "—" : indicator.signal.label}</span
-      >
-      <span
+      </span>` : nothing}
+      ${device.signal?.trim() ? html`<span title=${indicator.signal.detail} class="status-signal"
+        >${icon("signal")}${indicator.signal.state === "unknown" ? "—" : indicator.signal.label}</span>` : nothing}
+      ${device.connection?.trim() ? html`<span
         title=${indicator.connection.detail}
         class="status-connection ${indicator.connection.state}"
       >
         <i aria-hidden="true"></i>
         <span class="status-connection-full">${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}</span>
         <span class="status-connection-compact" aria-hidden="true">${indicator.connection.state === "ok" ? "OK" : indicator.connection.state === "bad" ? "!" : "—"}</span>
-      </span>
+      </span>` : nothing}
     </button>`;
   }
   private _headerDevices() {
