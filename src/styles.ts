@@ -1360,6 +1360,8 @@ export const cardStyles = css`
   .status-connection.bad i {
     background: #df674e;
   }
+  /* Full connection wording stays on phones and in device details. */
+  .status-connection-compact { display: none; }
   .diagnostics,
   .records-trigger {
     margin-left: 0;
@@ -1463,13 +1465,17 @@ export const cardStyles = css`
       font-size: 0.5rem;
     }
     .header-devices .device-chip > strong {
-      font-size: 0.58rem;
+      font-size: 0.66rem;
     }
+    /* Compact desktop chips retain the status and its full hover title
+       without requiring clipped labels or microscopic typography. */
+    .header-devices .status-connection-full { display: none; }
+    .header-devices .status-connection-compact { display: inline; }
     .header-devices .status-battery,
     .header-devices .status-signal,
     .header-devices .status-connection {
-      gap: 1px;
-      font-size: 0.5rem;
+      gap: 2px;
+      font-size: 0.60rem;
     }
     .header-devices .battery-glyph { width: 13px; height: 12px; }
     .header-devices .status-signal .icon { width: 11px; height: 12px; }

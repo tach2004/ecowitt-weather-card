@@ -646,8 +646,9 @@ export class EcowittWeatherCard extends LitElement {
         title=${indicator.connection.detail}
         class="status-connection ${indicator.connection.state}"
       >
-        <i aria-hidden="true"></i
-        >${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}
+        <i aria-hidden="true"></i>
+        <span class="status-connection-full">${indicator.connection.state === "unknown" ? "—" : indicator.connection.label}</span>
+        <span class="status-connection-compact" aria-hidden="true">${indicator.connection.state === "ok" ? "OK" : indicator.connection.state === "bad" ? "!" : "—"}</span>
       </span>
     </button>`;
   }
