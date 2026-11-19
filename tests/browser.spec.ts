@@ -1698,7 +1698,7 @@ test("device status chips use original readable sizes and only configured indica
     await setStatusDevices(page, 5);
     await page.evaluate(async () => {
       const win = window as DemoWindow;
-      const devices = win.demoConfig.device_status.map((device: any, index: number) =>
+      const devices = win.card._config.device_status.map((device: any, index: number) =>
         index === 3
           ? { ...device, battery: "", signal: undefined }
           : index === 4
