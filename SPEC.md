@@ -1,21 +1,12 @@
-# Ecowitt Weather Card — current product specification
+# Ecowitt Weather Card
 
-A standalone responsive Home Assistant Lovelace custom card for locally integrated Ecowitt weather stations. This describes the current product, **not** a pending implementation plan; no user's installation-specific details are assumed.
+Eine eigenständige Lovelace-Karte für lokale Wetterdaten aus Home Assistant. `custom:ecowitt-weather-card` unterstützt den visuellen Editor, YAML sowie Panel- und Sections-Ansichten. Das Layout richtet sich nach der verfügbaren Kartenbreite.
 
-## Architecture
-- `custom:ecowitt-weather-card` with native editor and optional YAML configuration. One card supports Panel and Sections views, sized by the card's available container width.
-- Wind, outdoor climate, rain, pressure, solar/UV and device statuses use explicitly mapped **real HA entities**. Device and entity suggestions come dynamically from HA registries, never hard-coded personal IDs.
-- Recorder history and optional calendar-day minimum/maximum load only when relevant details are opened. Missing data and unit differences are reported, never invented.
-- HACS publishes a single local JS module; no remote map/weather API or required third-party frontend cards. The optional installed `custom:windrose-card` can replace the wind diagram in place and accepts its native options and variants.
+- Die Karte verwendet zugeordnete Home-Assistant-Entitäten. Gerätevorschläge stammen aus der Registry. Fehlende, ungültige und nicht verfügbare Werte bleiben erkennbar.
+- Windrichtung bezeichnet die meteorologische Herkunft. Der Strömungspfeil zeigt von dort zum Ziel. Windrichtung und Norden bleiben auch bei einem gedrehten Bild eindeutig.
+- Regenrate, Regenmenge und Oberflächenfeuchtigkeit sind getrennte Messgrößen. Wettereffekte folgen lokalen Quellen und kennzeichnen Schätzungen. Die Bewegungseinstellung des Systems wird berücksichtigt.
+- Details und Wetterrekorde verwenden vorhandene Recorder-Daten. Tagesextrema der Außentemperatur können auch auf der Hauptkarte aus dem Recorder ergänzt werden, wenn eigene Extremwertsensoren fehlen.
+- Die neutrale Windgrafik ist Bestandteil der Karte. Eigene Bilder werden über die Home-Assistant-Instanz bereitgestellt. Eine separat installierte Windrose lässt sich optional in die Karte einbetten.
+- HACS bezieht das Kartenmodul aus dem GitHub-Release. Die Wetterkarte benötigt keine weiteren Frontend-Karten.
 
-## Visual and data semantics
-- Default drawing is a generic independently designed north-up site illustration. Private backgrounds are configured by each user on their own Home Assistant installation and remain outside the public repository.
-- Wind direction is the meteorological **source** bearing; an illustrative airflow arrow towards the target points at source bearing + 180°. Animate compass wraparound correctly.
-- Sensor wetness is not proof of falling rain. Actual rain rate/accumulation and calendar-day vs rolling rainfall have separate sources.
-- Weather overlays show sun, clouds, moon and rain using observed HA data or **explicitly labeled** local estimates. Solar measurements do not provide certain cloud coverage. Respect reduced-motion and user animation preferences; never alter the configured background or coordinate system.
-- Show units, uncertainty, unavailable sources and errors clearly. Never invent connectivity, calculations or recorder measurements.
-
-## Maintenance
-- Verify mobile/desktop, Panel/Sections, themes, dialogs, missing sensors, graphs, windrose presence/absence and configuration compatibility.
-- Preserve CI/HACS packaging and reliable tests. Only independent generic art and synthetic samples belong in public docs/tests.
-- Mandatory privacy and contribution rules: [AGENTS.md](AGENTS.md). Work starts only after explicit instruction; **no automatic merge**.
+Die [Konfigurationsübersicht](docs/CONFIGURATION.md) beschreibt die verfügbaren Felder. Für die Pflege gelten die [Repository-Regeln](AGENTS.md).
