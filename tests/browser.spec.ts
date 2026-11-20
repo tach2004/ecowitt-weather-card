@@ -181,6 +181,46 @@ test("wind arrows point toward target from the meteorological source with a shor
   await expect(arrow).toHaveCount(0);
 });
 
+test("a valid average wind direction remains visible during a calm while current airflow disappears", async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  const average = page.locator(".wind-layer .flow-average");
+  const current = page.locator(".wind-layer .flow-current");
+
+  await update(page, "wind_direction", 85);
+  await update(page, "wind_direction_avg", 270);
+  await expect(average).toHaveAttribute("data-bearing", "270");
+  await expect(current).toHaveAttribute("data-bearing", "85");
+
+  // An instant of 0 km/h does not invalidate the independently reported
+  // average (e.g. GW3000 ten-minute mean). No new direction is calculated.
+  await update(page, "wind_speed", 0);
+  await expect(current).toHaveCount(0);
+  await expect(average).toHaveCount(1);
+  await expect(average).toHaveAttribute("data-bearing", "270");
+  await expect(page.locator(".image-note")).toContainText("Flaute");
+
+  // A legitimate 0° mean is north and must not be mistaken for missing.
+  await update(page, "wind_direction_avg", 0);
+  await expect(average).toHaveAttribute("data-bearing", "0");
+
+  // Never retain a graphic from a missing or invalid mean reading.
+  await update(page, "wind_direction_avg", "unavailable");
+  await expect(average).toHaveCount(0);
+  await update(page, "wind_direction_avg", 185, "°");
+  await expect(average).toHaveAttribute("data-bearing", "185");
+  await update(page, "wind_direction_avg", 185, "km/h");
+  await expect(average).toHaveCount(0);
+
+  // Current airflow returns only when the wind starts moving again.
+  await update(page, "wind_speed", 5);
+  await expect(current).toHaveAttribute("data-bearing", "85");
+  await expect(average).toHaveCount(0);
+  await update(page, "wind_direction_avg", 185, "°");
+  await expect(average).toHaveAttribute("data-bearing", "185");
+  await noOverflow(page);
+});
+
 test("WS90 wet state is separate from WH40 accumulated rain", async ({
   page,
 }) => {

@@ -723,7 +723,9 @@ export class EcowittWeatherCard extends LitElement {
       speed.status === "ok" &&
       speed.value !== null &&
       speed.value > 0;
-    const averageVisible = avg.status === "ok" && !calm;
+    // Keep a valid measured average direction visible during a momentary calm.
+    // Only the current airflow arrow depends on current wind speed.
+    const averageVisible = avg.status === "ok";
     const offsetX = this._clamp(this._config.image_target_x, 50, 10, 90) - 50;
     const offsetY = this._clamp(this._config.image_target_y, 50, 10, 90) - 50;
     const radius = Math.hypot(offsetX, offsetY);
