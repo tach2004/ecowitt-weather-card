@@ -85,6 +85,8 @@ export function normalizeConfig(value: unknown): CardConfig {
       if (knownMetrics.has(key) && id) entities[key as MetricKey] = id;
     }
   }
+  const nightLux = bounded(value.night_lux_threshold, 0, 199999) ?? 0;
+  const dayLux = bounded(value.day_lux_threshold, 0, 200000) ?? 10;
   return {
     type: "custom:ecowitt-weather-card",
     title: text(value.title),
@@ -117,6 +119,8 @@ export function normalizeConfig(value: unknown): CardConfig {
     weather_entity: text(value.weather_entity)?.startsWith("weather.")
       ? text(value.weather_entity)
       : undefined,
+    night_lux_threshold: nightLux,
+    day_lux_threshold: Math.max(dayLux, nightLux + 1),
     windrose: normalizeWindroseOptions(value.windrose),
     history_hours: bounded(value.history_hours, 1, 168),
     stale_after_minutes: bounded(value.stale_after_minutes, 0, 10080),

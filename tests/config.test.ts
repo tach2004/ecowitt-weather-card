@@ -89,6 +89,31 @@ test("numeric editor options stay finite and inside their supported ranges", () 
   ] as const)
     assert.equal(invalid[key], undefined);
 });
+test("night and day lux thresholds preserve zero and form an ordered pair", () => {
+  const defaults = normalizeConfig({ type: "custom:ecowitt-weather-card" });
+  assert.equal(defaults.night_lux_threshold, 0);
+  assert.equal(defaults.day_lux_threshold, 10);
+  const zero = normalizeConfig({
+    night_lux_threshold: 0, day_lux_threshold: 0,
+  });
+  assert.equal(zero.night_lux_threshold, 0);
+  assert.equal(zero.day_lux_threshold, 1);
+  const custom = normalizeConfig({
+    night_lux_threshold: 5, day_lux_threshold: 80,
+  });
+  assert.equal(custom.night_lux_threshold, 5);
+  assert.equal(custom.day_lux_threshold, 80);
+  const invalid = normalizeConfig({
+    night_lux_threshold: -500, day_lux_threshold: Infinity,
+  });
+  assert.equal(invalid.night_lux_threshold, 0);
+  assert.equal(invalid.day_lux_threshold, 10);
+  const reverse = normalizeConfig({
+    night_lux_threshold: 100, day_lux_threshold: 10,
+  });
+  assert.equal(reverse.day_lux_threshold, 101);
+});
+
 test("config normalization preserves grid placement and does not mutate input YAML", () => {
   const input = {
     type: "custom:anything",

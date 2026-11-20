@@ -10,8 +10,11 @@ export function weatherScene(
 ) {
   if (observation.kind === "unknown") return nothing;
   const rain = observation.kind === "rain";
-  const sun =
-    observation.kind === "sunny" || observation.kind === "partlycloudy";
+  const night = observation.kind === "night" || observation.night === true;
+  const sun = !night &&
+    (observation.kind === "sunny" || observation.kind === "partlycloudy");
+  const moon = night &&
+    (observation.kind === "night" || observation.kind === "partlycloudy");
   const clouds =
     observation.kind === "partlycloudy" ||
     observation.kind === "cloudy" ||
@@ -30,23 +33,20 @@ export function weatherScene(
         ? 10
         : 7;
   return html`<div
-    class="weather-scene weather-scene--${surface} weather-scene--${observation.kind} ${
+    class="weather-scene weather-scene--${surface} weather-scene--${observation.kind} ${night ? "weather-scene--nighttime" : ""} ${
       animated ? "weather-scene--animated" : "weather-scene--still"
     }"
     data-scene-weather=${observation.kind}
+    data-scene-time=${night ? "night" : observation.lighting || "day"}
     aria-hidden="true"
   >
     <span class="scene-atmosphere"></span>
+    ${night ? html`<span class="scene-night-haze"></span>` : nothing}
+    ${moon ? html`<span class="scene-stars"></span><span class="scene-moon"></span>` : nothing}
     ${
       sun
         ? html`<span class="scene-corona"></span><span class="scene-sun"></span
             ><span class="scene-sun-glint"></span>`
-        : nothing
-    }
-    ${
-      observation.kind === "night"
-        ? html`<span class="scene-night-haze"></span
-            ><span class="scene-moon"></span>`
         : nothing
     }
     ${
@@ -219,6 +219,29 @@ export const weatherSceneStyles = css`
       radial-gradient(ellipse at 71% 26%, #b8d9ee1f, transparent 46%),
       linear-gradient(#14233f26, transparent 60%);
   }
+  .weather-scene--nighttime .scene-cloud {
+    background: linear-gradient(#536877c8, #33475eaf);
+    opacity: 0.83;
+  }
+  .weather-scene--nighttime.weather-scene--rain .scene-cloud {
+    background: linear-gradient(#536877c8, #293e55c0);
+    opacity: 0.65;
+  }
+  .weather-scene--nighttime .scene-atmosphere {
+    background: linear-gradient(#0d193943, transparent 70%);
+  }
+  .scene-stars {
+    inset: 7% 9% 37%;
+    opacity: 0.76;
+    background-image:
+      radial-gradient(circle at 12% 25%, #fffce2e6 0 1px, transparent 2px),
+      radial-gradient(circle at 37% 11%, #dbe8ffff 0 1.4px, transparent 2.5px),
+      radial-gradient(circle at 84% 37%, #fffce6db 0 1px, transparent 2px),
+      radial-gradient(circle at 65% 21%, #e3f0ffe6 0 1px, transparent 2px),
+      radial-gradient(circle at 25% 81%, #eaf6ffdb 0 1.2px, transparent 2px),
+      radial-gradient(circle at 54% 75%, #ffffffc7 0 1px, transparent 2px),
+      radial-gradient(circle at 92% 78%, #fff5cee0 0 1px, transparent 2px);
+  }
   .scene-moon {
     left: 62%;
     top: 16%;
@@ -303,6 +326,9 @@ export const weatherSceneStyles = css`
       5px -2px 0 #defaff99,
       10px 1px 0 #defaff9c;
   }
+  .weather-scene--animated .scene-stars {
+    animation: weather-star-twinkle 6.5s ease-in-out infinite alternate;
+  }
   .weather-scene--animated .scene-corona {
     animation: weather-rays 28s linear infinite;
   }
@@ -372,6 +398,10 @@ export const weatherSceneStyles = css`
   .weather-scene--tile .scene-splash {
     width: 15px;
     height: 5px;
+  }
+  @keyframes weather-star-twinkle {
+    from { opacity: 0.47; }
+    to { opacity: 0.9; }
   }
   @keyframes weather-rays {
     to {
