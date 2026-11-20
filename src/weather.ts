@@ -194,10 +194,10 @@ export function determineLighting(
     const phase: LightPhase =
       lux <= nightLimit ? "night" :
       lux >= dayLimit ? "day" :
-      astro.phase === "twilight" ? "twilight" :
       options.previousLighting && options.previousLighting !== "unknown"
         ? options.previousLighting
-        : astro.phase !== "unknown" ? astro.phase : "twilight";
+        : astro.phase === "twilight" ? "twilight"
+          : astro.phase !== "unknown" ? astro.phase : "twilight";
     // A near-zero sensor at high noon, or artificial light at deep night,
     // must not be interpreted as a plausible day/night transition.
     const contradiction =
@@ -317,7 +317,7 @@ export function observeWeather(
     return {
       kind: "daylight", lighting: "twilight", label: "Dämmerung",
       estimated: false, source: lighting.source === "lux" ? "lux" : "sun",
-      note: `${lighting.note} Bei niedriger Helligkeit wird keine direkte Sonne behauptet.`,
+      note: `${lighting.note} Bei niedriger Helligkeit: direkte Sonne wird nicht behauptet.`,
     };
   if (lighting.phase === "unknown")
     return unknown(`${lighting.note} Für den Himmelszustand wird eine lokale Luxquelle oder sun.sun benötigt.`);
