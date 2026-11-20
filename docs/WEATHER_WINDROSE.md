@@ -1,106 +1,41 @@
-# Wettereffekte, eingebettete Windrose und Temperatur-Tageswerte
+# Wettereffekte, Windrose und Verläufe
 
-Diese Erweiterung verwendet die bestehende Ecowitt-Karte weiter. Wettereffekte liegen als dekorative Ebene über dem konfigurierten Bild und an der Regenkachel. Die Windrose wird bei Bedarf innerhalb derselben Karte eingeblendet. Hintergrundbild, Nordausrichtung und die vorhandene Strömungspfeil-Geometrie werden dafür nicht neu gezeichnet oder in eine Bilddatei eingebrannt.
+## Wettereffekte
 
-## Lokale Wettereffekte und erforderliche Quellen
+Die Karte zeigt Wettereffekte auf der Windgrafik und der Regenkachel. Sie verwendet dafür Zustände aus Home Assistant.
 
-Die Karte ruft keine externe Wetter- oder Karten-API auf. Vorhandene Home-Assistant-Zustände und Recorder-Daten genügen. Für die lokale Auswertung sind die folgenden Zuordnungen relevant:
+| Quelle | Verwendung |
+| --- | --- |
+| `entities.rain_rate` | Eine positive gültige lokale Regenrate hat Vorrang. |
+| `entities.rain_rate_secondary` | Optionale zweite lokale Regenrate, wenn die erste keinen aktuellen Regen belegt. |
+| `entities.rain_wet` | Separater Status für eine nasse oder trockene Oberfläche. |
+| `weather_entity` | Aktueller unterstützter Wetterzustand einer gewählten Home-Assistant-Entität. |
+| `sun.sun`, `entities.solar` | Sonnenstand und Globalstrahlung als Grundlage einer lokalen Himmelsabschätzung. |
 
-| Quelle | Verwendung | Grenze |
-| --- | --- | --- |
-| `entities.rain_rate` | Numerische WH40-Regenrate; positive gültige Rate hat Vorrang. | Eine Kalendertagssumme ist keine aktuelle Regenrate. |
-| `entities.rain_rate_secondary` | Optional eine tatsächlich vorhandene WS90-Regenratenquelle. | Keine Piezo-Feuchtigkeitsquelle auswählen; es wird kein Sensorname erfunden oder automatisch angelegt. |
-| `entities.rain_wet` | Separater WS90-Oberflächenstatus NASS/TROCKEN/UNAVAILABLE. | NASS allein begründet keine Regenanimation und unterdrückt weder Sonne noch Nacht. |
-| `entities.solar` | WS90-Globalstrahlung in W/m² oder kW/m² für eine grobe Himmelsabschätzung. | Lux wird nicht in Globalstrahlung umgerechnet. |
-| `sun.sun` | Astronomischer Tag-/Nachtstatus und Sonnenhöhe. | Sonnenhöhe allein misst keine Bewölkung. |
-| `weather_entity` | Optional der aktuelle Zustand einer ausdrücklich ausgewählten vorhandenen `weather.*`-Entität. | Es wird keine Vorhersage abgerufen; die bestehende HA-Integration dieser Entität kann eigene, auch externe Datenquellen haben. |
+Die Regenanimation folgt einer positiven lokalen Regenrate. Eine nasse Oberfläche, die bisherige Tagesmenge oder eine meldende Wetterentität allein lösen sie nicht aus. Bei Regen laut Wetterentität ohne lokale Messung zeigt die Karte die Herkunft des Hinweises an. Sie fragt keine Vorhersage ab.
 
-Die Reihenfolge ist bewusst begrenzt: Eine positive verwendbare WH40-Rate, andernfalls eine positive explizit zugeordnete WS90-Rate, begründet lokalen Regen. Ohne solchen Messnachweis kann eine ausgewählte HA-Wetterentität ihren unterstützten aktuellen Himmelszustand liefern. Danach werden astronomische Nacht beziehungsweise die lokale Strahlungsschätzung verwendet. Oberflächenfeuchtigkeit bleibt davon unabhängig.
+Für eine lokale Einschätzung vergleicht die Karte bei mindestens 12 Grad Sonnenhöhe die Globalstrahlung mit einem Klarhimmelmodell. Verschattung, Dunst und die Lage des Sensors können das Ergebnis beeinflussen. Bei tiefer Sonne erscheint neutrales Tageslicht. In der Nacht zeigt der Mond den astronomischen Zustand.
 
-Eine HA-Wetterentität mit Regenzustand, aber ohne bestätigte lokale Rate, erhält den Hinweis „Regen laut Wetterquelle“. Daraus wird keine gemessene lokale Regenrate und keine lokale Regenanimation erzeugt. Nicht unterstützte Wetterzustände werden nicht frei in Schnee, Gewitter oder andere Sensorbeobachtungen umgedeutet.
+Unter der Windgrafik lässt sich die verwendete Quelle einsehen. Reduzierte Bewegung in den Systemeinstellungen oder `weather_animation: false` lassen die Effekte statisch erscheinen. Eine optional eingestellte Altersgrenze gilt auch für Wetterquellen.
 
-Die lokale Schätzung vergleicht Globalstrahlung mit dem Haurwitz-Klarhimmelmodell. `kW/m²` wird dazu mit 1000 multipliziert. Die bisherigen Verhältnisgrenzen von 0,78 für sonnig und 0,40 für teilweise bewölkt bleiben Heuristiken. Verschattung, Dunst, Nebel, Sensorlage und Modellabweichungen können wie Bewölkung wirken. Temperatur, Luftfeuchte und Luftdruck liefern daraus keine eindeutige Wolken- oder Regenbestimmung.
+## Windrose einbetten
 
-Bei bestätigtem Tageslicht und einer Sonnenhöhe unter 12° erscheint eine neutrale Tageslichtszene. Sie behauptet weder direkte Sonne noch Bewölkung. Das ersetzt eine pauschale Fehlermeldung bei tiefem Sonnenstand, ohne den physikalisch unsicheren Klarhimmelvergleich dort zu erzwingen. Astronomische Nacht bedeutet ebenfalls weder einen wolkenfreien Himmel noch Niederschlagsfreiheit.
+1. Die Windrose Card separat installieren und deren JavaScript-Ressource als Modul in Home Assistant laden. [Lovelace Windrose Card](https://github.com/aukedejong/lovelace-windrose-card)
+2. In der Ecowitt Weather Card die aktuelle Windrichtung und Windgeschwindigkeit zuordnen.
+3. Zur Windrose wechseln, indem du die Windgrafik antippst oder **Windrose öffnen** wählst. **Windgrafik** führt zur Hauptansicht zurück.
 
-### Aktualität und Animation
+Die Windrose verwendet standardmäßig die aufgezeichneten Windrichtungen und Geschwindigkeiten der letzten 24 Stunden. Sie benötigt Recorder-Daten der gewählten Quellen. Fehlt die separat installierte Ressource, zeigt die Karte einen Einrichtungshinweis. Die eingebettete Windrose bleibt nur während ihrer geöffneten Ansicht aktiv.
 
-Die zuvor eingeführte starre 30-Minuten-Verfallsgrenze für Wetterzustände entfällt. `last_updated` ist ein Änderungszeitpunkt und kein sicherer Telemetrie-Heartbeat: Eine unveränderte Regenrate darf nicht allein deshalb verschwinden. Die explizite Einstellung `stale_after_minutes` und die tatsächlichen HA-Zustände `unknown`/`unavailable` bleiben maßgeblich. Bei `stale_after_minutes: 0` gilt keine zusätzliche Altersgrenze. Das ist keine Zusicherung, dass ein unveränderter Wert weiterhin gemessen wird; bei Bedarf eine zur eigenen Integration passende Altersregel wählen. Ungültige Werte, falsche Einheiten und unplausible Zeitangaben werden weiterhin abgewiesen.
+Eigene Varianten und alternative installierte Windrosen lassen sich im Karten-YAML einrichten. Im visuellen Karteneditor ist die Einbettung abschaltbar. [Darstellung und Windrosenvarianten](DASHBOARD_OPTIONS.md)
 
-Sonne, Wolken, Mond beziehungsweise Regen mit Tropfen und Spritzern werden als CSS-Ebenen dargestellt. Die Regendichte folgt ausschließlich einer gültigen numerischen lokalen Rate; sie ist eine Illustration und keine Messung von Tropfengröße oder räumlicher Niederschlagsverteilung. Unzureichende Quellen erhalten einen lesbaren Hinweis.
+## Messverläufe und Tageswerte
 
-`weather_animation: false` schaltet die Wetterbewegung ab; `prefers-reduced-motion` wird ebenfalls berücksichtigt. Die vorhandene Windrichtungslogik und ihre kurze Animation über Nord bleiben erhalten; die Systemeinstellung für reduzierte Bewegung gilt weiterhin auch für deren Übergänge.
+Ein Tipp auf eine Messkachel öffnet deren Details mit zugeordneten Quellen, Einheiten und Zeitachsen. Die Diagramme verwenden aufgezeichnete Home-Assistant-Werte. Nicht verfügbare Messwerte oder Einheitenwechsel unterbrechen den Verlauf. Recorder-Aufbewahrung, ausgeschlossene Entitäten und Benutzerrechte bestimmen, welche Daten die Karte abrufen kann.
 
-## Installierte Windrose innerhalb derselben Karte
+Eigene Quellen für Temperaturminimum und -maximum haben Vorrang. Fehlt eine Zuordnung, kann die Hauptkarte den Wert aus der aufgezeichneten Außentemperatur zwischen Mitternacht und jetzt ergänzen. Maßgeblich ist die Zeitzone von Home Assistant. Die Karte kennzeichnet unvollständige Daten und benötigt mindestens eine gültige Aufzeichnung des laufenden Tages.
 
-Verwendet wird die separate [Lovelace Windrose Card von aukedejong](https://github.com/aukedejong/lovelace-windrose-card). Die Ecowitt-Karte enthält keinen Ersatz und lädt dieses Plugin nicht selbst aus dem Internet nach. Nutzer ohne Windrose benötigen es nicht.
+Regenmengen für den heutigen Kalendertag und für die gleitenden letzten 24 Stunden werden getrennten Sensoren zugeordnet.
 
-1. Die Windrose Card separat in HACS installieren und deren JavaScript-Ressource als Modul in Home Assistant laden. Der Upstream dokumentiert beispielsweise `/hacsfiles/lovelace-windrose-card/windrose-card.js`; der tatsächlich von der eigenen HACS-Installation angelegte Ressourcenpfad ist maßgeblich.
-2. In Ecowitt vorhandene Windgeschwindigkeits- und aktuelle Windrichtungsquellen zuordnen.
-3. Die Einbettung ist standardmäßig aktiv. Im visuellen Editor lässt sie sich deaktivieren; ausdrücklich aktiviert wird sie so:
+## Wetterrekorde
 
-   ```yaml
-   windrose:
-     enabled: true
-   ```
-
-4. Die bestehende Windgrafik antippen, um innerhalb derselben Dashboardkarte zur Windrose zu wechseln. Die Drehung blendet die bisherige Ansicht aus und die echte Windrose ein; die Rückkehr bleibt an derselben Stelle möglich. Es erfolgt kein Seitenwechsel. Die Rückseite wächst bei Bedarf auf die tatsächliche Höhe der installierten Karte, damit ihre Windrose auf dem Handy vollständig sichtbar bleibt.
-
-Die Hauptkarte erzeugt dafür ein echtes `<windrose-card>`-Element, übergibt dessen `setConfig()`-Konfiguration und das vorhandene `hass`-Objekt. Fehlt die Ressource, erscheint ein Einrichtungshinweis mit „Erneut prüfen“. Falsche oder nicht vorhandene Quellen führen ebenfalls zu einem Hinweis, nicht zu einer nachgebildeten Windrose.
-
-### Standard und freie Upstream-Konfiguration
-
-Ohne eigene Windrosenkonfiguration werden die bereits ausgewählten `entities.wind_direction` und `entities.wind_speed` verwendet. Der Standardzeitraum ist der zurückliegende 24-Stunden-Zeitraum (`data_period.period_back: -24h`). Die Windrose benötigt tatsächliche Richtungs- und Geschwindigkeitsverläufe; die mittlere Richtung der letzten zehn Minuten ist keine Verteilung.
-
-Unter `windrose.config` kann eine native Windrose-Konfiguration ergänzt werden, etwa:
-
-```yaml
-windrose:
-  enabled: true
-  config:
-    data_period:
-      period_back: -24h
-    rose_config:
-      wind_direction_count: 16
-```
-
-Die Upstream-Felder `wind_direction_entity` und `windspeed_entities` erlauben bei Bedarf andere tatsächlich vorhandene Quellen. Es werden keine festen Entity-IDs vorgeschrieben. Standardtyp ist `custom:windrose-card`; native `config.type` oder `windrose.card_type` können einen anderen bereits geladenen Custom-Card-Typ auswählen. Benannte Varianten stehen unter `windrose.variants`; siehe [DASHBOARD_OPTIONS.md](DASHBOARD_OPTIONS.md). Für zusätzliche Upstream-Optionen wie Zeitwahl, Geschwindigkeitsklassen, Aktionen und Statistikdaten gilt die Dokumentation der installierten Windrose-Version.
-
-Der Adapter bildet unterstützte Quellgeschwindigkeiten auf die nativen Einheiten der Windrose ab und verwendet standardmäßig dieselbe Ausgabeeinheit. Er erfindet keine Messpunkte, Recorder-Historie oder Statistik. Aufbewahrung, ausgeschlossene Entitäten, Statistikverfügbarkeit und die gewählte Messwert-Zuordnung begrenzen die Aussage der Windrose. Ein leerer oder kurzer Recorder-Zeitraum wird durch das Einbetten nicht vollständiger.
-
-Bei reduzierter Bewegung beziehungsweise deaktivierter Wetteranimation werden außerdem die bewegten Live-Pfeile der eingebetteten Windrose ausgeblendet und eine konfigurierte automatische Kompassrotation abgeschaltet. Allein die Upstream-Option `disable_animations` würde deren Live-Pfeile nicht stilllegen; der Adapter berücksichtigt das ausdrücklich.
-
-Beim Rückwechseln wird das fremde Kartenelement entfernt; dessen eigene Abfragen werden damit beendet. Normale HA-Zustandsupdates aktualisieren dieselbe Instanz. Eine tatsächlich geänderte Windrosenkonfiguration erzeugt eine neue Instanz, damit auch deren Abfrageintervall konsistent neu eingerichtet wird.
-
-## Tages-Minimum und -Maximum aus Recorder
-
-Explizit konfigurierte `entities.temperature_min` und `entities.temperature_max` haben weiterhin Vorrang. Fehlt eine dieser Zuordnungen, kann der entsprechende Wert aus der tatsächlich konfigurierten Außentemperaturquelle `entities.temperature` und ihrer lokalen HA-Recorder-Historie ergänzt werden. Ein explizit zugeordneter, aber momentan nicht verfügbarer Min-/Max-Sensor wird nicht still durch einen anderen Wert ersetzt.
-
-Der Zeitraum beginnt um Mitternacht in **Home Assistants konfigurierter Zeitzone** (`hass.config.time_zone`) und endet beim tatsächlichen Anfragezeitpunkt. Er ist kein rollierendes 24h-Fenster. Sommer-/Winterzeitwechsel mit 23 beziehungsweise 25 Stunden werden berücksichtigt; ohne verlässliche HA-Zeitzone wird kein Kalendertag geraten.
-
-Berechnet werden die kleinsten und größten **aufgezeichneten gültigen Temperaturwerte bisher**. Mindestens ein echter gültiger Eintrag des aktuellen Tages ist erforderlich. Ein früherer Recorder-Ausgangszustand kann als gehaltener HA-Zustand ab Mitternacht berücksichtigt werden, wird aber ausdrücklich gekennzeichnet und nicht als neue Messung gezählt. Nur ein alter Zustand ohne heutigen Eintrag erzeugt keine heutigen Extremwerte.
-
-Unbekannte/ungültige Abschnitte, fehlender Tagesanfang, erst ein heutiger Eintrag oder nicht bestätigte aktuelle Sensorabdeckung werden als unvollständiger Zeitraum erklärt. Aufgezeichnete gültige Werte gehen dadurch nicht verloren, sind aber keine Garantie für die tatsächlichen Tagesextrema. Bei unterschiedlichen Temperatureinheiten im Zeitraum werden keine gemeinsamen Extremwerte erfunden. Fehler, fehlende Recorder-API oder leere Historie erhalten einen Hinweis. Der aktuelle Live-Wert wird nicht als Ersatzhistorie eingesetzt.
-
-## Details mit Quellnamen und Achsen
-
-Details verwenden den menschlichen `friendly_name` eines Sensors und eine belegte Herkunftsrolle, etwa „Außentemperatur · WS90“. Ein bevorzugtes Gerät im allgemeinen Feldtitel ist kein Herkunftsnachweis. Rollen werden aus tatsächlichen Registry-Verknüpfungen oder expliziter Quellzuordnung zu einer Gerätekonfiguration abgeleitet; ohne solche Metadaten bleibt die Herkunft neutral. Die Geräteauswahl allein beweist nicht, dass ein Sensor zu diesem Gerät gehört.
-
-Technische Entity-IDs bleiben intern für Abfragen und native HA-More-Info erhalten; sie werden nicht überall als sichtbare Überschrift ausgeschrieben. Die Möglichkeit „In Home Assistant öffnen“ bleibt verfügbar.
-
-Die Recorder-Diagramme zeigen Wertbeschriftungen einschließlich Einheit und eine Zeitachse mit Beginn, Mitte und Ende des angefragten Zeitraums. Bei gültiger HA-Zeitzone wird diese verwendet und benannt; andernfalls ist die Browserzeit ausdrücklich gekennzeichnet. Konstante Werte erhalten eine einzige sinnvolle Wertmarke. Nicht verfügbare Abschnitte und Einheitenwechsel bleiben getrennt; es werden keine Messungen zwischen den empfangenen Zuständen erfunden.
-
-## Prüfung und verbleibende Grenzen
-
-Alle öffentlichen Tests verwenden generische Illustrationen, synthetische HA-Zustände und synthetische Registry-Einträge. Das native HA-Kartenharness bildet relevantes Host-/Slot-/Größenverhalten nach; es ist keine vollständige Home-Assistant-Installation. Tatsächliches Lovelace-Mounting, native Picker, HA-Berechtigungen und Companion-WebView-/Safari-Verhalten müssen weiterhin auf der Zielinstanz geprüft werden.
-
-Der Windrosenadapter wird zusätzlich mit der unmodifizierten echten Upstream-Ausgabe **v2.8.0** unter Chromium geprüft. Diese Distribution bleibt ein ignoriertes Entwicklungsartefakt und wird nicht in das Ecowitt-Bundle oder Repository übernommen. Die optionale Integrationsprüfung lässt sich mit einer lokal vorhandenen Distribution ausführen:
-
-```sh
-WINDROSE_UPSTREAM_JS=/absoluter/pfad/windrose-card.js \
-  npx tsx --test tests/windrose.integration.test.ts
-```
-
-Ohne diese Umgebungsvariable wird nur diese gesonderte Upstream-Integrationsprüfung übersprungen; die regulären Adaptertests bleiben aktiv. Build- und Browserprüfungen sind in den GitHub-Actions-Läufen nachvollziehbar.
-
-Private Grundstücksfotos und private HA-Screenshots werden nicht verändert, in Testansichten eingebaut, kopiert oder veröffentlicht. Für sensible Bilder gilt weiterhin: `/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt; eine HA-Media-Quelle und deren Zugriff ohne Anmeldung müssen auf der tatsächlichen Instanz geprüft werden. Es gibt keine Sicherheitsgarantie. 
+Über die Schaltfläche **Wetterrekorde** lassen sich die aufgezeichneten Höchstwerte der ausgewählten Quellen ansehen. Standard ist **Heute**. Die Datumsauswahl bietet weitere Zeiträume und eine Kalenderwahl. Bei täglich zurückgesetzten Werten wie Tagesregen und Tagesmaximalböe berücksichtigt die Karte Tage mit erkennbarer Rücksetzung. Lücken im Recorder können deshalb die sichtbaren Höchstwerte begrenzen.

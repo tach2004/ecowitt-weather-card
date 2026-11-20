@@ -681,7 +681,7 @@ test("visual editor emits persistent entity and image config changes", async ({
   await expect(image).toHaveValue("/local/example-weather.svg");
 });
 
-test("light theme, reduced motion and iPhone landscape remain usable", async ({
+test("light theme, reduced motion and mobile landscape remain usable", async ({
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
@@ -1527,7 +1527,7 @@ for (const hostTheme of ["light", "dark"])
 for (const view of ["panel", "sections"])
   for (const portrait of [true, false])
     for (const theme of ["light", "dark"]) {
-      test(`${view} iPhone ${portrait ? "portrait" : "landscape"} ${theme}: every detail opens, scrolls and closes`, async ({
+      test(`${view} mobile ${portrait ? "portrait" : "landscape"} ${theme}: every detail opens, scrolls and closes`, async ({
         page,
       }) => {
         const width = portrait ? 402 : 874,
@@ -2110,7 +2110,7 @@ test("native HA media metadata supports expandable folders and images without fi
     .toBe("media-source://media_source/local/folder/image");
 });
 
-test("six main metrics form three complete rows on iPhone portrait", async ({
+test("six main metrics form three complete rows in mobile portrait", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 402, height: 874 });
@@ -2131,7 +2131,7 @@ test("six main metrics form three complete rows on iPhone portrait", async ({
   }
 });
 
-test("iPhone touch emulation can tap stacked device statuses and weather details in both orientations", async ({
+test("mobile touch emulation can tap stacked device statuses and weather details in both orientations", async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -2173,7 +2173,7 @@ test("iPhone touch emulation can tap stacked device statuses and weather details
   }
 });
 
-test("iPhone modal close stays clear of system bar in every detail view", async ({
+test("mobile modal close stays clear of system bar in every detail view", async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -2241,7 +2241,7 @@ test("iPhone modal close stays clear of system bar in every detail view", async 
   }
 });
 
-test("iOS companion detail dismissal has a reachable fallback without changing Safari", async ({
+test("Companion App detail dismissal has a fallback and preserves standalone browser behavior", async ({
   browser,
 }) => {
   const companionUserAgent =
@@ -2307,7 +2307,7 @@ test("iOS companion detail dismissal has a reachable fallback without changing S
   }
 });
 
-test("iOS Companion overlay stays anchored when Recorder content grows", async ({ browser }) => {
+test("Companion App overlay stays anchored when Recorder content grows", async ({ browser }) => {
   const context = await browser.newContext({
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 402, height: 874 },
@@ -2353,7 +2353,7 @@ test("iOS Companion overlay stays anchored when Recorder content grows", async (
   }
 });
 
-test("iOS Companion overlay closes on Escape and backdrop tap", async ({ browser }) => {
+test("Companion App overlay closes on Escape and backdrop tap", async ({ browser }) => {
   const context = await browser.newContext({
     baseURL: "http://127.0.0.1:4173",
     viewport: { width: 402, height: 874 },

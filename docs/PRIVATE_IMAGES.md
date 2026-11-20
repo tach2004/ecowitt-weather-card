@@ -1,16 +1,15 @@
-# Private images and user data
+# Eigene Hintergrundbilder
 
-This repository is public. Private images, HA screenshots, addresses, coordinates, authentic network/device identifiers, credentials and site-plan derivatives must **never** be published in source files, test fixtures, GitHub issues/PRs, Actions artifacts, screenshots or releases.
+Die Karte zeigt standardmäßig eine neutrale Grafik mit Norden oben. Ein eigenes Bild bleibt auf deiner Home-Assistant-Instanz. Im Karteneditor lässt sich eine Bildquelle auswählen oder eintragen.
 
-## Background image handling
-- Public images are independently created generic artwork with synthetic data.
-- Owners may configure optional `site_image` or `background_image` using their own Home Assistant instance. This does **not** upload the picture to GitHub.
-- References supplied privately to an agent are for viewing **only** during an authorized task. Do not trace recognizable property geometry or add those reference files to a public checkout.
-- `media-source://` image resolution uses Home Assistant's media API. Access controls must be tested on the actual installation. `/config/www` exposed through `/local/` is **not automatically authenticated**; do not present it as a secure store for personal images.
-- No automatic image uploads, remote image hosts or external weather-map services.
+## Bildquelle einrichten
 
-## Before any PR
-- Manually review the complete diff, staged paths, docs, generated assets, tests and each screenshot.
-- Run `npm run check`, which includes a public assets/history audit and basic current-text identifier screening. Detectors cannot identify every sensitive description or image: manual review is mandatory.
-- Editing today's files does **not** erase already public Git history, forks or caches. History rewrites need a separate coordinated decision.
-- [AGENTS.md](../AGENTS.md) contains the binding Codex/agent confidentiality and no-merge rules.
+1. Das Bild zum Beispiel unter `/media/wetter/beispielbild.png` in Home Assistant ablegen.
+2. Im Karteneditor den Medienbrowser öffnen und das Bild auswählen. Alternativ im Bildfeld `media-source://media_source/local/wetter/beispielbild.png` eintragen. Ob sich das Bild laden lässt, hängt von Quelle und Berechtigungen ab.
+3. Bei Bedarf Bildrotation und Pfeilziel einstellen. Der Kompass bleibt nordorientiert. Das Bild wird quadratisch zugeschnitten und rund angezeigt. Die Zielkoordinaten beziehen sich auf den sichtbaren Ausschnitt.
+
+Das entsprechende YAML-Feld heißt `site_image`. Es akzeptiert auch relative Bildpfade und Bild-URLs derselben Home-Assistant-Herkunft. Die Karte verwendet die Home-Assistant-Medienquelle direkt und bietet keine Upload-Funktion.
+
+## Zugriff prüfen
+
+**`/config/www` und `/local/` bieten keinen automatischen Zugriffsschutz.** Bei einem sensiblen Bild eine Home-Assistant-Medienquelle mit passenden Berechtigungen verwenden und den Zugriff auf die Bild-URL auch ohne Anmeldung testen. Private Bilder und Aufnahmen mit echten Daten gehören außerhalb des öffentlichen Repositorys.

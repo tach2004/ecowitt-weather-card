@@ -1,78 +1,42 @@
 # Installation und Einbindung
 
-**Stand:** HACS-installierbare JavaScript-Releases verfügbar. Automatische Tests ersetzen keine Prüfung auf der eigenen HA-Instanz. Bestehende Dashboards werden nicht automatisch verändert.
+Voraussetzung ist Home Assistant mit eingerichteten Ecowitt-Sensoren. Die Karte verwendet die vorhandenen Entitäten und deren Werte.
 
-## Optionale manuelle Installation
+## Installation über HACS
 
-1. Das Repository auschecken. Node.js 22 oder neuer verwenden und im Repository `npm ci` sowie `npm run build` ausführen.
-2. Ausschließlich `dist/ecowitt-weather-card.js` nach `/config/www/ecowitt-weather-card/ecowitt-weather-card.js` auf der eigenen HA-Instanz kopieren. Keine privaten Referenzbilder ins Repository oder Build-Verzeichnis kopieren.
-3. In Home Assistant unter **Einstellungen → Dashboards → Ressourcen** eine Ressource hinzufügen. Gegebenenfalls zuerst den erweiterten Benutzermodus aktivieren:
+1. In HACS unter **Benutzerdefinierte Repositories** die URL `https://github.com/tach2004/ecowitt-weather-card` als **Dashboard** hinzufügen. In älteren HACS-Versionen heißt die Kategorie **Lovelace** oder **Plugin**.
+2. **Ecowitt Weather Card** installieren und das Dashboard neu laden.
+3. Falls die Karte im Kartenkatalog fehlt, unter **Einstellungen → Dashboards → Ressourcen** prüfen, ob `/hacsfiles/ecowitt-weather-card/ecowitt-weather-card.js` als **JavaScript-Modul** eingetragen ist. Falls die Ressource fehlt, diese ergänzen.
 
-   ```yaml
-   url: /local/ecowitt-weather-card/ecowitt-weather-card.js
-   type: module
-   ```
+## Manuelle Installation
 
-4. Das Frontend neu laden. Im Dashboard **Karte hinzufügen → Ecowitt Weather Card** wählen. Falls die Karte fehlt, Ressource, Browserkonsole und Cache prüfen.
-5. Die vorhandenen HA-Entitäten im grafischen Karteneditor auswählen. Ohne Zuordnung zeigt die Karte einen Einrichtungshinweis. Die Zuordnung wird mit der Kartenkonfiguration gespeichert.
+1. Die fertige Datei `ecowitt-weather-card.js` aus dem aktuellen GitHub-Release herunterladen. [Aktuelles Release](https://github.com/tach2004/ecowitt-weather-card/releases/latest)
+2. Die Datei auf der Home-Assistant-Instanz unter `/config/www/ecowitt-weather-card/ecowitt-weather-card.js` ablegen.
+3. Unter **Einstellungen → Dashboards → Ressourcen** einen Eintrag mit `/local/ecowitt-weather-card/ecowitt-weather-card.js` als **JavaScript-Modul** hinzufügen. Falls das Ressourcenmenü fehlt, im Benutzerprofil den erweiterten Modus aktivieren.
+4. Das Dashboard neu laden. Falls nach einem manuellen Update weiter die alte Version erscheint, den Browsercache leeren oder den Versionsparameter der Ressourcen-URL ändern.
 
-Nach Updates den Browsercache erneuern oder den Versionsparameter der Ressource ändern. HACS und manuelle Installation nicht gleichzeitig mit zwei Ressourcen laden.
+Für jede Installation genügt eine Kartenressource. Beim Wechsel zu HACS den manuellen Ressourceneintrag entfernen.
 
-## Installation über HACS (empfohlen)
+## Karte und Sensoren einrichten
 
-HACS verwendet das veröffentlichte **Asset `ecowitt-weather-card.js`** aus dem GitHub-Release. Die Karte wird als benutzerdefiniertes Dashboard-Repository eingebunden; eine Aufnahme in den HACS-Standardkatalog wird nicht behauptet.
+Im Dashboard **Karte hinzufügen → Ecowitt Weather Card** wählen und die bestehenden Entitäten im visuellen Editor auswählen. Der Geräteassistent verwendet zugeordnete Geräte für Vorschläge. Die Messquellen selbst werden in den jeweiligen Feldern ausgewählt.
 
-1. In HACS unter **Benutzerdefinierte Repositories** `https://github.com/tach2004/ecowitt-weather-card` als Kategorie **Dashboard** hinzufügen (in älteren HACS-Versionen **Lovelace/Plugin**).
-2. **Ecowitt Weather Card** installieren und das Frontend neu laden.
-3. Falls HACS die Ressource nicht angelegt hat, `/hacsfiles/ecowitt-weather-card/ecowitt-weather-card.js` als **JavaScript-Modul** ergänzen.
-4. Karte hinzufügen und Sensorzuordnung im visuellen Editor vornehmen.
+- **Wind und Wetter:** Windgeschwindigkeit, Böen, Windrichtung, UV und Solarstrahlung.
+- **Regen:** eine Tagesmenge für den Kalendertag, eine aktuelle Regenrate und gegebenenfalls getrennte Quellen für die letzten 24 Stunden, Woche, Monat und Jahr. Den Feuchtigkeitsstatus separat auswählen.
+- **Außenklima:** Außentemperatur und Luftfeuchte. Eine passende WN32-Quelle kann bevorzugt werden. Gefühlte Temperatur und Tagesextrema sind optional.
+- **Druck:** Absoluten Luftdruck für die Hauptleiste und optional relativen Luftdruck für die Druckdetails.
+- **Geräte:** Batterie, Signal, Verbindungsstatus und Zusatzmesswerte nach Bedarf zuordnen.
 
-Das Repository enthält absichtlich kein versioniertes `dist`-Bundle. HACS lädt den einzeln kompilierten JavaScript-Asset aus dem neuesten GitHub-Release; der unkompilierte Standardbranch ist deshalb in HACS ausgeblendet. **Nach jedem PR-Merge in `main`** erzeugt `.github/workflows/release.yml` nach erfolgreichen Tests automatisch den nächsten **Patch-Tag** (z. B. `v0.1.1`) sowie das Release mit dem richtigen JavaScript-Asset. Für das Reparieren eines existierenden Tags ohne Asset: auf GitHub **Actions → Release card → Run workflow**, bei `repair_tag` die vorhandene Version (`v0.0.1`) eintragen. Der Workflow veröffentlicht nur die geprüfte JavaScript-Datei, keine Testbilder, privaten Referenzen oder Berichte.
+Bei fehlender Zuordnung zeigt die Karte einen Einrichtungshinweis. Die Übersicht erklärt alle Felder und Voraussetzungen für Verläufe. [Kartenkonfiguration](CONFIGURATION.md)
 
-## Empfohlen: eigener Wetter-Reiter als Panel View
+## Ansichten
 
-1. Gewünschtes Dashboard öffnen und einen **neuen** Reiter mit Titel **Wetter** anlegen.
-2. Als Ansicht **Panel / Vollbildkarte** wählen.
-3. Genau eine **Ecowitt Weather Card** hinzufügen und ihre Sensoren im grafischen Editor zuordnen.
+Für einen eigenen Wetterreiter eine **Panel-Ansicht** erstellen und die Wetterkarte als einzige Karte hinzufügen. In einer **Sections-Ansicht** lässt sich die Wetterkarte neben anderen Karten platzieren und bei Bedarf auf volle Breite setzen.
 
-Die Karte begrenzt und zentriert sich selbst auf großen Displays. Auf schmalen Containern ordnet sie Zusammenfassung, Windgrafik und Kennzahlen neu an. Es müssen keine Sections oder zusätzlichen Überschriften erstellt werden.
+Die YAML-Vorlagen sind vollständige Konfigurationen für jeweils eine Ansicht. Zum Verwenden eine neue Ansicht öffnen und den passenden Inhalt unter **Ansicht bearbeiten → ⋮ → In YAML bearbeiten** einfügen. Anschließend die Sensoren im Karteneditor zuordnen. [Panel-Vorlage](../examples/view-panel.yaml) · [Sections-Vorlage](../examples/view-sections.yaml)
 
-Alternativ den Inhalt von [view-panel.yaml](../examples/view-panel.yaml) über **Ansicht bearbeiten → ⋮ → In YAML bearbeiten** als vollständige **Ansichts-YAML** einfügen. Die Vorlage enthält absichtlich keine erfundenen Sensor-IDs. Sie benötigt das installierte Kartenmodul. Vorhandene Ansicht zuerst sichern; die Vorlage ersetzt deren Inhalt. Nicht die gesamte Dashboard-Rohkonfiguration durch ein View-Snippet ersetzen.
+## Eigenes Hintergrundbild
 
-## Alternative: Sections View
+Unter **Darstellung, Wetteranimation und Theme** eine Bildquelle aus der eigenen Home-Assistant-Instanz wählen. Bildrotation und Pfeilziel lassen sich im Editor anpassen. Ohne eigene Quelle erscheint die neutrale Beispielgrafik.
 
-[view-sections.yaml](../examples/view-sections.yaml) enthält eine vollständige Sections-Ansicht mit einer Grid-Section, die drei Ansichtsspalten überspannt, und genau einer Wetterkarte in voller Breite. Sie verwendet dieselbe Custom Card.
-
-Wie beim Panel über die YAML-Bearbeitung einer neuen Ansicht einfügen. In einer bereits befüllten Sections-Ansicht die Karte besser einzeln hinzufügen und auf volle Breite setzen; deren gesamte Ansichts-YAML muss dafür nicht ersetzt werden.
-
-## Sensoren und Recorder
-
-- **WS90:** Wind, Böen, Richtung, UV, Solarstrahlung und Piezo-Feuchtigkeitsstatus.
-- **WH40:** Regenrate und Regenmengen. Tagesmenge, Kalenderwoche und gleitende letzte 24 Stunden bewusst getrennt zuordnen.
-- **WN32:** Außentemperatur und Feuchte bevorzugt, sofern vorhanden; alternativ passende WS90-Sensoren manuell auswählen.
-- **GW3000:** relativer Luftdruck. Zusätzliche WN31/WH31-Kanäle und vorhandene Batterie-/Signalquellen in den Details zuordnen.
-
-Es werden keine neuen HA-Entitäten angelegt. Sensorvorschläge werden aus tatsächlich vorhandenen HA-Entitäten und Geräten gebildet und müssen im Editor überprüft werden.
-
-Verläufe benötigen aufgezeichnete und für den angemeldeten Nutzer zugängliche HA-Recorder-Daten der ausgewählten Entitäten. Aufbewahrung und Recorder-Ausschlüsse bleiben HA-Konfiguration. Die Karte erfindet keine Historie und setzt Tagesregen nicht mit einer 24-Stunden-Summe gleich.
-
-## Private Bildquelle
-
-Im Editor einen HA-relativen Bildpfad, eine URL derselben HA-Herkunft oder eine `media-source://`-ID aus der eigenen Home-Assistant-Instanz eintragen. Media-IDs werden über die native HA-Media-API aufgelöst; nur URLs derselben Herkunft werden als Bild geladen. Die Karte bietet keinen Datei-Upload und überträgt kein Bild an einen Kartendienst. Ausrichtung und Pfeilziel an das eigene nordorientierte Bild anpassen. Das Bild wird quadratisch auf die runde Ansicht zugeschnitten; die Zielkoordinaten beziehen sich auf diese sichtbare Bildfläche. Das Pfeilziel wird bei Bedarf auf einen Kreisradius von 40 % um die Bildmitte begrenzt, damit es innerhalb der runden Ansicht bleibt. Ohne Bild wird die generische Beispielgrafik verwendet.
-
-**`/config/www` → `/local/` ist nicht automatisch zugriffsgeschützt.** Bei extern erreichbarem HA kann eine Bild-URL ohne Anmeldung abrufbar sein. Für sensible Immobilienbilder eine authentisierte HA-Media-Lösung prüfen und den Zugriff auch ohne Anmeldung testen. Nicht jede Media-Source-ID ist direkt als Browserbild verwendbar; Unterstützung und Berechtigungen müssen an der tatsächlichen Instanz geprüft werden. Keine Sicherheitsgarantie. Details: [PRIVATE_IMAGES.md](PRIVATE_IMAGES.md).
-
-Alle Konfigurationsfelder stehen in [CONFIGURATION.md](CONFIGURATION.md).
-
-
-## Neue Anzeigeoptionen und private Bilder
-
-Die Hauptkarte unterstützt bei Auswahl entsprechender HA-Quellen WS90-Batterie, Empfang und Verbindungsstatus. Im Editor werden Zusatzsensoren nach Geräten aufgelistet und per Checkbox ausgewählt; die bisherige Strg-Mehrfachauswahl entfällt. Das Theme ist unter „Darstellung, Wetteranimation und Theme“ auf `Automatisch`, `Hell` oder `Dunkel` einstellbar.
-
-**Privates Hintergrundbild:** Lege bei dir den Ordner `/media/wetter/` an und speichere dort `beispielbild.png`. Trage dann im Karteneditor ein:
-
-```text
-media-source://media_source/local/wetter/beispielbild.png
-```
-
-Alternativ kannst du den internen Medienbrowser im Karteneditor ausprobieren. Er listet lokale Medien über die HA-Media-API, soweit dein Benutzer zugriffsberechtigt ist. Keine private Datei in das öffentliche GitHub-Repository, in Actions-Assets oder in einen GitHub-PR hochladen. `/config/www` und der daraus abgeleitete Pfad `/local/` sind für sensible Immobilienbilder nicht empfehlenswert, da sie nicht automatisch geschützt sind.
+Bilder unter `/config/www` sind über `/local/` erreichbar und **nicht automatisch zugriffsgeschützt**. Für ein sensibles Bild die Zugriffsrechte der eigenen Home-Assistant-Medienquelle prüfen. [Private Bildquellen](PRIVATE_IMAGES.md)
