@@ -1,27 +1,33 @@
-# Ecowitt Weather Card — mandatory agent instructions
+# AGENTS.md
 
-This is a **public** repository. The following rules apply to Codex and every other contributor. Read `SPEC.md` and the current explicit user request before acting.
+Ecowitt Weather Card ist eine eigenständige Home-Assistant-Dashboardkarte in einem öffentlichen Repository. Diese Regeln gelten für Codex und alle Mitwirkenden. Lies vor Arbeitsbeginn `SPEC.md` und den aktuellen ausdrücklichen Auftrag.
 
-## Task and merge authorization
-- Only implement the user's approved scope. Never guess entity IDs, sensor readings, supported device features, or undisclosed requirements; ask or document uncertainty.
-- Always work in a **separate branch**, based on the latest `main`. Open a reviewable PR. **Never push directly to main, merge, tag/release, rewrite Git history, or edit another repository without separate, explicit user approval.**
-- Preserve existing behavior, approved visual layout, backwards compatibility and tests. Avoid surprise changes and repeated broken intermediate commits. Tests must not be weakened to manufacture a passing result.
-- Run applicable checks before pushing. State exactly which checks passed or failed and what remains unverified in real Home Assistant / mobile hardware. Simulated tests are not a real-device validation.
+## Zusammenarbeit und Prüfungen
 
-## Privacy rules — binding publication gate
-- Treat **every private user-supplied image, screenshot, config, log, prompt, attachment or reference** as confidential. It may be viewed in an explicitly authorized private task, but **never** added to source control, public PRs/issues, demos, GitHub Actions artifacts, screenshots, release assets or example fixtures.
-- Do not publish identifiable property geometry or private-image derivatives, aerial photographs, home addresses, coordinates, personal names, private IP addresses/hostnames/MACs, credentials, accounts, or installation-specific sensor/device/entity IDs. Cropping or stylistically transforming a private property image does not make it a safe public demo.
-- Public imagery must be **independently generic**, with **synthetic** entities, measurements and device names. Never trace real geometry. Do not publish actual screenshots from a user's HA instance.
-- Never hard-code personal sensor IDs as defaults or suggestions. Discover actual devices/entities dynamically from Home Assistant and let users choose.
-- User background images stay on the user's own HA instance, never in the repository or HACS bundle. Direct `/local/` image URLs are **not automatically private**; warn about access control. No remote image-upload service.
-- Before any push/PR inspect the **complete diff, staged files, documentation, code comments, UI fixtures, screenshots, build assets and PR body**. Run `npm run check` including the asset/history and current-text privacy audit. Never switch off a privacy safeguard just to pass CI.
-- Automatic scanning is only defense in depth. Manually inspect ordinary prose and every visual. If private information exists in **historical** public commits, report it privately; editing today's files does not erase history/forks/caches. **Never force-push or rewrite history without separately coordinated consent.**
-- Do not repeat identifying filenames/identifiers in a public PR while describing their removal; use neutral generic wording.
+- Arbeite im freigegebenen Umfang auf einem separaten Branch vom aktuellen `main`. Bereite Änderungen zur Begutachtung vor. Kläre oder dokumentiere offene Anforderungen und Unsicherheiten zu Entitäts-IDs, Messwerten und unterstützten Gerätefunktionen. Verwende im Kartenbetrieb belegte Angaben.
+- Erhalte bestehendes Verhalten, freigegebenes Layout, Abwärtskompatibilität und Tests im Rahmen des Auftrags. Vermeide überraschende Änderungen und wiederholt fehlerhafte Zwischencommits. Schwäche Tests nicht ab, um ein bestandenes Prüfergebnis zu erzwingen.
+- Führe vor einem Push die für die Änderung vorgesehenen Prüfungen aus. Prüfe Darstellungsänderungen auf Desktop und Mobilgeräten. Berichte, welche Prüfungen tatsächlich liefen, welche bestanden oder fehlschlugen und was an einer echten Home-Assistant-Installation oder auf realen Mobilgeräten offenbleibt. Kennzeichne simulierte Prüfungen als solche.
 
-## Product and engineering requirements
-- Maintain one standalone `custom:ecowitt-weather-card`, Panel/Sections views, native editor, container-responsive layouts, HA themes, accessible controls and reduced-motion support.
-- Use only actual configured HA states/Recorder data; do not invent histories or connectivity. Preserve wind-from direction vs airflow-to target, measured rainfall vs wet-surface indication, and calendar-day vs rolling period.
-- An optional installed Windrose Card is separate from this project's bundle and is not fetched from GitHub at runtime.
-- Keep CI, HACS release automation and regression tests. Review changes on desktop/mobile using **synthetic-only** screenshots.
+## Datenschutz
 
-**Release gate:** checks reviewed, privacy and provenance verified, PR ready for user review; **no merge before explicit user approval**.
+- Behandle private Bilder, Screenshots, Konfigurationen, Logs, Prompts, Anhänge und Referenzen vertraulich. Nutze sie ausschließlich in ausdrücklich autorisierten privaten Aufgaben. Halte sie aus dem Repository, der Git-Historie, öffentlichen PRs und Issues, Demos, Testdaten, Screenshots, GitHub-Actions-Artefakten und Releases heraus.
+- Erstelle öffentliche Grafiken eigenständig und generisch. Verwende synthetische Geräte, Entitäten und Messwerte sowie neutrale Geräte- und Quellennamen. Kennzeichne Demowerte. Zeichne keine reale Grundstücksgeometrie nach. Aus privaten Bildern erzeugte Ausschnitte, Nachzeichnungen und stilistische Bearbeitungen bleiben vertraulich.
+- Veröffentliche keine identifizierbaren Grundstücksgeometrien, Luftbilder, Screenshots aus Nutzerinstallationen, Adressen, Koordinaten, Personennamen, privaten Kontaktdaten, privaten IP-Adressen, Hostnamen oder MAC-Adressen, Zugangsdaten, Kontodaten, installationsspezifischen Sensor-, Geräte- oder Entitäts-IDs und vertraulichen Prüfbefunde.
+
+## Prüfung vor Veröffentlichung
+
+- Prüfe vor Push, PR, Merge oder Release den vollständigen Diff, gestagte Dateien und jeden Commit, der dadurch öffentlich erreichbar wird. Prüfe auch Zwischencommits, deren Inhalte später geändert oder gelöscht wurden. Kontrolliere Dateinamen, Dokumentation, Codekommentare, Testdaten, UI-Beispiele, Bilder, Build- und Release-Artefakte sowie PR- und Release-Texte.
+- Prüfe die tatsächlichen Git-Metadaten. Dazu gehören Autor- und Committername, beide E-Mail-Adressen, Zeitstempel und Zeitzonen, Commit-Nachrichten und Einträge wie `Co-authored-by` und `Signed-off-by`. Prüfe bei Tags auch Namen, Nachrichten und gegebenenfalls Tagger-Daten. Verwende als Autor und Committer den vorgesehenen öffentlichen Accountnamen oder ein freigegebenes Pseudonym und eine `noreply`-Adresse. Private Namen und E-Mail-Adressen gehören auch dann nicht in Commits, wenn GitHub sie in der Oberfläche ausblendet.
+- Prüfe Branch-Namen und eingebettete Dateimetadaten wie EXIF- und GPS-Daten, Dokumentautor, lokale Dateipfade und Angaben in Source Maps. Lies Texte und sichte jedes Bild zusätzlich zu den automatischen Prüfungen manuell. Behalte Datenschutzmaßnahmen auch bei fehlgeschlagener CI bei.
+- Stoppe die Veröffentlichung bei einem Datenschutzfund. Melde private Daten in bereits öffentlichen Commits vertraulich. Beschreibe die Entfernung öffentlich mit neutralen Begriffen, damit Dateinamen oder Kennungen nicht erneut offengelegt werden. Frühere Commits, Forks und Caches können die Daten weiterhin enthalten.
+
+## Ecowitt Weather Card
+
+- Öffne einen PR zur Begutachtung. Direkte Pushes auf `main`, Merges, Tags, Releases und Änderungen an anderen Repositories erfordern eine separate ausdrückliche Freigabe des Nutzers. Force-Pushes und das Umschreiben der Git-Historie erfordern eine gesondert abgestimmte ausdrückliche Zustimmung.
+- Erhalte eine eigenständige Karte `custom:ecowitt-weather-card`, Panel- und Sections-Ansichten, den nativen Editor, containerabhängige Layouts, Home-Assistant-Themes, barrierefreie Bedienelemente und die Unterstützung für reduzierte Bewegung.
+- Ermittle Geräte und Entitäten dynamisch aus Home Assistant und lasse Nutzer auswählen. Verwende keine persönlichen Sensor-IDs als Standardwerte oder Vorschläge. Beziehe Messwerte, Verläufe und Verbindungsinformationen ausschließlich aus vorhandenen Daten der konfigurierten Home-Assistant-Entitäten und des Recorders.
+- Unterscheide Windherkunft und Zielrichtung des Luftstroms, gemessenen Niederschlag und Hinweise auf eine nasse Oberfläche sowie Kalendertage und rollierende Zeiträume.
+- Die optionale Windrose Card bleibt separat installiert und außerhalb des Bundles. Lade sie zur Laufzeit nicht von GitHub.
+- Nutzerhintergründe verbleiben auf der jeweiligen Home-Assistant-Instanz. Halte sie aus Repository und HACS-Bundle heraus. Verwende keinen externen Upload-Dienst. Weise darauf hin, dass direkte `/local/`-Bild-URLs für sich genommen keinen Zugriffsschutz garantieren.
+- Führe vor einem Push oder PR `npm run check` einschließlich der Datenschutzprüfung von Assets, Git-Historie und aktuellen Texten aus. Erhalte CI, HACS-Release-Automatisierung und Regressionstests. Verwende für visuelle Prüfungen auf Desktop und Mobilgeräten ausschließlich Screenshots mit synthetischen Daten.
+- Prüfe vor einem Release die Prüfergebnisse, den Datenschutz und die Herkunft der verwendeten Materialien. Stelle den PR dem Nutzer zur Begutachtung bereit. Ein Merge setzt die ausdrückliche Freigabe des Nutzers voraus.
