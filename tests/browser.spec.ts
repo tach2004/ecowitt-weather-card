@@ -1097,8 +1097,13 @@ test("measured WH40 rain is visualized in the image and tile while wet Piezo rem
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "on");
   await expect(page.locator(".scene-drop-track")).toHaveCount(0);
+  // With a usable local lux source, the sky can remain a neutral
+  // daylight scene even though the measured precipitation stopped.
   await expect(page.locator(".weather-info summary")).toContainText(
-    "Wetterdaten ergänzen",
+    "Tag",
+  );
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "daylight",
   );
   await expect(page.locator(".wet-badge:visible").first()).toContainText(
     "NASS",
@@ -1481,7 +1486,7 @@ test("night, low daylight and incomplete observations have independent moisture 
     "data-scene-weather", "daylight",
   );
   await page.locator(".weather-info summary").click();
-  await expect(page.locator(".weather-info p")).toContainText(/Sonnenhöhe/);
+  await expect(page.locator(".weather-info p")).toContainText(/Lokal gemessene Beleuchtungsstärke/);
 });
 
 test("main rain tile uses positive WH40 first, then positive WS90 if WH40 shows zero", async ({ page }) => {
