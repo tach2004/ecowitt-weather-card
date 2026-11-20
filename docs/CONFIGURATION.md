@@ -16,7 +16,9 @@ title: Wetterstation
 | `max_width` | Maximale Kartenbreite zwischen 900 und 3200 CSS-Pixeln, Standard 1380 |
 | `theme_mode` | `auto` für das Home-Assistant-Theme, `light` oder `dark` |
 | `weather_animation` | Standard `true`, bei `false` bleiben Wettereffekte statisch sichtbar |
-| `weather_entity` | Optionale vorhandene `weather.*`-Entität für den aktuellen Zustand |
+| `weather_entity` | Optionale vorhandene `weather.*`-Entität für den aktuellen Himmelszustand. Nur ergänzend; Regenanimation ausschließlich aus positiver lokaler WH40- oder WS90-Regenrate. |
+| `night_lux_threshold` | Nachtszene bei lokaler Beleuchtungsstärke höchstens diesem Wert in Lux, Standard **0** (0 ist ausdrücklich erlaubt). |
+| `day_lux_threshold` | Tagesdarstellung ab dieser Beleuchtungsstärke in Lux, Standard **10**. Muss über `night_lux_threshold` liegen; ungültige Reihenfolge wird beim Speichern korrigiert. |
 | `site_image`, `background_image` | Optionale Bildquelle, mit Vorrang für `site_image` |
 | `image_rotation` | Drehung des Bildes im Uhrzeigersinn, −180 bis 180 Grad, Standard 0 |
 | `image_target_x`, `image_target_y` | Pfeilziel in Prozent des sichtbaren quadratischen Bildausschnitts, 10 bis 90, Standard 50. Das Ziel bleibt innerhalb eines Radius von 40 % um die Mitte. |
@@ -50,6 +52,10 @@ Ein eigenes Bild bleibt auf der Home-Assistant-Instanz. Dort lassen sich Auflös
 | `rain_24h`, `rain_week`, `rain_month`, `rain_year`, `rain_event` | Gleitende 24-Stunden-Menge, Wochen-, Monats-, Jahres- und Ereignismenge aus getrennten Quellen |
 | `pressure_absolute`, `pressure` | Absoluter Druck in Hauptleiste und Details, relativer Druck in den Details |
 | `uv`, `solar`, `solar_lux` | UV-Index, Solarstrahlung und Beleuchtungsstärke |
+
+Die Wetterkarte nutzt `solar_lux` zur örtlichen Erkennung von Tag/Nacht. Im Bereich zwischen Nacht- und Tagesgrenze behält sie eine vorhandene Lichtphase bei und berücksichtigt die astronomische Dämmerung. Bei fehlendem/ungültigem Luxwert oder eindeutigen Widersprüchen dient die **lokal berechnete Home-Assistant-Integration `sun.sun`** zur Kontrolle und als Rückfallquelle; dafür wird kein Internet abgerufen. Der aktuelle regionale Zustand von `weather_entity` steuert nur Sonne/Wolken. Meldet die Wetterquelle Regen, ohne dass die Regenraten vor Ort positiv sind, wird **bewölkt statt Regen** gezeigt. Nachts zeigt klarer Himmel Mond und Sterne, bewölkter Himmel dunkle Wolken, lokal gemessener Regen Regentropfen bei Nacht.
+
+Die Regenrate der Hauptkachel verwendet zuerst einen **positiven WH40-Wert**, andernfalls einen positiven WS90-Wert aus `rain_rate_secondary`. Sind beide null, wird null angezeigt; bei fehlender gültiger WH40-Messung kann eine gültige WS90-Rate einspringen. `rain_wet` (Piezo-NASS) ist kein Regenraten-Ersatz. In den Sensor-Details bleiben beide einzeln konfigurierten Quellmessungen erkennbar.
 
 Die Karte übernimmt unterstützte Einheiten aus den Entitäten und kennzeichnet unpassende Einheiten. Der dimensionslose UV-Index wird auf eine ganze Zahl gerundet. Solarstrahlung und Beleuchtungsstärke benötigen getrennte Quellen.
 

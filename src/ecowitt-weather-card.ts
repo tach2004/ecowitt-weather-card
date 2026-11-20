@@ -27,7 +27,7 @@ import {
   type WeatherRecordsResult,
 } from "./records";
 import { resolveImage } from "./image";
-import { observeWeather, type WeatherObservation } from "./weather";
+import { observeWeather, selectRainRate, type LightPhase, type WeatherObservation } from "./weather";
 import { deviceIndicators } from "./device-status";
 import {
   METRICS,
@@ -162,6 +162,8 @@ export class EcowittWeatherCard extends LitElement {
   ];
   hass?: HomeAssistant;
   private _config: CardConfig = { type: "custom:ecowitt-weather-card" };
+  /** Keep the current light phase stable between the configured lux limits. */
+  private _lastLighting?: LightPhase;
   private _detail?: Detail;
   private _detailTrigger?: HTMLElement;
   private _records?: WeatherRecordsResult;
@@ -404,7 +406,9 @@ export class EcowittWeatherCard extends LitElement {
     return getReading(this.hass, this._config, key);
   }
   private _value(key: MetricKey, small = false) {
-    const reading = this._reading(key);
+    return this._renderReading(this._reading(key), small);
+  }
+  private _renderReading(reading: Reading, small = false) {
     return html`<span class=${small ? "small-value" : "value"}
         >${reading.text}${
           reading.value !== null && reading.unit
@@ -412,6 +416,12 @@ export class EcowittWeatherCard extends LitElement {
             : nothing
         }</span
       >${this._status(reading)}`;
+  }
+  private _selectedRainRate() {
+    return selectRainRate(
+      this._reading("rain_rate"), this._reading("rain_rate_secondary"),
+      { staleAfterMinutes: this._config.stale_after_minutes },
+    );
   }
   private _status(reading: Reading) {
     return reading.status === "ok"
@@ -584,7 +594,7 @@ export class EcowittWeatherCard extends LitElement {
   }
 
   private _observation(): WeatherObservation {
-    return observeWeather(
+    const result = observeWeather(
       this.hass?.states["sun.sun"],
       this._reading("solar"),
       this._reading("rain_rate"),
@@ -592,11 +602,18 @@ export class EcowittWeatherCard extends LitElement {
       {
         staleAfterMinutes: this._config.stale_after_minutes,
         secondaryRainRate: this._reading("rain_rate_secondary"),
+        lux: this._reading("solar_lux"),
+        nightLuxThreshold: this._config.night_lux_threshold,
+        dayLuxThreshold: this._config.day_lux_threshold,
+        previousLighting: this._lastLighting,
         conditionEntity: this._config.weather_entity
           ? this.hass?.states[this._config.weather_entity]
           : undefined,
       },
     );
+    if (result.lighting && result.lighting !== "unknown")
+      this._lastLighting = result.lighting;
+    return result;
   }
   private _batteryGlyph(percent?: number) {
     const width =
@@ -969,6 +986,7 @@ export class EcowittWeatherCard extends LitElement {
 
   private _rain() {
     const sky = this._observation();
+    const rate = this._selectedRainRate();
     const raining = sky.kind === "rain";
     const animated = this._config.weather_animation !== false;
     return html`<button
@@ -990,7 +1008,7 @@ export class EcowittWeatherCard extends LitElement {
           )}
         </div>
         <div data-key="rain_rate">
-          <span class="label">Regenrate</span>${this._value("rain_rate")}
+          <span class="label">Regenrate${rate.source === "ws90" ? " · WS90" : ""}</span>${this._renderReading(rate.reading)}
         </div>
       </div>
       <div class="wet-line" data-key="rain_wet">

@@ -307,11 +307,11 @@ export class EcowittWeatherCardEditor extends LitElement {
             >`
       }
       <p class="hint">
-        Optionaler aktueller Himmelszustand. Keine Vorhersageabfrage. Die
-        vorhandene HA-Integration kann eigene Datenquellen verwenden. Lokaler
-        Regen folgt einer positiven WH40- oder zusätzlich ausgewählten
-        WS90-Regenrate; NASS allein genügt nicht. Bei tiefem Sonnenstand wird
-        ohne weitere Quelle nur Tageslicht dargestellt.
+        Ergänzende HA-Wetterquelle für Wolken und klaren Himmel. Positiver
+        lokaler Regen von WH40 oder WS90 hat Vorrang; ein regional gemeldeter
+        Regen ohne lokale Bestätigung erzeugt nur Wolken, keine Regeneffekte.
+        Tag und Nacht folgen vorrangig der zugeordneten Beleuchtungsstärke
+        (solar_lux); sun.sun prüft Widersprüche und dient als Rückfallquelle.
       </p>
     </div>`;
   }
@@ -751,7 +751,9 @@ export class EcowittWeatherCardEditor extends LitElement {
       | "image_target_x"
       | "image_target_y"
       | "history_hours"
-      | "stale_after_minutes",
+      | "stale_after_minutes"
+      | "night_lux_threshold"
+      | "day_lux_threshold",
     label: string,
     value: number,
     min: number,
@@ -920,6 +922,9 @@ export class EcowittWeatherCardEditor extends LitElement {
         <summary>Darstellung, Wetteranimation und Theme</summary>
         ${this._openGroups.has("Darstellung") ? this._weatherPicker() : nothing}
         <div class="fields">
+          ${this._number("night_lux_threshold", "Nachtszene bei höchstens · Lux", 0, 0, 199999)}
+          ${this._number("day_lux_threshold", "Tagesdarstellung ab · Lux", 10, 0, 200000)}
+          <p class="hint">Die Luxwerte stammen ausschließlich aus der zugeordneten Beleuchtungsstärke (solar_lux). Der Wert 0 ist gültig. Zwischen den Grenzen wird die Dämmerung anhand der bisherigen Lichtphase und Sonnenhöhe behandelt; die Tagesgrenze muss über der Nachtgrenze liegen (wird bei Bedarf angepasst). Bei einem fehlenden oder ungültigen Luxwert greift sun.sun.</p>
           <label
             >Maximale Kartenbreite · ${this._config.max_width ?? 1380} px<input
               type="range"

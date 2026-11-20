@@ -383,11 +383,12 @@ test("HA source reports cannot silently invent measured local rain, snow or a co
     reading(1, ""),
     { now, conditionEntity: condition("rainy") },
   );
-  assert.equal(regional.kind, "unknown");
+  assert.equal(regional.kind, "cloudy");
+  assert.equal(regional.rainIntensity, undefined);
   assert.equal(regional.source, "weather_entity");
   assert.match(
     regional.note,
-    /positive lokale Regenrate wurde nicht bestätigt/,
+    /positive lokale Regenrate ist nicht bestätigt/,
   );
   const measured = observeWeather(
     sun(),
@@ -403,7 +404,7 @@ test("HA source reports cannot silently invent measured local rain, snow or a co
       now,
       conditionEntity: condition("clear-night"),
     }).kind,
-    "unknown",
+    "sunny",
   );
   const night = observeWeather(
     sun("below_horizon", -10),
@@ -464,4 +465,113 @@ test("local WH40 then WS90 rain always takes priority over an explicitly selecte
     }).kind,
     "sunny",
   );
+});
+
+test("explicit configurable lux thresholds, including zero, determine night before astronomical sunset", () => {
+  const options = (lux: number, nightLimit = 0, dayLimit = 10) => ({
+    now, lux: reading(lux, "lx"),
+    nightLuxThreshold: nightLimit, dayLuxThreshold: dayLimit,
+  });
+  assert.equal(
+    observeWeather(sun("above_horizon", 4), reading(300), noRain(), dry, options(0)).kind,
+    "night",
+  );
+  assert.equal(
+    observeWeather(sun("above_horizon", 4), reading(300), noRain(), dry, options(10)).kind,
+    "daylight",
+  );
+  assert.equal(
+    observeWeather(sun("below_horizon", -3), reading(0), noRain(), dry, options(0.5)).kind,
+    "daylight",
+  );
+  assert.equal(
+    observeWeather(sun("below_horizon", -3), reading(0), noRain(), dry,
+      { ...options(0.5), previousLighting: "night" }).kind,
+    "night",
+  );
+  assert.equal(
+    observeWeather(sun("below_horizon", -3), reading(0), noRain(), dry, options(2, 2, 20)).kind,
+    "night",
+  );
+  assert.equal(
+    observeWeather(sun("below_horizon", -3), reading(0), noRain(), dry, options(20, 2, 20)).kind,
+    "daylight",
+  );
+});
+
+test("strong sun and local lux contradictions use sun.sun; invalid lux falls back to astronomy", () => {
+  const opts = { now, nightLuxThreshold: 0, dayLuxThreshold: 10 };
+  const midDay = observeWeather(sun(), reading(650), noRain(), dry, {
+    ...opts, lux: reading(0, "lx"),
+  });
+  assert.notEqual(midDay.kind, "night");
+  assert.match(midDay.note, /Sonnenstand widersprechen/);
+  const darkNight = observeWeather(sun("below_horizon", -20), reading(0), noRain(), dry, {
+    ...opts, lux: reading(280, "lx"),
+  });
+  assert.equal(darkNight.kind, "night");
+  assert.match(darkNight.note, /Sonnenstand widersprechen/);
+  for (const bad of [
+    reading(null, "lx", "unavailable"), reading(0, "W/m²"),
+    reading(-4, "lx"), reading(5, "lx", "stale"),
+  ]) {
+    const result = observeWeather(sun("below_horizon", -12), reading(0), noRain(), dry, {
+      ...opts, lux: bad,
+    });
+    assert.equal(result.kind, "night");
+    assert.equal(result.source, "sun");
+  }
+  const offlineSun = observeWeather(undefined, reading(0), noRain(), dry, {
+    ...opts, lux: reading(0, "lx"),
+  });
+  assert.equal(offlineSun.kind, "night");
+  assert.equal(offlineSun.source, "lux");
+});
+
+test("local WH40 then WS90 rain rate is shared by scene, source and displays", () => {
+  const options = { now, secondaryRainRate: reading(0.6, "mm/h") };
+  const wh = observeWeather(sun(), reading(650), reading(0.7, "mm/h"), dry, options);
+  assert.equal(wh.kind, "rain");
+  assert.equal(wh.source, "wh40");
+  assert.equal(observeWeather(sun(), reading(650), reading(0, "mm/h"), dry, options).source, "ws90");
+  assert.equal(observeWeather(sun(), reading(650), reading(0, "mm/h"), dry, {
+    ...options, secondaryRainRate: reading(0, "mm/h"),
+  }).kind, "sunny");
+  const rainyNight = observeWeather(sun("below_horizon", -15), reading(0),
+    reading(0, "mm/h"), dry, { ...options, lux: reading(0, "lx") });
+  assert.equal(rainyNight.kind, "rain");
+  assert.equal(rainyNight.source, "ws90");
+  assert.equal(rainyNight.night, true);
+});
+
+test("met.no-style conditions assist sky only, while local rainfall is authoritative at night and day", () => {
+  const light = (isNight: boolean, state: string, wh40: number, ws90 = 0) =>
+    observeWeather(
+      isNight ? sun("below_horizon", -15) : sun("above_horizon", 45),
+      reading(650), reading(wh40, "mm/h"), dry,
+      { now, conditionEntity: condition(state), lux: reading(isNight ? 0 : 2000, "lx"),
+        nightLuxThreshold: 0, dayLuxThreshold: 10,
+        secondaryRainRate: reading(ws90, "mm/h") },
+    );
+  const clear = light(true, "clear-night", 0);
+  assert.equal(clear.kind, "night");
+  assert.equal(clear.night, true);
+  const cloud = light(true, "cloudy", 0);
+  assert.equal(cloud.kind, "cloudy");
+  assert.equal(cloud.night, true);
+  const reportedRain = light(true, "rainy", 0);
+  assert.equal(reportedRain.kind, "cloudy");
+  assert.equal(reportedRain.night, true);
+  assert.equal(reportedRain.rainIntensity, undefined);
+  const observedRain = light(true, "rainy", 0.3);
+  assert.equal(observedRain.kind, "rain");
+  assert.equal(observedRain.night, true);
+  assert.equal(observedRain.source, "wh40");
+  const daytime = light(false, "rainy", 0);
+  assert.equal(daytime.kind, "cloudy");
+  assert.equal(daytime.night, false);
+  assert.equal(daytime.rainIntensity, undefined);
+  const secondary = light(false, "rainy", 0, 0.6);
+  assert.equal(secondary.kind, "rain");
+  assert.equal(secondary.source, "ws90");
 });

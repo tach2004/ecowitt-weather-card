@@ -81,6 +81,10 @@ export interface CardConfig {
   theme_mode?: "auto" | "light" | "dark";
   weather_animation?: boolean;
   weather_entity?: string;
+  /** At or below this local lux reading, display night. Zero is valid. */
+  night_lux_threshold?: number;
+  /** At or above this reading, display day; must exceed the night threshold. */
+  day_lux_threshold?: number;
   windrose?: WindroseOptions;
   diagnostic_entities?: string[];
   history_hours?: number;

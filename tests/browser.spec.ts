@@ -1097,8 +1097,13 @@ test("measured WH40 rain is visualized in the image and tile while wet Piezo rem
   await update(page, "rain_rate", 0, "mm/h");
   await update(page, "rain_wet", "on");
   await expect(page.locator(".scene-drop-track")).toHaveCount(0);
+  // With a usable local lux source, the sky can remain a neutral
+  // daylight scene even though the measured precipitation stopped.
   await expect(page.locator(".weather-info summary")).toContainText(
-    "Wetterdaten ergänzen",
+    "Tag",
+  );
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "daylight",
   );
   await expect(page.locator(".wet-badge:visible").first()).toContainText(
     "NASS",
@@ -1475,10 +1480,157 @@ test("night, low daylight and incomplete observations have independent moisture 
     win.card.hass = { ...win.hass };
     await win.card.updateComplete;
   });
+  // A valid local lux reading keeps the light phase usable even when the
+  // optional astronomical sun source is temporarily missing.
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "daylight",
+  );
   await page.locator(".weather-info summary").click();
-  await expect(page.locator(".weather-info p")).toContainText(/Sonnenzustand/);
+  await expect(page.locator(".weather-info p")).toContainText(/Lokal gemessene Beleuchtungsstärke/);
 });
 
+test("main rain tile uses positive WH40 first, then positive WS90 if WH40 shows zero", async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "sensor.demo_secondary_precipitation";
+    const now = new Date().toISOString();
+    win.hass.states[id] = {
+      entity_id: id, state: "0.6", last_updated: now, last_changed: now,
+      attributes: {
+        friendly_name: "Beispiel WS90-Regenrate",
+        unit_of_measurement: "mm/h",
+        device_class: "precipitation_intensity",
+      },
+    };
+    win.setDemoConfig({
+      ...win.demoConfig,
+      entities: { ...win.demoConfig.entities, rain_rate_secondary: id },
+    });
+    await win.card.updateComplete;
+  });
+  await update(page, "rain_rate", 0, "mm/h");
+  const rate = page.locator(".rain [data-key='rain_rate']");
+  await expect(rate).toContainText("0,6");
+  await expect(rate).toContainText("WS90");
+  await expect(page.locator(".rain .weather-scene")).toHaveAttribute("data-scene-weather", "rain");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-weather", "rain");
+  await update(page, "rain_rate", 1.3, "mm/h");
+  await expect(rate).toContainText("1,3");
+  await expect(rate).not.toContainText("WS90");
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "sensor.demo_secondary_precipitation";
+    win.hass.states[id] = { ...win.hass.states[id], state: "0",
+      last_updated: new Date().toISOString() };
+    win.card.hass = { ...win.hass, states: { ...win.hass.states } };
+    await win.card.updateComplete;
+  });
+  await update(page, "rain_rate", 0, "mm/h");
+  await expect(rate).toContainText("0,0");
+  await expect(rate).not.toContainText("WS90");
+  await expect(page.locator(".site .scene-drop-track")).toHaveCount(0);
+});
+
+test("met.no-like nighttime cloud and rain conditions never invent local precipitation", async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await ready(page);
+  await update(page, "rain_rate", 0, "mm/h");
+  await update(page, "solar_lux", 0, "lx");
+  await setSky(page, -16, 0, "W/m²", "below_horizon");
+  const condition = async (state: string) => {
+    await page.evaluate(async (nextState) => {
+      const win = window as DemoWindow;
+      const id = "weather.demo_regional";
+      win.hass.states[id] = {
+        entity_id: id, state: nextState,
+        last_updated: new Date().toISOString(),
+        attributes: { friendly_name: "Beispiel Wetterquelle" },
+      };
+      win.setDemoConfig({ ...win.demoConfig, weather_entity: id,
+        night_lux_threshold: 0, day_lux_threshold: 10 });
+      await win.card.updateComplete;
+    }, state);
+  };
+  const sky = page.locator(".site .weather-scene");
+  await condition("clear-night");
+  await expect(sky).toHaveAttribute("data-scene-weather", "night");
+  await expect(sky.locator(".scene-moon")).toHaveCount(1);
+  await expect(sky.locator(".scene-stars")).toHaveCount(1);
+
+  await condition("cloudy");
+  await expect(sky).toHaveAttribute("data-scene-time", "night");
+  await expect(sky).toHaveAttribute("data-scene-weather", "cloudy");
+  await expect(sky.locator(".scene-cloud")).toHaveCount(2);
+  await expect(sky.locator(".scene-stars")).toHaveCount(0);
+
+  await condition("rainy");
+  await expect(sky).toHaveAttribute("data-scene-weather", "cloudy");
+  await expect(sky).toHaveAttribute("data-scene-time", "night");
+  await expect(sky.locator(".scene-drop-track")).toHaveCount(0);
+
+  await update(page, "rain_rate", 0.8, "mm/h");
+  await expect(sky).toHaveAttribute("data-scene-weather", "rain");
+  await expect(sky).toHaveAttribute("data-scene-time", "night");
+  await expect(sky.locator(".scene-drop-track")).toHaveCount(24);
+
+  await update(page, "rain_rate", 0, "mm/h");
+  await setSky(page, 42, 500);
+  await update(page, "solar_lux", 25000, "lx");
+  await expect(sky).toHaveAttribute("data-scene-weather", "cloudy");
+  await expect(sky).toHaveAttribute("data-scene-time", "day");
+  await expect(sky.locator(".scene-drop-track")).toHaveCount(0);
+  await noOverflow(page);
+});
+
+test("lux thresholds including zero and sun.sun plausibility govern light scenes", async ({ page }) => {
+  await ready(page);
+  await update(page, "rain_rate", 0, "mm/h");
+  await setSky(page, 3, 25);
+  await update(page, "solar_lux", 0, "lx");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-weather", "night");
+  await expect(page.locator(".site .scene-stars")).toHaveCount(1);
+  await update(page, "solar_lux", 20, "lx");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-weather", "daylight");
+
+  await setSky(page, 45, 650);
+  await update(page, "solar_lux", 0, "lx");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-weather", "sunny");
+  await expect(page.locator(".weather-info summary")).toContainText("geschätzt");
+
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    win.hass.states["sensor.demo_solar_lux"] = {
+      ...win.hass.states["sensor.demo_solar_lux"], state: "unavailable",
+      last_updated: new Date().toISOString(),
+    };
+    win.card.hass = { ...win.hass, states: { ...win.hass.states } };
+    await win.card.updateComplete;
+  });
+  await setSky(page, -15, 0, "W/m²", "below_horizon");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-weather", "night");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute("data-scene-time", "night");
+});
+
+test("visual editor persists both freely configured lux thresholds and an explicit zero", async ({ page }) => {
+  await ready(page, "/?editor=1");
+  await page.getByText("Darstellung, Wetteranimation und Theme", { exact: true }).click();
+  const night = page.getByLabel("Nachtszene bei höchstens · Lux", { exact: true });
+  const day = page.getByLabel("Tagesdarstellung ab · Lux", { exact: true });
+  await expect(night).toHaveValue("0");
+  await expect(day).toHaveValue("10");
+  await night.fill("0");
+  await night.dispatchEvent("change");
+  await day.fill("35");
+  await day.dispatchEvent("change");
+  await expect.poll(() => page.evaluate(
+    () => (window as DemoWindow).lastEditorConfig?.day_lux_threshold,
+  )).toBe(35);
+  expect(await page.evaluate(
+    () => (window as DemoWindow).lastEditorConfig?.night_lux_threshold,
+  )).toBe(0);
+});
 test("weather preferences retain static visible rain and preserve independent wind transitions", async ({
   page,
 }) => {
