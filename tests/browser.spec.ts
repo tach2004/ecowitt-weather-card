@@ -1413,6 +1413,53 @@ for (const width of [320, 375, 390, 402, 430, 600, 768, 874, 1024, 1440]) {
   });
 }
 
+test("wind site uses the fourth preview sun and cloud positions without shifting the rain tile", async ({
+  page,
+}) => {
+  await ready(page);
+  await update(page, "rain_rate", 0, "mm/h");
+  const checkPosition = async (selector: string, left: number, top: number) => {
+    const found = page.locator(selector);
+    await expect(found).toHaveCount(1);
+    const position = await found.evaluate((element) => {
+      const parent = element.parentElement!;
+      const computed = getComputedStyle(element);
+      return {
+        left: (parseFloat(computed.left) / parent.clientWidth) * 100,
+        top: (parseFloat(computed.top) / parent.clientHeight) * 100,
+      };
+    });
+    expect(position.left, selector).toBeCloseTo(left, 0);
+    expect(position.top, selector).toBeCloseTo(top, 0);
+  };
+
+  await setSky(page, 45, 700);
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "sunny",
+  );
+  await checkPosition(".site .scene-sun", 65, 9);
+  await checkPosition(".site .scene-corona", 33, -24);
+  await checkPosition(".site .scene-sun-glint", 69, 14);
+  await checkPosition(".rain .scene-sun", 60, 15);
+
+  await setSky(page, 15, 150);
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "partlycloudy",
+  );
+  await checkPosition(".site .scene-cloud--far", 13, 12);
+  await checkPosition(".site .scene-cloud--near", 40, 21);
+  await checkPosition(".rain .scene-cloud--far", 13, 18);
+  await checkPosition(".rain .scene-cloud--near", 40, 30);
+
+  await setSky(page, 45, 30);
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "cloudy",
+  );
+  await checkPosition(".site .scene-cloud--near", 43, 15);
+  await checkPosition(".rain .scene-cloud--near", 43, 24);
+  await expect(page.locator(".site .wind-layer")).toHaveCount(1);
+});
+
 test("wet surface coexists with sun and clouds over the unchanged image; measured rain takes priority", async ({
   page,
 }) => {
