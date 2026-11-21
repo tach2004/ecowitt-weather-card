@@ -213,6 +213,29 @@ export const weatherSceneStyles = css`
     left: 43%;
     opacity: 0.72;
   }
+  /* Fourth comparison panel: lift the sun and clouds within the circular wind
+     graphic only. The rain tile and weather calculations keep their positions. */
+  .weather-scene--site .scene-corona {
+    left: 33%;
+    top: -24%;
+  }
+  .weather-scene--site .scene-sun {
+    left: 65%;
+    top: 9%;
+  }
+  .weather-scene--site .scene-sun-glint {
+    left: 69%;
+    top: 14%;
+  }
+  .weather-scene--site .scene-cloud--far {
+    top: 12%;
+  }
+  .weather-scene--site .scene-cloud--near {
+    top: 21%;
+  }
+  .weather-scene--site.weather-scene--cloudy .scene-cloud--near {
+    top: 15%;
+  }
   .scene-night-haze {
     inset: 0;
     background:
