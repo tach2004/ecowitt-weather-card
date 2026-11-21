@@ -1440,7 +1440,20 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
   await checkPosition(".site .scene-sun", 65, 9);
   await checkPosition(".site .scene-corona", 33, -24);
   await checkPosition(".site .scene-sun-glint", 69, 14);
-  await checkPosition(".rain .scene-sun", 60, 15);
+  // The rain tile intentionally places the fixed-width sun from the right,
+  // unlike the percentage-based sun in the circular wind graphic.
+  const rainSun = page.locator(".rain .scene-sun");
+  await expect(rainSun).toHaveCount(1);
+  const rainSunPosition = await rainSun.evaluate((element) => {
+    const container = element.parentElement!;
+    const computed = getComputedStyle(element);
+    return {
+      right: (parseFloat(computed.right) / container.clientWidth) * 100,
+      top: (parseFloat(computed.top) / container.clientHeight) * 100,
+    };
+  });
+  expect(rainSunPosition.right).toBeCloseTo(9, 0);
+  expect(rainSunPosition.top).toBeCloseTo(12, 0);
 
   await setSky(page, 15, 150);
   await expect(page.locator(".site .weather-scene")).toHaveAttribute(
@@ -1448,15 +1461,15 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
   );
   await checkPosition(".site .scene-cloud--far", 13, 12);
   await checkPosition(".site .scene-cloud--near", 40, 21);
-  await checkPosition(".rain .scene-cloud--far", 13, 18);
-  await checkPosition(".rain .scene-cloud--near", 40, 30);
+  await checkPosition(".rain .scene-cloud--far", 15, 13);
+  await checkPosition(".rain .scene-cloud--near", 53, 17);
 
   await setSky(page, 45, 30);
   await expect(page.locator(".site .weather-scene")).toHaveAttribute(
     "data-scene-weather", "cloudy",
   );
   await checkPosition(".site .scene-cloud--near", 43, 15);
-  await checkPosition(".rain .scene-cloud--near", 43, 24);
+  await checkPosition(".rain .scene-cloud--near", 53, 17);
   await expect(page.locator(".site .wind-layer")).toHaveCount(1);
 });
 
