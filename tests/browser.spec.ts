@@ -1460,7 +1460,7 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
     "data-scene-weather", "partlycloudy",
   );
   await checkPosition(".site .scene-cloud--far", 13, 12);
-  await checkPosition(".site .scene-cloud--near", 40, 21);
+  await checkPosition(".site .scene-cloud--near", 44, 18);
   await checkPosition(".rain .scene-cloud--far", 15, 13);
   await checkPosition(".rain .scene-cloud--near", 53, 17);
 
@@ -1468,8 +1468,66 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
   await expect(page.locator(".site .weather-scene")).toHaveAttribute(
     "data-scene-weather", "cloudy",
   );
-  await checkPosition(".site .scene-cloud--near", 43, 15);
+  // The same large-cloud position must apply with and without the moon.
+  await checkPosition(".site .scene-cloud--near", 44, 18);
   await checkPosition(".rain .scene-cloud--near", 53, 17);
+
+  await setSky(page, -15, 0, "W/m²", "below_horizon");
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-time", "night",
+  );
+  await checkPosition(".site .scene-moon", 67, 10);
+  // The small rain tile retains its pre-existing right-anchored moon.
+  const rainMoon = page.locator(".rain .scene-moon");
+  await expect(rainMoon).toHaveCount(1);
+  const moonPosition = await rainMoon.evaluate((element) => {
+    const container = element.parentElement!;
+    const computed = getComputedStyle(element);
+    return {
+      right: (parseFloat(computed.right) / container.clientWidth) * 100,
+      top: (parseFloat(computed.top) / container.clientHeight) * 100,
+    };
+  });
+  expect(moonPosition.right).toBeCloseTo(13, 0);
+  expect(moonPosition.top).toBeCloseTo(10, 0);
+
+  // With a weather entity, verify that the large cloud stays in the same
+  // place by day, by night with a moon, and by night without one.
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "weather.demo_cloud_alignment";
+    const now = new Date().toISOString();
+    win.hass.states[id] = {
+      entity_id: id,
+      state: "partlycloudy",
+      last_updated: now,
+      last_changed: now,
+      attributes: { friendly_name: "Synthetic cloud alignment" },
+    };
+    win.setDemoConfig({ ...win.demoConfig, weather_entity: id });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "partlycloudy",
+  );
+  await expect(page.locator(".site .scene-moon")).toHaveCount(1);
+  await checkPosition(".site .scene-cloud--near", 44, 18);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "weather.demo_cloud_alignment";
+    win.hass.states[id] = {
+      ...win.hass.states[id],
+      state: "cloudy",
+      last_updated: new Date().toISOString(),
+    };
+    win.card.hass = { ...win.hass, states: { ...win.hass.states } };
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "cloudy",
+  );
+  await expect(page.locator(".site .scene-moon")).toHaveCount(0);
+  await checkPosition(".site .scene-cloud--near", 44, 18);
   await expect(page.locator(".site .wind-layer")).toHaveCount(1);
 });
 
