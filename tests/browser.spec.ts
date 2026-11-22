@@ -1468,7 +1468,8 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
   await expect(page.locator(".site .weather-scene")).toHaveAttribute(
     "data-scene-weather", "cloudy",
   );
-  await checkPosition(".site .scene-cloud--near", 47, 12);
+  // The same large-cloud position must apply with and without the moon.
+  await checkPosition(".site .scene-cloud--near", 44, 18);
   await checkPosition(".rain .scene-cloud--near", 53, 17);
 
   await setSky(page, -15, 0, "W/m²", "below_horizon");
@@ -1489,6 +1490,44 @@ test("wind site uses the fourth preview sun and cloud positions without shifting
   });
   expect(moonPosition.right).toBeCloseTo(13, 0);
   expect(moonPosition.top).toBeCloseTo(10, 0);
+
+  // With a weather entity, verify that the large cloud stays in the same
+  // place by day, by night with a moon, and by night without one.
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "weather.demo_cloud_alignment";
+    const now = new Date().toISOString();
+    win.hass.states[id] = {
+      entity_id: id,
+      state: "partlycloudy",
+      last_updated: now,
+      last_changed: now,
+      attributes: { friendly_name: "Synthetic cloud alignment" },
+    };
+    win.setDemoConfig({ ...win.demoConfig, weather_entity: id });
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "partlycloudy",
+  );
+  await expect(page.locator(".site .scene-moon")).toHaveCount(1);
+  await checkPosition(".site .scene-cloud--near", 44, 18);
+  await page.evaluate(async () => {
+    const win = window as DemoWindow;
+    const id = "weather.demo_cloud_alignment";
+    win.hass.states[id] = {
+      ...win.hass.states[id],
+      state: "cloudy",
+      last_updated: new Date().toISOString(),
+    };
+    win.card.hass = { ...win.hass, states: { ...win.hass.states } };
+    await win.card.updateComplete;
+  });
+  await expect(page.locator(".site .weather-scene")).toHaveAttribute(
+    "data-scene-weather", "cloudy",
+  );
+  await expect(page.locator(".site .scene-moon")).toHaveCount(0);
+  await checkPosition(".site .scene-cloud--near", 44, 18);
   await expect(page.locator(".site .wind-layer")).toHaveCount(1);
 });
 
