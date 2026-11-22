@@ -230,11 +230,14 @@ export const weatherSceneStyles = css`
   .weather-scene--site .scene-cloud--far {
     top: 12%;
   }
+  /* Move only the large/near cloud slightly to the north-east; far cloud stays put. */
   .weather-scene--site .scene-cloud--near {
-    top: 21%;
+    left: 44%;
+    top: 18%;
   }
   .weather-scene--site.weather-scene--cloudy .scene-cloud--near {
-    top: 15%;
+    left: 47%;
+    top: 12%;
   }
   .scene-night-haze {
     inset: 0;
@@ -273,6 +276,11 @@ export const weatherSceneStyles = css`
     border-radius: 50%;
     box-shadow: inset -12px 5px 0 #e3edf7c9;
     filter: drop-shadow(0 0 10px #c7e5ff4d);
+  }
+  /* Align the moon with the sun's raised north-east position in the wind view. */
+  .weather-scene--site .scene-moon {
+    left: 67%;
+    top: 10%;
   }
   .scene-daylight {
     inset: 0;
