@@ -235,10 +235,6 @@ export const weatherSceneStyles = css`
     left: 44%;
     top: 18%;
   }
-  .weather-scene--site.weather-scene--cloudy .scene-cloud--near {
-    left: 47%;
-    top: 12%;
-  }
   .scene-night-haze {
     inset: 0;
     background:
