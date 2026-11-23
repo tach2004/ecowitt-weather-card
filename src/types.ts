@@ -22,6 +22,7 @@ export interface HomeAssistant {
 export type MetricKey =
   | "temperature"
   | "humidity"
+  | "absolute_humidity"
   | "feels_like"
   | "dew_point"
   | "temperature_min"
@@ -72,6 +73,8 @@ export interface CardConfig {
   image_target_x?: number;
   image_target_y?: number;
   entities?: Partial<Record<MetricKey, string>>;
+  /** Assigned sensor IDs included in weather records. Omission keeps the earlier defaults. */
+  record_entities?: string[];
   /** Saved registry-device choices for sensor suggestions; empty string disables a role. */
   device_roles?: Partial<Record<DeviceRole, string>>;
   extra_entities?: string[];
@@ -160,6 +163,12 @@ export const METRICS: {
     label: "Luftfeuchte · WN32 bevorzugt",
     group: "Außenklima",
     deviceClass: "humidity",
+  },
+  {
+    key: "absolute_humidity",
+    label: "Absolute Luftfeuchte",
+    group: "Außenklima",
+    unit: "g/m³",
   },
   {
     key: "feels_like",

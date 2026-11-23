@@ -1,30 +1,67 @@
-import { isUnitValid, numericState } from "./data";
-import type { HassEntity, HomeAssistant, MetricKey } from "./types";
+import { isUnitValid, isValueValid, numericState } from "./data";
+import { weatherExtraDetail } from "./detail-extras";
+import type { CardConfig, HassEntity, HomeAssistant, MetricKey } from "./types";
 
 /** Only configured sensors and locally retained Recorder states are considered. */
-export interface RecordDefinition {
-  key: MetricKey;
+export const RECORD_GROUPS = {
+  temperature: { title: "Außenklima", icon: "temperature", color: "#d77940" },
+  wind: { title: "Wind", icon: "wind", color: "#209bb7" },
+  rain: { title: "Niederschlag", icon: "rain", color: "#326bd5" },
+  sun: { title: "Sonne & UV", icon: "sun", color: "#b88117" },
+  pressure: { title: "Luftdruck", icon: "pressure", color: "#6a83ad" },
+  extra: { title: "Weitere Messwerte", icon: "sensors", color: "#6a83ad" },
+} as const;
+
+interface RecordDefinition {
+  key: MetricKey | "extra";
   title: string;
-  group: "wind" | "rain" | "light" | "pressure";
-  icon: "wind" | "rain" | "sun" | "pressure";
+  group: keyof typeof RECORD_GROUPS;
+  icon: string;
   color: string;
 }
 
-export const RECORD_DEFINITIONS: readonly RecordDefinition[] = [
+const recordDefinitions: readonly RecordDefinition[] = [
+  { key: "temperature", title: "Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
+  { key: "humidity", title: "Rel. Luftfeuchte", group: "temperature", icon: "humidity", color: "#209bb7" },
+  { key: "absolute_humidity", title: "Abs. Luftfeuchte", group: "temperature", icon: "humidity", color: "#209bb7" },
+  { key: "feels_like", title: "Gefühlte Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
+  { key: "dew_point", title: "Taupunkt", group: "temperature", icon: "temperature", color: "#d77940" },
+  { key: "temperature_min", title: "Höchstes Tagesminimum", group: "temperature", icon: "temperature", color: "#d77940" },
+  { key: "temperature_max", title: "Temperatur-Tagesmaximum", group: "temperature", icon: "temperature", color: "#d77940" },
+  { key: "vpd", title: "Dampfdruckdefizit", group: "temperature", icon: "humidity", color: "#209bb7" },
   { key: "wind_speed", title: "Windgeschwindigkeit", group: "wind", icon: "wind", color: "#209bb7" },
   { key: "wind_gust_max", title: "Stärkste Böe", group: "wind", icon: "wind", color: "#1582c5" },
+  { key: "wind_gust", title: "Höchste aufgezeichnete Einzelböe", group: "wind", icon: "wind", color: "#1582c5" },
+  { key: "wind_speed_avg", title: "Mittlere Windgeschwindigkeit", group: "wind", icon: "wind", color: "#209bb7" },
+  { key: "wind_direction", title: "Größter Richtungswinkel", group: "wind", icon: "wind", color: "#209bb7" },
+  { key: "wind_direction_avg", title: "Größter mittlerer Richtungswinkel", group: "wind", icon: "wind", color: "#209bb7" },
   { key: "rain_rate", title: "Höchste Regenintensität", group: "rain", icon: "rain", color: "#326bd5" },
   { key: "rain_today", title: "Höchster Tagesregen", group: "rain", icon: "rain", color: "#6e62c9" },
-  { key: "solar", title: "Solarstrahlung", group: "light", icon: "sun", color: "#b88117" },
-  { key: "solar_lux", title: "Beleuchtungsstärke", group: "light", icon: "sun", color: "#b47b24" },
-  { key: "uv", title: "UV-Index", group: "light", icon: "sun", color: "#ab5688" },
+  { key: "rain_rate_secondary", title: "Zusätzliche Regenrate", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "rain_24h", title: "Regen in gleitenden 24 Stunden", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "rain_week", title: "Regen in der Kalenderwoche", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "rain_month", title: "Regen im Kalendermonat", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "rain_year", title: "Regen im Kalenderjahr", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "rain_event", title: "Regenereignis", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "solar", title: "Solarstrahlung", group: "sun", icon: "sun", color: "#b88117" },
+  { key: "solar_lux", title: "Beleuchtungsstärke", group: "sun", icon: "sun", color: "#b47b24" },
+  { key: "uv", title: "UV-Index", group: "sun", icon: "sun", color: "#ab5688" },
   { key: "pressure_absolute", title: "Luftdruck absolut", group: "pressure", icon: "pressure", color: "#6a83ad" },
   { key: "pressure", title: "Luftdruck relativ", group: "pressure", icon: "pressure", color: "#66789b" },
 ];
 
-export interface WeatherRecord {
-  key: MetricKey;
-  entityId: string | null;
+const legacyRecordKeys: readonly MetricKey[] = [
+  "wind_speed", "wind_gust_max", "rain_rate", "rain_today",
+  "solar", "solar_lux", "uv", "pressure_absolute", "pressure",
+];
+const definitions = new Map(recordDefinitions.map(definition => [definition.key, definition]));
+const recordOrder = new Map(recordDefinitions.map((definition, index) => [definition.key, index]));
+
+interface RecordSource extends RecordDefinition {
+  entityId: string;
+}
+
+export interface WeatherRecord extends RecordSource {
   value: number | null;
   unit: string;
   timestamp: number | null;
@@ -90,28 +127,83 @@ export function daysBeforeDate(date: string, days: number): string {
   return new Date(noon - days * DAY).toISOString().slice(0, 10);
 }
 
-export function selectedRecordSources(
-  configured: Partial<Record<MetricKey, string>>,
-  states: HomeAssistant["states"],
-): WeatherRecord[] {
-  return RECORD_DEFINITIONS.map(({ key }) => {
-    // The gateway daily gust maximum must stay its own measured HA sensor.
-    // Sampling wind_gust periodically cannot reconstruct the true peak.
-    const id = configured[key];
-    return {
-      key, entityId: id && states[id] ? id : null,
-      value: null, unit: "", timestamp: null, samples: 0,
-      state: id && states[id] ? "empty" as const : "missing" as const,
-    };
-  });
+export function enabledRecordEntities(config: CardConfig): Set<string> {
+  return new Set(config.record_entities ?? legacyRecordKeys.flatMap(key => {
+    const id = config.entities?.[key];
+    return id ? [id] : [];
+  }));
 }
 
-function acceptable(key: MetricKey, row: HassEntity) {
+function additionalDefinition(id: string, entity?: HassEntity): RecordDefinition {
+  const attributes = entity?.attributes;
+  const unit = attributes?.unit_of_measurement ?? "";
+  const deviceClass = attributes?.device_class;
+  const name = `${attributes?.friendly_name ?? ""} ${id}`;
+  if (deviceClass === "absolute_humidity" ||
+      (isUnitValid("absolute_humidity", unit) && /(?:feucht|humidity)/i.test(name)))
+    return definitions.get("absolute_humidity")!;
+  if (deviceClass === "humidity" ||
+    (!deviceClass && unit === "%" && /luftfeucht|humidity/i.test(name)))
+    return definitions.get("humidity")!;
+  if (deviceClass === "temperature" || isUnitValid("temperature", unit)) {
+    const key = /gefühl|feels.?like|apparent/i.test(name) ? "feels_like" :
+      /taupunkt|dew.?point/i.test(name) ? "dew_point" : "temperature";
+    return definitions.get(key)!;
+  }
+  const group = weatherExtraDetail(id, entity) ?? "extra";
+  return {
+    ...RECORD_GROUPS[group],
+    key: "extra", group,
+    title: attributes?.friendly_name || "Zusätzlicher Messwert",
+  };
+}
+
+/** One record per assigned sensor, including additional devices and older lists. */
+export function configuredRecordSources(
+  config: CardConfig,
+  states: HomeAssistant["states"],
+): RecordSource[] {
+  const sources = new Map<string, RecordSource>();
+  const add = (id: string | undefined, definition?: RecordDefinition) => {
+    if (!id?.startsWith("sensor.") || sources.has(id)) return;
+    const entity = states[id];
+    if (["enum", "connectivity"].includes(entity?.attributes.device_class ?? "")) return;
+    sources.set(id, { ...(definition ?? additionalDefinition(id, entity)), entityId: id });
+  };
+  for (const definition of recordDefinitions) {
+    if (definition.key !== "extra") add(config.entities?.[definition.key], definition);
+  }
+  for (const device of config.device_status ?? []) {
+    add(device.battery);
+    add(device.signal);
+    for (const id of device.extra_entities ?? []) add(id);
+  }
+  for (const id of [...(config.extra_entities ?? []), ...(config.diagnostic_entities ?? [])])
+    add(id);
+  return [...sources.values()].sort((a, b) =>
+    (recordOrder.get(a.key) ?? recordDefinitions.length) -
+    (recordOrder.get(b.key) ?? recordDefinitions.length));
+}
+
+export function selectedRecordSources(
+  config: CardConfig,
+  states: HomeAssistant["states"],
+): WeatherRecord[] {
+  const enabled = enabledRecordEntities(config);
+  return configuredRecordSources(config, states)
+    .filter(source => enabled.has(source.entityId))
+    .map(source => ({
+      ...source,
+      value: null, unit: "", timestamp: null, samples: 0,
+      state: states[source.entityId] ? "empty" : "missing",
+    }));
+}
+
+function acceptable(key: RecordDefinition["key"], row: HassEntity) {
   const value = numericState(row.state);
-  const unit = row.attributes?.unit_of_measurement ?? (key === "uv" ? "" : undefined);
-  if (value === null || typeof unit !== "string" || !isUnitValid(key, unit))
-    return null;
-  if (value < 0) return null; // All displayed records are nonnegative physical metrics.
+  const unit = row.attributes?.unit_of_measurement ?? "";
+  if (value === null || typeof unit !== "string") return null;
+  if (key !== "extra" && (!isUnitValid(key, unit) || !isValueValid(key, value))) return null;
   return { value, unit };
 }
 
@@ -173,13 +265,13 @@ function confirmedDailyReadings(
  */
 export async function loadWeatherRecords(
   hass: HomeAssistant,
-  configured: Partial<Record<MetricKey, string>>,
+  config: CardConfig,
   from: string,
   to: string,
   now = Date.now(),
 ): Promise<WeatherRecordsResult> {
   const timeZone = hass.config?.time_zone ?? "";
-  const records = selectedRecordSources(configured, hass.states);
+  const records = selectedRecordSources(config, hass.states);
   const base = { records, from, to, start: null, end: null, timeZone };
   if (!timeZone) return {
     ...base, status: "unavailable", message: "Die Home-Assistant-Zeitzone fehlt.",
@@ -200,18 +292,22 @@ export async function loadWeatherRecords(
     ...base, start, end, status: "unavailable",
     message: "Der Zeitraum liegt in der Zukunft oder enthält keine vergangenen Stunden.",
   };
-  if (!records.some(r => r.entityId)) return {
+  if (!records.length) return {
     ...base, start, end, status: "empty",
-    message: "Für Rekorde sind noch keine passenden Messquellen zugeordnet.",
+    message: "Im Karteneditor unter Wetterrekorde Messquellen auswählen.",
+  };
+  const ids = new Set(records.filter(r => r.state !== "missing").map(r => r.entityId));
+  if (!ids.size) return {
+    ...base, start, end, status: "empty",
+    message: "Die für Rekorde ausgewählten Entitäten sind derzeit nicht in Home Assistant verfügbar.",
   };
   if (!hass.callApi) return {
     ...base, start, end, status: "unavailable",
     message: "Die lokale Home-Assistant-Recorder-API ist nicht verfügbar.",
   };
 
-  const ids = [...new Set(records.flatMap(r => r.entityId ? [r.entityId] : []))];
   const query = new URLSearchParams({
-    filter_entity_id: ids.join(","),
+    filter_entity_id: [...ids].join(","),
     end_time: new Date(end).toISOString(),
     significant_changes_only: "0",
   });
@@ -237,7 +333,7 @@ export async function loadWeatherRecords(
   for (const row of response.flat()) {
     if (!row || typeof row !== "object") continue;
     const state = row as HassEntity;
-    if (typeof state.entity_id !== "string" || !ids.includes(state.entity_id))
+    if (typeof state.entity_id !== "string" || !ids.has(state.entity_id))
       continue;
     const timestamp = Date.parse(state.last_updated ?? state.last_changed ?? "");
     if (!Number.isFinite(timestamp) || timestamp >= end)
@@ -247,7 +343,7 @@ export async function loadWeatherRecords(
     byId.set(state.entity_id, list);
   }
   for (const record of records) {
-    if (!record.entityId) continue;
+    if (record.state === "missing") continue;
     const rows = byId.get(record.entityId) ?? [];
     const all = rows.flatMap(row => {
       const data = acceptable(record.key, row);
@@ -278,8 +374,11 @@ export async function loadWeatherRecords(
     record.timestamp = max.timestamp;
     record.state = daily.unverifiedDays ? "partial" : "ok";
   }
+  const hasDailySource = records.some(r => r.key === "rain_today" || r.key === "wind_gust_max");
   return {
     ...base, start, end, status: records.some(r => r.state === "ok" || r.state === "partial") ? "ok" : "empty",
-    message: "Nur Recorder-Messwerte. Tagesmaxima und Tageszähler werden erst nach erkennbarer Rücksetzung berücksichtigt. Fehlende Rücksetz-Nachweise und Aufzeichnungslücken können Rekorde verbergen.",
+    message: hasDailySource
+      ? "Nur Recorder-Messwerte. Tagesmaxima und Tageszähler werden erst nach erkennbarer Rücksetzung berücksichtigt. Fehlende Rücksetz-Nachweise und Aufzeichnungslücken können Rekorde verbergen."
+      : "Nur aufgezeichnete Recorder-Messwerte im ausgewählten Zeitraum.",
   };
 }

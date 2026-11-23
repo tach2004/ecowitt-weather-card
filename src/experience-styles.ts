@@ -14,6 +14,116 @@ export const experienceStyles = css`
     border-left: 1px solid var(--line);
     padding-left: 14px;
   }
+  /* The former three-column layout reserves the same space even when its
+     readings wrap at this width. The visible layout shares that grid area. */
+  .climate-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .climate-layout > .trio {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .climate-size-reference {
+    visibility: hidden;
+  }
+  .climate-heading-extrema,
+  .climate-density-label-short {
+    display: none;
+  }
+  .climate .climate-readings {
+    grid-template-columns: minmax(max-content, 1.65fr) repeat(3, minmax(min-content, 1fr));
+    column-gap: clamp(2px, 0.35cqi, 8px);
+  }
+  .climate-readings > div {
+    overflow-wrap: normal;
+  }
+  .climate .climate-readings > div + div {
+    padding-left: clamp(2px, 0.35cqi, 8px);
+  }
+  .climate-readings > [data-key="humidity"] {
+    border-left-width: 2px;
+  }
+  .climate-readings .value {
+    white-space: nowrap;
+  }
+  @container weather (min-width:520px) {
+    .climate-readings .label {
+      display: flex;
+      align-items: flex-end;
+      block-size: 1.35em;
+    }
+    /* Units fit under the smaller values within the existing value area. */
+    .climate-secondary .value {
+      position: relative;
+    }
+    .climate-secondary .unit {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin: 0;
+      line-height: 1;
+    }
+  }
+  @container weather (max-width:399px) or ((min-width:760px) and (max-width:1009px)) {
+    .climate-heading {
+      gap: 4px;
+    }
+    .climate-heading-extrema {
+      display: flex;
+      align-items: center;
+      block-size: 28px;
+      margin-inline-start: auto;
+    }
+    .climate-heading .more {
+      margin-inline-start: 0;
+    }
+    .climate-readings .climate-extremes {
+      display: none;
+    }
+  }
+  @container weather (max-width:359px) {
+    .climate .climate-readings {
+      column-gap: 1px;
+      margin-inline: -4px;
+    }
+    .climate .climate-readings > div + div {
+      padding-left: 1px;
+    }
+  }
+  @container weather (min-width:760px) and (max-width:829px) {
+    .climate .climate-readings {
+      margin-inline: -6px;
+    }
+  }
+  @container weather (max-width:359px) or ((min-width:760px) and (max-width:829px)) {
+    .climate-density-label {
+      display: none;
+    }
+    .climate-density-label-short {
+      display: inline;
+    }
+  }
+  @container weather (min-width:760px) and (max-width:1269px) {
+    .climate .climate-readings {
+      column-gap: 2px;
+    }
+    .climate .climate-readings > div + div {
+      padding-left: 2px;
+    }
+  }
+  @container weather (min-width:760px) and (max-width:1009px) {
+    .climate-readings .value {
+      position: relative;
+    }
+    .climate-readings .unit {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin: 0;
+      line-height: 1;
+    }
+  }
   .climate-temperature-row {
     display: flex;
     align-items: center;

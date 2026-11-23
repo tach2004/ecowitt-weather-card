@@ -84,6 +84,7 @@ export function metricRole(
     [
       "temperature",
       "humidity",
+      "absolute_humidity",
       "feels_like",
       "dew_point",
       "temperature_min",
@@ -244,6 +245,10 @@ function matchesMetric(
     return (
       dc === "humidity" && !maximum && !minimum && !average && !longerPeriod
     );
+  if (key === "absolute_humidity")
+    return !maximum && !minimum && !average && !longerPeriod &&
+      (dc === "absolute_humidity" || /(?:absolut|absolute)/.test(name) &&
+        /(?:feuchte|humidity)/.test(name));
   if (key === "pressure" || key === "pressure_absolute")
     return (
       ["atmospheric_pressure", "pressure"].includes(dc || "") &&

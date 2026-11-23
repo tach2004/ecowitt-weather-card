@@ -38,4 +38,8 @@ Regenmengen für den heutigen Kalendertag und für die gleitenden letzten 24 Stu
 
 ## Wetterrekorde
 
+Unter **Wetterrekorde · Messquellen auswählen** im Karteneditor lassen sich zugeordnete numerische Entitäten einzeln anhaken, auch Zusatzsensoren weiterer Geräte. Wetterzustände und Ein/Aus-Sensoren haben keinen numerischen Rekord. Ungewählte Quellen werden weder abgefragt noch als Kachel angezeigt. Ohne gespeicherte Auswahl bleiben in bestehenden Karten die bisher angezeigten Rekordquellen ausgewählt. Neue Karten starten mit einer leeren Auswahl.
+
+Die gewählten Außenklimaquellen stehen am Anfang. Temperatur, relative und absolute Luftfeuchte sowie gefühlte Temperatur erscheinen jeweils mit ihrem eigenen Quellnamen und Höchstwert im gewählten Zeitraum. Mehrere Sensoren derselben Messgröße bleiben getrennt.
+
 Über die Schaltfläche **Wetterrekorde** lassen sich die aufgezeichneten Höchstwerte der ausgewählten Quellen ansehen. Standard ist **Heute**. Die Datumsauswahl bietet weitere Zeiträume und eine Kalenderwahl. Bei täglich zurückgesetzten Werten wie Tagesregen und Tagesmaximalböe berücksichtigt die Karte Tage mit erkennbarer Rücksetzung. Lücken im Recorder können deshalb die sichtbaren Höchstwerte begrenzen.

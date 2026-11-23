@@ -23,7 +23,8 @@ import {
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
 import {
-  RECORD_DEFINITIONS, haLocalDate, loadWeatherRecords,
+  RECORD_GROUPS, haLocalDate, loadWeatherRecords,
+  type WeatherRecord,
   type WeatherRecordsResult,
 } from "./records";
 import { resolveImage } from "./image";
@@ -211,7 +212,7 @@ export class EcowittWeatherCard extends LitElement {
     return document.createElement("ecowitt-weather-card-editor");
   }
   static getStubConfig() {
-    return { type: "custom:ecowitt-weather-card", entities: {} };
+    return { type: "custom:ecowitt-weather-card", entities: {}, record_entities: [] };
   }
   setConfig(config: CardConfig) {
     const normalized = normalizeConfig(config);
@@ -408,14 +409,15 @@ export class EcowittWeatherCard extends LitElement {
   private _value(key: MetricKey, small = false) {
     return this._renderReading(this._reading(key), small);
   }
-  private _renderReading(reading: Reading, small = false) {
+  private _renderReading(reading: Reading, small = false, showStatus = true) {
     return html`<span class=${small ? "small-value" : "value"}
+        title=${!showStatus && reading.status !== "ok" ? reading.note ?? nothing : nothing}
         >${reading.text}${
           reading.value !== null && reading.unit
             ? html`<span class="unit">${reading.unit}</span>`
             : nothing
         }</span
-      >${this._status(reading)}`;
+      >${showStatus ? this._status(reading) : nothing}`;
   }
   private _selectedRainRate() {
     return selectRainRate(
@@ -907,35 +909,49 @@ export class EcowittWeatherCard extends LitElement {
     </section>`;
   }
   private _climate() {
+    const extremes = html`<span class="climate-extremes">
+      ${this._climateExtreme("temperature_max")}${this._climateExtreme("temperature_min")}
+    </span>`;
+    const temperature = html`<span class="climate-temperature-row">
+      <span class="climate-current-value">${this._value("temperature")}</span>
+      ${extremes}
+    </span>`;
+    const humidity = this._value("humidity");
+    const feelsLike = this._value("feels_like");
+    const density = this._reading("absolute_humidity");
+    const absoluteHumidity = this._renderReading(
+      density.status === "ok" ? density : { ...density, value: null, text: "—" },
+      false, false,
+    );
     return html`<button
       class="panel climate"
       data-detail="temperature"
       aria-label="Außenklimadetails öffnen"
       @click=${() => this._openDetail("temperature")}
     >
-      <div class="panel-heading">
+      <div class="panel-heading climate-heading">
         ${icon("temperature")}
         <h2>Außenklima</h2>
+        <span class="climate-heading-extrema">${extremes}</span>
         <span class="more">›</span>
       </div>
-      <div class="trio">
-        ${(
-          [
-            ["temperature", "Temperatur"],
-            ["humidity", "Luftfeuchte"],
-            ["feels_like", "Gefühlt"],
-          ] as [MetricKey, string][]
-        ).map(
-          ([key, label]) =>
-            html`<div data-key=${key}>
-              <span class="label">${label}</span>${key === "temperature"
-                ? html`<span class="climate-temperature-row">
-                    <span class="climate-current-value">${this._value(key)}</span>
-                    <span class="climate-extremes">${this._climateExtreme("temperature_max")}${this._climateExtreme("temperature_min")}</span>
-                  </span>`
-                : this._value(key)}
-            </div>`,
-        )}
+      <div class="climate-layout">
+        <div class="trio climate-size-reference" aria-hidden="true" inert>
+          <div><span class="label">Temperatur</span>${temperature}</div>
+          <div><span class="label">Luftfeuchte</span>${humidity}</div>
+          <div><span class="label">Gefühlt</span>${feelsLike}</div>
+        </div>
+        <div class="trio climate-readings">
+          <div data-key="temperature"><span class="label">Temperatur</span>${temperature}</div>
+          <div data-key="feels_like" class="climate-secondary"><span class="label">Gefühlt</span>${feelsLike}</div>
+          <div data-key="humidity"><span class="label"><span>rel. Luft<wbr>feuchte</span></span>${humidity}</div>
+          <div data-key="absolute_humidity" class="climate-secondary">
+            <span class="label">
+              <span class="climate-density-label">abs. Luftfeuchte</span>
+              <span class="climate-density-label-short">abs. Feuchte</span>
+            </span>${absoluteHumidity}
+          </div>
+        </div>
       </div>
     </button>`;
   }
@@ -1212,7 +1228,7 @@ export class EcowittWeatherCard extends LitElement {
       return;
     }
     const result = await loadWeatherRecords(
-      hass, this._config.entities ?? {}, this._recordsFrom, this._recordsTo,
+      hass, this._config, this._recordsFrom, this._recordsTo,
     );
     if (request !== this._recordsRequest || this._detail !== "records") return;
     this._records = result;
@@ -1222,12 +1238,6 @@ export class EcowittWeatherCard extends LitElement {
   private _recordDetails() {
     const records = this._records;
     const zone = this.hass?.config?.time_zone || "UTC";
-    const groups = [
-      { key: "wind", name: "Wind", symbol: "wind" },
-      { key: "rain", name: "Niederschlag", symbol: "rain" },
-      { key: "light", name: "Sonne & UV", symbol: "sun" },
-      { key: "pressure", name: "Luftdruck", symbol: "pressure" },
-    ] as const;
     return html`<div class="records-page">
       <p class="detail-caption">
         Höchstwerte deiner ausgewählten Messquellen im frei wählbaren Zeitraum.
@@ -1249,63 +1259,59 @@ export class EcowittWeatherCard extends LitElement {
           ? html`<p class="records-coverage" role="status">${records.message}</p>`
           : html`<p class="detail-caption">Zeitraum auswählen und auf Auswerten tippen.</p>`}
       ${records && (records.status === "ok" || records.status === "empty")
-        ? groups.map(group => html`<section class="record-group">
-            <h3>${icon(group.symbol)} ${group.name}</h3>
-            <div class="records-grid">
-              ${RECORD_DEFINITIONS.filter(def => def.group === group.key).map(def => {
-                const item = records.records.find(entry => entry.key === def.key);
-                const valid = (item?.state === "ok" || item?.state === "partial") && item.value !== null &&
-                  item.timestamp !== null;
-                const digits = def.key === "solar_lux" || def.key === "solar" ? 0 : 1;
-                const text = valid
-                  ? item!.value!.toLocaleString("de-DE", { maximumFractionDigits: digits })
-                  : "—";
-                const date = valid
-                  ? new Intl.DateTimeFormat("de-DE", {
-                      timeZone: zone, dateStyle: "medium", timeStyle: "short",
-                    }).format(item!.timestamp!)
-                  : "";
-                const message = item?.state === "missing"
-                  ? "Keine passende HA-Entität zugeordnet"
-                  : item?.state === "unit-conflict"
-                    ? "Einheitenwechsel im Zeitraum – keine Vergleichbarkeit"
-                    : item?.state === "uncertain"
-                      ? "Tageswechsel nicht nachgewiesen – kein verlässlicher Rekord"
-                      : "Keine gültigen Aufzeichnungen im Zeitraum";
-                return html`<button type="button" class="record-tile"
-                  data-record-key=${def.key}
-                  style=${`--record-accent: ${def.color}`}
-                  ?disabled=${!item?.entityId}
-                  aria-label=${item?.entityId
-                    ? `${def.title}: Sensor in HA öffnen`
-                    : `${def.title}: keine Sensorquelle`}
-                  @click=${() => { if (item?.entityId) this._moreInfo(item.entityId); }}>
-                  <span class="record-title">${icon(def.icon)}<span>${def.title}</span></span>
-                  <span class="record-number">${text}
-                    ${valid && item?.unit ? html`<small>${item.unit}</small>` : nothing}
-                  </span>
-                  <span class="record-meta">
-                    ${valid ? html`<time>${date}</time>` : message}
-                    ${item?.state === "partial" ? html`<span class="record-note">
-                      Unvollständig: ${item.unverifiedDays} Kalendertag(e) ohne bestätigten Tageswechsel
-                    </span>` : nothing}
-                    ${item?.entityId ? html`<span class="record-source">
-                      ${this._source(item.entityId)}
-                    </span>` : nothing}
-                  </span>
-                </button>`;
-              })}
-            </div>
-          </section>`)
+        ? Object.entries(RECORD_GROUPS).map(([key, group]) => {
+            const items = records.records.filter(item => item.group === key);
+            if (!items.length) return nothing;
+            return html`<section class="record-group">
+              <h3>${icon(group.icon)} ${group.title}</h3>
+              <div class="records-grid">${items.map(item => this._recordTile(item, zone))}</div>
+            </section>`;
+          })
         : nothing}
       ${records?.status === "ok" ? html`<p class="detail-caption">
-        Tagesregen ist der höchste gespeicherte Stand von „Regen heute“,
-        nicht die Regenmenge einer gleitenden 24-Stunden-Periode.
-        Für die stärkste Böe wird ausschließlich der konfigurierte
-        Tageshöchstwert-Sensor verwendet, keine Berechnung aus Einzelböen.
+        ${records.records.some(item => item.key === "rain_today")
+          ? "Tagesregen ist der höchste gespeicherte Stand von „Regen heute“, nicht die Regenmenge einer gleitenden 24-Stunden-Periode."
+          : nothing}
+        ${records.records.some(item => item.key === "wind_gust_max")
+          ? "Für die stärkste Böe wird ausschließlich der konfigurierte Tageshöchstwert-Sensor verwendet, keine Berechnung aus Einzelböen."
+          : nothing}
         Die angezeigten Zeitpunkte sind Recorder-Zeitstempel.
       </p>` : nothing}
     </div>`;
+  }
+
+  private _recordTile(item: WeatherRecord, zone: string) {
+    const { entityId, title, state, timestamp, unit, value } = item;
+    const date = timestamp === null ? "" : new Intl.DateTimeFormat("de-DE", {
+      timeZone: zone, dateStyle: "medium", timeStyle: "short",
+    }).format(timestamp);
+    const digits = item.key === "solar_lux" || item.key === "solar" ? 0 : 1;
+    const message = state === "missing"
+      ? "Entität in Home Assistant nicht gefunden"
+      : state === "unit-conflict"
+        ? "Einheitenwechsel im Zeitraum – keine Vergleichbarkeit"
+        : state === "uncertain"
+          ? "Tageswechsel nicht nachgewiesen – kein verlässlicher Rekord"
+          : "Keine gültigen Aufzeichnungen im Zeitraum";
+    const source = this._source(entityId, title);
+    return html`<button type="button" class="record-tile"
+      data-record-key=${item.key}
+      style=${`--record-accent: ${item.color}`}
+      ?disabled=${state === "missing"}
+      aria-label=${state === "missing" ? `${title}: Quelle fehlt` : `${title}: ${source} in HA öffnen`}
+      @click=${() => this._moreInfo(entityId)}>
+      <span class="record-title">${icon(item.icon)}<span>${title}</span></span>
+      <span class="record-number">${value?.toLocaleString("de-DE", { maximumFractionDigits: digits }) ?? "—"}
+        ${value !== null && unit ? html`<small>${unit}</small>` : nothing}
+      </span>
+      <span class="record-meta">
+        ${date ? html`<time>${date}</time>` : message}
+        ${state === "partial" ? html`<span class="record-note">
+          Unvollständig: ${item.unverifiedDays} Kalendertag(e) ohne bestätigten Tageswechsel
+        </span>` : nothing}
+        <span class="record-source">${source}</span>
+      </span>
+    </button>`;
   }
 
   private _renderDialog() {

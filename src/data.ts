@@ -85,6 +85,7 @@ const precipitationRate = new Set([
 ]);
 const solar = new Set(["W/m²", "W/m2", "kW/m²", "kW/m2"]);
 const illuminance = new Set(["lx", "lux", "klx"]);
+const absoluteHumidity = new Set(["g/m³", "g/m3"]);
 const vpdUnits = new Set(["kPa", "hPa", "Pa"]);
 // Ecowitt Local emits "UV Index". UVI is dimensionless; case changes do not
 // change that meaning, while irradiance/illuminance units remain incompatible.
@@ -109,6 +110,7 @@ export function isUnitValid(key: MetricKey, unit: string): boolean {
   )
     return temperature.has(unit);
   if (key === "humidity") return unit === "%";
+  if (key === "absolute_humidity") return absoluteHumidity.has(unit);
   if (key === "pressure" || key === "pressure_absolute")
     return pressure.has(unit);
   if (key === "uv") return uvUnits.has(unit.trim().toLowerCase());
@@ -127,7 +129,7 @@ export function numericState(state: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-function validRange(key: MetricKey, value: number): boolean {
+export function isValueValid(key: MetricKey, value: number): boolean {
   if (key === "wind_direction" || key === "wind_direction_avg")
     return value >= 0 && value <= 360;
   if (key === "humidity") return value >= 0 && value <= 100;
@@ -137,6 +139,7 @@ function validRange(key: MetricKey, value: number): boolean {
     key === "solar" ||
     key === "solar_lux" ||
     key === "vpd" ||
+    key === "absolute_humidity" ||
     key === "uv" ||
     key === "pressure" ||
     key === "pressure_absolute"
@@ -150,6 +153,7 @@ function format(value: number, key: MetricKey): string {
     "wind_direction",
     "wind_direction_avg",
     "humidity",
+    "absolute_humidity",
     "pressure",
     "solar",
     "solar_lux",
@@ -215,7 +219,7 @@ export function getReading(
       note: "Quelle meldet nicht verfügbar",
     };
   const value = numericState(entity.state);
-  if (value === null || !validRange(key, value))
+  if (value === null || !isValueValid(key, value))
     return {
       ...base,
       value: null,

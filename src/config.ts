@@ -103,6 +103,7 @@ export function normalizeConfig(value: unknown): CardConfig {
     image_target_x: bounded(value.image_target_x, 10, 90),
     image_target_y: bounded(value.image_target_y, 10, 90),
     entities,
+    record_entities: ids(value.record_entities),
     device_roles: savedDeviceRoles(value.device_roles),
     extra_entities: ids(value.extra_entities),
     diagnostic_entities: ids(value.diagnostic_entities),

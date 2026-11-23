@@ -60,6 +60,12 @@ function reading(
     now,
   );
 }
+test("absolute humidity reads mass per volume and rejects percentages and negative values", () => {
+  assert.equal(reading("absolute_humidity", "12.1", "g/m³").text, "12,1");
+  assert.equal(reading("absolute_humidity", "12.1", "g/m3").unit, "g/m3");
+  assert.equal(reading("absolute_humidity", "12.1", "%").status, "invalid");
+  assert.equal(reading("absolute_humidity", "-3", "g/m³").status, "invalid");
+});
 test("meteorological N/O/S/W produces flow toward the house from its source side", () => {
   for (const [from, to, label] of [
     [0, 180, "N"],

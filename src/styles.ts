@@ -399,8 +399,11 @@ export const cardStyles = css`
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
   }
-  .bearing {
+  .bearing,
+  .climate-secondary .value {
     font-size: 1.7rem;
+  }
+  .bearing {
     font-weight: 650;
     letter-spacing: -0.03em;
   }
@@ -1255,7 +1258,8 @@ export const cardStyles = css`
     .wet-description {
       max-width: 120px;
     }
-    .bearing {
+    .bearing,
+    .climate-secondary .value {
       font-size: 1.5rem;
     }
     .detail-grid {
