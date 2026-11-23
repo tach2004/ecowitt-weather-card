@@ -376,7 +376,8 @@ export const cardStyles = css`
     line-height: 1.35;
   }
   .value {
-    font-size: clamp(1.8rem, 4cqi, 3rem);
+    --reading-size: clamp(1.8rem, 4cqi, 3rem);
+    font-size: var(--reading-size);
     font-weight: 650;
     line-height: 1.15;
     letter-spacing: -0.04em;
@@ -1267,13 +1268,12 @@ export const cardStyles = css`
       height: 38px;
     }
     .value {
-      font-size: 1.7rem;
+      --reading-size: 1.7rem;
     }
     .wet-description {
       max-width: 120px;
     }
-    .bearing,
-    .climate-secondary .value {
+    .bearing {
       font-size: 1.5rem;
     }
     .detail-grid {

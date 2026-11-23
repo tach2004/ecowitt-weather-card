@@ -932,7 +932,6 @@ export class EcowittWeatherCard extends LitElement {
       <div class="panel-heading climate-heading">
         ${icon("temperature")}
         <h2>Außenklima</h2>
-        <span class="climate-heading-extrema">${extremes}</span>
         <span class="more">›</span>
       </div>
       <div class="climate-layout">
@@ -1300,10 +1299,11 @@ export class EcowittWeatherCard extends LitElement {
           ? "Tageswechsel nicht nachgewiesen – kein verlässlicher Rekord"
           : "Keine gültigen Aufzeichnungen im Zeitraum";
     const source = this._source(entityId, item.title);
+    const accent = extremum === "min" && item.icon === "temperature" ? "#4d87ba" : item.color;
     return html`<button type="button" class="record-tile"
       data-record-key=${item.key}
       data-record-extremum=${extremum ?? nothing}
-      style=${`--record-accent: ${item.color}`}
+      style=${`--record-accent: ${accent}`}
       ?disabled=${state === "missing"}
       aria-label=${state === "missing" ? `${title}: Quelle fehlt` : `${title}: ${source} in HA öffnen`}
       @click=${() => this._moreInfo(entityId)}>

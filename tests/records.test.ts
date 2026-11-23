@@ -211,6 +211,8 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
     sample("humidity", 110, "%", later),
     sample("absolute_humidity", 3.4, "g/m³", earlier),
     sample("absolute_humidity", 97, "%", later),
+    sample("dew_point", -14, "°C", earlier),
+    sample("dew_point", -7.3, "°C", later),
     sample("feels_like", -7.1, "°C", later),
     sample("wind_speed", 42, "km/h", later),
     sample("unassigned_temperature", 27, "°C", later),
@@ -221,6 +223,7 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
       temperature: "sensor.demo_temperature",
       humidity: "sensor.demo_humidity",
       absolute_humidity: "sensor.demo_absolute_humidity",
+      dew_point: "sensor.demo_dew_point",
       feels_like: "sensor.demo_feels_like",
       wind_speed: "sensor.demo_wind_speed",
     }),
@@ -231,7 +234,7 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
     record_entities: [
       "sensor.demo_absolute_humidity", "sensor.demo_feels_like",
       "sensor.demo_temperature", "sensor.demo_room_temperature", "sensor.demo_humidity",
-      "sensor.demo_unassigned_temperature",
+      "sensor.demo_dew_point", "sensor.demo_unassigned_temperature",
     ],
   };
   const result = await loadWeatherRecords(hass, selection, "2026-11-17", "2026-11-17", now);
@@ -242,6 +245,7 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
     ["feels_like", "sensor.demo_feels_like", -7.1, "°C"],
     ["humidity", "sensor.demo_humidity", 94, "%"],
     ["absolute_humidity", "sensor.demo_absolute_humidity", 3.4, "g/m³"],
+    ["dew_point", "sensor.demo_dew_point", -7.3, "°C"],
   ]);
   assert.deepEqual(result.records.map(({ minimum }) => minimum), [
     { value: -12.4, timestamp: Date.parse(earlier) },
@@ -249,10 +253,13 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
     { value: -7.1, timestamp: Date.parse(later) },
     { value: 94, timestamp: Date.parse(earlier) },
     { value: 3.4, timestamp: Date.parse(earlier) },
+    { value: -14, timestamp: Date.parse(earlier) },
   ]);
+  assert.equal(result.records.at(-1)?.group, "humidity");
+  assert.equal(result.records.at(-1)?.timestamp, Date.parse(later));
   assert.equal(calls.length, 1);
   assert.equal(new URL(calls[0], "http://fixture.invalid").searchParams.get("filter_entity_id"),
-    "sensor.demo_temperature,sensor.demo_room_temperature,sensor.demo_feels_like,sensor.demo_humidity,sensor.demo_absolute_humidity");
+    "sensor.demo_temperature,sensor.demo_room_temperature,sensor.demo_feels_like,sensor.demo_humidity,sensor.demo_absolute_humidity,sensor.demo_dew_point");
   const empty = await loadWeatherRecords(hass, { ...selection, record_entities: [] }, "2026-11-17", "2026-11-17", now);
   assert.deepEqual(empty.records, []);
   assert.equal(calls.length, 1);
