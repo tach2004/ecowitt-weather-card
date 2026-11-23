@@ -14,6 +14,88 @@ export const experienceStyles = css`
     border-left: 1px solid var(--line);
     padding-left: 14px;
   }
+  .climate {
+    position: relative;
+  }
+  /* The former three-column layout reserves the same space even when its
+     readings wrap at this width. The visible layout shares that grid area. */
+  .climate-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .climate-layout > .trio {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .climate-size-reference {
+    visibility: hidden;
+  }
+  .climate .climate-readings {
+    grid-template-columns: minmax(max-content, 1.65fr) repeat(3, minmax(min-content, 1fr));
+    column-gap: clamp(2px, 0.55cqi, 10px);
+  }
+  .climate-readings > div {
+    overflow-wrap: normal;
+  }
+  .climate .climate-readings > div + div {
+    padding-left: clamp(2px, 0.55cqi, 10px);
+  }
+  .climate-readings > [data-key="humidity"] {
+    border-left-width: 2px;
+  }
+  .climate-readings .value {
+    white-space: nowrap;
+  }
+  @container weather (min-width:520px) {
+    .climate-readings .label {
+      display: flex;
+      align-items: flex-end;
+      block-size: 1.35em;
+    }
+  }
+  @container weather (max-width:399px) or ((min-width:760px) and (max-width:1009px)) {
+    .climate-readings .climate-extremes {
+      position: absolute;
+      top: 19px;
+      right: 49px;
+    }
+  }
+  @container weather (max-width:359px) {
+    .climate .climate-readings {
+      column-gap: 1px;
+      margin-inline: -4px;
+    }
+    .climate .climate-readings > div + div {
+      padding-left: 1px;
+    }
+    .climate-readings .climate-extremes {
+      top: 15px;
+      right: 45px;
+    }
+  }
+  @container weather (min-width:760px) and (max-width:829px) {
+    .climate .climate-readings {
+      margin-inline: -6px;
+    }
+  }
+  @container weather (min-width:760px) and (max-width:1269px) {
+    .climate .climate-readings {
+      column-gap: 2px;
+    }
+    .climate .climate-readings > div + div {
+      padding-left: 2px;
+    }
+    .climate-secondary .value {
+      position: relative;
+    }
+    .climate-secondary .unit {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin: 0;
+      line-height: 1;
+    }
+  }
   .climate-temperature-row {
     display: flex;
     align-items: center;

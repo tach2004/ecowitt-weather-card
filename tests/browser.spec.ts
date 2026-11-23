@@ -493,17 +493,110 @@ test("clicking a weather-record tile opens its configured HA sensor", async ({ p
   await expect(page.getByRole("dialog")).not.toBeVisible();
 });
 
-test("record tiles without a configured sensor cannot open unrelated entities", async ({ page }) => {
+test("an unassigned record source leaves no tile and a missing selected sensor cannot open unrelated entities", async ({ page }) => {
   await ready(page);
   await page.evaluate(async () => {
     const win = window as DemoWindow;
     win.setDemoConfig({
-      ...win.demoConfig, entities: { ...win.demoConfig.entities, solar: "" },
+      ...win.demoConfig, entities: {
+        ...win.demoConfig.entities, solar: "", pressure: "sensor.demo_missing_pressure",
+      },
     });
     await win.card.updateComplete;
   });
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
-  await expect(page.getByRole("dialog").locator('[data-record-key="solar"]')).toBeDisabled();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator('[data-record-key="solar"]')).toHaveCount(0);
+  await expect(dialog.locator('[data-record-key="pressure"]')).toBeDisabled();
+});
+
+test("the record editor saves each sensor separately and only enabled sources appear on desktop and mobile", async ({ page }) => {
+  for (const width of [402, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await ready(page, "/?editor=1");
+    const editor = page.locator("ecowitt-weather-card-editor");
+    await editor.waitFor();
+    await page.evaluate(async () => {
+      const win = window as DemoWindow;
+      win.hass.states["sensor.demo_room_temperature"] = {
+        ...win.hass.states["sensor.demo_temperature"],
+        entity_id: "sensor.demo_room_temperature",
+        attributes: {
+          friendly_name: "Temperatur Nebenraum",
+          device_class: "temperature",
+          unit_of_measurement: "°C",
+        },
+      };
+      const callWS = win.hass.callWS;
+      win.hass.callWS = async (message: { type: string }) => {
+        const response = await callWS(message);
+        if (message.type === "config/device_registry/list")
+          return [...response, { id: "demo-room", model: "WN31", manufacturer: "Ecowitt" }];
+        if (message.type === "config/entity_registry/list")
+          return response.map((entry: { entity_id: string }) =>
+            entry.entity_id === "sensor.demo_room_temperature"
+              ? { ...entry, device_id: "demo-room" }
+              : entry);
+        return response;
+      };
+      win.setDemoConfig({
+        ...win.demoConfig,
+        device_status: [{
+          device_id: "demo-room", role: "WN31",
+          extra_entities: ["sensor.demo_room_temperature"],
+        }],
+        record_entities: ["sensor.demo_wind_speed", "sensor.demo_solar"],
+      });
+      win.editor.hass = { ...win.hass };
+      win.editor.setConfig(win.card._config);
+      await win.editor.updateComplete;
+    });
+    const options = editor.locator("details").filter({
+      has: page.getByText("Wetterrekorde · Messquellen auswählen", { exact: true }),
+    });
+    await options.locator("summary").click();
+    for (const id of [
+      "demo_temperature", "demo_room_temperature", "demo_humidity",
+      "demo_absolute_humidity", "demo_feels_like",
+    ]) {
+      const checkbox = options.getByRole("checkbox", {
+        name: new RegExp(`sensor\\.${id}$`),
+      });
+      await expect(checkbox).not.toBeChecked();
+      await checkbox.check();
+    }
+    await options.getByRole("checkbox", { name: /sensor\.demo_solar$/ }).uncheck();
+    const saved = await page.evaluate(() => {
+      const win = window as DemoWindow;
+      const config = JSON.parse(JSON.stringify(win.lastEditorConfig));
+      win.editor.setConfig(win.demoConfig);
+      win.editor.setConfig(config);
+      win.historyRequests = [];
+      return config.record_entities;
+    });
+    expect(saved).toEqual([
+      "sensor.demo_wind_speed", "sensor.demo_temperature", "sensor.demo_room_temperature",
+      "sensor.demo_humidity", "sensor.demo_absolute_humidity", "sensor.demo_feels_like",
+    ]);
+    await expect(options.getByRole("checkbox", { name: /sensor\.demo_room_temperature$/ })).toBeChecked();
+    await expect(options.getByRole("checkbox", { name: /sensor\.demo_solar$/ })).not.toBeChecked();
+    await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator(".record-group h3")).toHaveText(["Außenklima", "Wind"]);
+    await expect(dialog.locator(".record-tile .record-title")).toHaveText([
+      "Temperatur", "Temperatur", "Rel. Luftfeuchte", "Abs. Luftfeuchte", "Gefühlte Temperatur",
+      "Windgeschwindigkeit",
+    ]);
+    const room = dialog.locator(".record-tile").filter({ hasText: "Temperatur Nebenraum" });
+    await expect(room).toBeVisible();
+    await expect(room).toContainText("WN31");
+    const requested = await page.evaluate(() => {
+      const win = window as DemoWindow;
+      return new URL(win.historyRequests.at(-1).path, location.origin)
+        .searchParams.get("filter_entity_id")?.split(",").sort();
+    });
+    expect(requested).toEqual([...saved].sort());
+  }
 });
 
 test("energy-style record calendar presets and custom selections use local recorder dates", async ({ page }) => {
@@ -3326,7 +3419,7 @@ test("optional real HA weather selection and installed windrose preferences surv
 });
 
 
-test("outdoor climate shows HA-local Recorder extrema next to the unchanged current temperature", async ({ page }) => {
+test("outdoor climate shows HA-local Recorder extrema and the unchanged current temperature", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-11-15T15:00:00Z") });
   await page.setViewportSize({ width: 402, height: 874 });
   await ready(page);
@@ -3346,7 +3439,7 @@ test("outdoor climate shows HA-local Recorder extrema next to the unchanged curr
     win.setDemoConfig({ ...win.demoConfig, entities });
     await win.card.updateComplete;
   });
-  const climate = page.locator(".climate");
+  const climate = page.locator(".climate-readings");
   await expect(climate.locator(".climate-current-value")).toContainText("18,6");
   const maximum = climate.locator(".climate-extreme.maximum");
   const minimum = climate.locator(".climate-extreme.minimum");
@@ -3357,16 +3450,17 @@ test("outdoor climate shows HA-local Recorder extrema next to the unchanged curr
   await expect.poll(async () => page.evaluate(() => (window as DemoWindow).historyRequests.length)).toBe(1);
   await update(page, "wind_speed", 3);
   await expect.poll(async () => page.evaluate(() => (window as DemoWindow).historyRequests.length)).toBe(1);
-  await expect(climate.locator(".trio > div")).toHaveCount(3);
+  await expect(climate.locator(":scope > div")).toHaveCount(4);
   await expect(climate.locator('[data-key="humidity"]')).toContainText("76");
   await expect(climate.locator('[data-key="feels_like"]')).toContainText("18,1");
   const bounds = await climate.locator('[data-key="temperature"]').evaluate((el) => {
     const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
     const extrema = el.querySelector(".climate-extremes")!.getBoundingClientRect();
-    return { right: current.right, left: extrema.left, deltaY: Math.abs(current.y + current.height / 2 - extrema.y - extrema.height / 2) };
+    return { right: current.right, left: extrema.left };
   });
   expect(bounds.left).toBeGreaterThanOrEqual(bounds.right - 1);
-  expect(bounds.deltaY).toBeLessThan(14);
+  await expect(maximum).toBeVisible();
+  await expect(minimum).toBeVisible();
   await noOverflow(page);
 });
 
@@ -3374,7 +3468,7 @@ test("day extrema are slightly larger without overlapping the main temperature o
   for (const width of [320, 402, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await ready(page);
-    const climate = page.locator(".climate");
+    const climate = page.locator(".climate-readings");
     const extrema = climate.locator(".climate-extreme");
     await expect(extrema).toHaveCount(2);
     const sizes = await extrema.evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)));
@@ -3383,8 +3477,10 @@ test("day extrema are slightly larger without overlapping the main temperature o
       const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
       const max = el.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
       const min = el.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
-      const cell = el.getBoundingClientRect();
-      return { nonoverlap: max.left >= current.right - 1, vertical: min.top >= max.bottom - 1, fits: Math.max(max.right,min.right) <= cell.right + 1 };
+      const panel = el.closest(".climate")!.getBoundingClientRect();
+      const heading = el.closest(".climate")!.querySelector(".panel-heading h2")!.getBoundingClientRect();
+      const overlapsHeading = max.left < heading.right && max.bottom > heading.top && max.top < heading.bottom;
+      return { nonoverlap: max.left >= current.right - 1 && !overlapsHeading, vertical: min.top >= max.bottom - 1, fits: Math.max(max.right,min.right) <= panel.right - 1 };
     });
     expect(bounds.nonoverlap).toBe(true);
     expect(bounds.vertical).toBe(true);
@@ -3395,7 +3491,7 @@ test("day extrema are slightly larger without overlapping the main temperature o
 
 test("explicitly configured minimum and maximum take priority and require no Recorder history", async ({ page }) => {
   await ready(page);
-  const climate = page.locator(".climate");
+  const climate = page.locator(".climate-readings");
   const maximum = climate.locator(".climate-extreme.maximum");
   const minimum = climate.locator(".climate-extreme.minimum");
   await expect(maximum).toHaveAttribute("data-source", "entity");
@@ -3696,10 +3792,10 @@ test("installed real windrose flips into the dashboard, retains instance across 
   expect(errors).toEqual([]);
 });
 
-test("wind and climate panels retain large values in three columns and two wind rows on desktop and phone", async ({
+test("wind keeps its layout and the four climate values fit at unchanged panel height on desktop and phone", async ({
   page,
 }) => {
-  for (const width of [320, 402, 1440]) {
+  for (const width of [320, 402, 792, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await ready(page);
     const wind = page.locator(".panel.wind");
@@ -3718,10 +3814,32 @@ test("wind and climate panels retain large values in three columns and two wind 
         .locator(".panel-heading .icon")
         .evaluate((el) => getComputedStyle(el).color),
     );
-    await expect(page.locator(".climate .trio > div")).toHaveCount(3);
+    const climate = page.locator(".climate-readings");
+    await expect(climate.locator(":scope > div .label")).toHaveText([
+      "Temperatur", "Gefühlt", "rel. Luftfeuchte", "abs. Luftfeuchte",
+    ]);
     await expect(
       page.locator('.climate [data-key="feels_like"]'),
     ).toContainText("18,1");
+    await expect(climate.locator('[data-key="absolute_humidity"] .value')).toHaveText(/12,1\s*g\/m³/);
+    const primarySize = await wind.locator('[data-key="wind_speed"] .value')
+      .evaluate(node => getComputedStyle(node).fontSize);
+    const secondarySize = await wind.locator(".bearing").first()
+      .evaluate(node => getComputedStyle(node).fontSize);
+    for (const key of ["temperature", "humidity"])
+      await expect(climate.locator(`[data-key="${key}"] .value`)).toHaveCSS("font-size", primarySize);
+    for (const key of ["feels_like", "absolute_humidity"])
+      await expect(climate.locator(`[data-key="${key}"] .value`)).toHaveCSS("font-size", secondarySize);
+    await expect(climate.locator('[data-key="humidity"]')).toHaveCSS("border-left-width", "2px");
+    const geometry = await climate.evaluate(grid => {
+      const bounds = grid.getBoundingClientRect();
+      const reference = grid.previousElementSibling!.getBoundingClientRect();
+      return {
+        matchingHeight: Math.abs(bounds.height - reference.height) < 0.5,
+        allInside: [...grid.children].every(el => el.getBoundingClientRect().right <= bounds.right + 0.5),
+      };
+    });
+    expect(geometry).toEqual({ matchingHeight: true, allInside: true });
     await expect(wind).not.toContainText("10 Min.");
     if (width < 760) {
       await expect(

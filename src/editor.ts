@@ -7,6 +7,7 @@ import {
   type MetricKey,
 } from "./types";
 import { normalizeConfig, sameConfig } from "./config";
+import { configuredRecordSources, enabledRecordEntities, RECORD_GROUPS } from "./records";
 import {
   DEVICE_ROLES,
   candidateEntities,
@@ -270,6 +271,34 @@ export class EcowittWeatherCardEditor extends LitElement {
     if (open) next.add(group);
     else next.delete(group);
     this._openGroups = next;
+  }
+
+  private _recordSourceEditor() {
+    const sources = configuredRecordSources(this._config, this.hass?.states ?? {});
+    if (!sources.length)
+      return html`<p class="hint">Ordne zuerst Messquellen in den Sensorfeldern oder bei den Zusatzsensoren zu.</p>`;
+    const enabled = enabledRecordEntities(this._config);
+    return html`
+      <p class="hint">Wähle für jede Messquelle, ob sie in den Wetterrekorden erscheinen soll.</p>
+      ${Object.entries(RECORD_GROUPS).map(([group, { title }]) => {
+        const matching = sources.filter(source => source.group === group);
+        if (!matching.length) return nothing;
+        return html`<section class="checkbox-list">
+          <strong>${title}</strong>
+          ${matching.map(({ entityId }) => html`<label class="check-row">
+            <input type="checkbox" .checked=${enabled.has(entityId)}
+              @change=${(event: Event) => {
+                const next = enabledRecordEntities(this._config);
+                if ((event.currentTarget as HTMLInputElement).checked)
+                  next.add(entityId);
+                else next.delete(entityId);
+                this._change({ record_entities: [...next] });
+              }}>
+            <span>${this._label(entityId)}</span>
+          </label>`)}
+        </section>`;
+      })}
+    `;
   }
   private _weatherPicker() {
     const selected = this._config.weather_entity || "";
@@ -1124,6 +1153,11 @@ export class EcowittWeatherCardEditor extends LitElement {
       <details>
         <summary>Zusatzsensoren & Diagnosen nach Gerät</summary>
         ${this._deviceEditor()}
+      </details>
+      <details ?open=${this._openGroups.has("Wetterrekorde")}
+        @toggle=${(event: Event) => this._toggleGroup("Wetterrekorde", event)}>
+        <summary>Wetterrekorde · Messquellen auswählen</summary>
+        ${this._openGroups.has("Wetterrekorde") ? this._recordSourceEditor() : nothing}
       </details>
       <details>
         <summary>Verlauf & Aktualität</summary>

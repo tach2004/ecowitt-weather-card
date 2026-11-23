@@ -23,6 +23,7 @@ title: Wetterstation
 | `image_rotation` | Drehung des Bildes im Uhrzeigersinn, −180 bis 180 Grad, Standard 0 |
 | `image_target_x`, `image_target_y` | Pfeilziel in Prozent des sichtbaren quadratischen Bildausschnitts, 10 bis 90, Standard 50. Das Ziel bleibt innerhalb eines Radius von 40 % um die Mitte. |
 | `entities` | Entitätszuordnung für die Messgrößen |
+| `record_entities` | Zugeordnete Sensor-Entitäten, die in den Wetterrekorden erscheinen. Eine leere Liste blendet alle Rekorde aus. |
 | `wind_average_period_minutes` | Bekannter Mittelungszeitraum der ausgewählten Richtungsquelle, 1 bis 1440 Minuten. Steuert die Beschriftung. |
 | `device_roles` | Geräteauswahl für Vorschläge, siehe Gerätestatus |
 | `device_status` | Gerätestatus und Zusatzmesswerte je Gerät |
@@ -40,7 +41,8 @@ Ein eigenes Bild bleibt auf der Home-Assistant-Instanz. Dort lassen sich Auflös
 
 | Schlüssel | Bedeutung |
 | --- | --- |
-| `temperature`, `humidity` | Außentemperatur und Außenluftfeuchte |
+| `temperature`, `humidity` | Außentemperatur und relative Luftfeuchte in Prozent |
+| `absolute_humidity` | Optionale Entität für absolute Luftfeuchte in `g/m³` oder `g/m3`, keine Berechnung aus anderen Quellen |
 | `feels_like`, `dew_point`, `vpd` | Gefühlte Temperatur, Taupunkt und Dampfdruckdefizit |
 | `temperature_min`, `temperature_max` | Eigene Tagesextremwerte. Fehlt eine Zuordnung, kann der Recorder den Wert ergänzen. |
 | `wind_speed`, `wind_gust`, `wind_gust_max` | Aktuelle Windgeschwindigkeit, aktuelle Böen und Tagesmaximalböe |
