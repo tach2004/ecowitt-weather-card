@@ -560,7 +560,7 @@ test("the record editor saves each sensor separately and only enabled sources ap
     await options.locator("summary").click();
     for (const id of [
       "demo_temperature", "demo_room_temperature", "demo_humidity",
-      "demo_absolute_humidity", "demo_feels_like",
+      "demo_absolute_humidity", "demo_feels_like", "demo_dew_point",
     ]) {
       const checkbox = options.getByRole("checkbox", {
         name: new RegExp(`sensor\\.${id}$`),
@@ -580,7 +580,7 @@ test("the record editor saves each sensor separately and only enabled sources ap
     expect(saved).toEqual([
       "sensor.demo_wind_speed", "sensor.demo_rain_rate", "sensor.demo_pressure",
       "sensor.demo_pressure_absolute", "sensor.demo_temperature", "sensor.demo_room_temperature",
-      "sensor.demo_humidity", "sensor.demo_absolute_humidity", "sensor.demo_feels_like",
+      "sensor.demo_humidity", "sensor.demo_absolute_humidity", "sensor.demo_feels_like", "sensor.demo_dew_point",
     ]);
     await expect(options.getByRole("checkbox", { name: /sensor\.demo_room_temperature$/ })).toBeChecked();
     await expect(options.getByRole("checkbox", { name: /sensor\.demo_solar$/ })).not.toBeChecked();
@@ -596,9 +596,19 @@ test("the record editor saves each sensor separately and only enabled sources ap
       "Windgeschwindigkeit", "Höchste Regenintensität",
       "Rel. Luftfeuchte · Maximum", "Rel. Luftfeuchte · Minimum",
       "Abs. Luftfeuchte · Maximum", "Abs. Luftfeuchte · Minimum",
+      "Taupunkt · Maximum", "Taupunkt · Minimum",
       "Luftdruck relativ · Maximum", "Luftdruck relativ · Minimum",
       "Luftdruck absolut · Maximum", "Luftdruck absolut · Minimum",
     ]);
+    const humidityRecords = dialog.locator(".record-group").filter({
+      has: page.getByRole("heading", { name: "Luftfeuchte", exact: true }),
+    });
+    await expect(humidityRecords.locator('[data-record-key="dew_point"] .record-number')).toHaveCount(2);
+    for (const key of ["temperature", "feels_like", "dew_point"]) {
+      const pair = dialog.locator(".record-pair").filter({ has: page.locator(`[data-record-key="${key}"]`) }).first();
+      await expect(pair.locator('[data-record-extremum="max"]')).toHaveCSS("border-left-color", "rgb(215, 121, 64)");
+      await expect(pair.locator('[data-record-extremum="min"]')).toHaveCSS("border-left-color", "rgb(77, 135, 186)");
+    }
     const pairsAligned = await dialog.locator(".record-pair").evaluateAll(nodes =>
       nodes.every(pair => {
         const maximum = pair.querySelector('[data-record-extremum="max"]')!;
@@ -3487,35 +3497,38 @@ test("outdoor climate shows HA-local Recorder extrema and the unchanged current 
   await noOverflow(page);
 });
 
-test("day extrema are slightly larger without overlapping the main temperature on phone and desktop", async ({ page }) => {
-  for (const width of [320, 402, 1440]) {
+test("day extrema stay next to the main temperature on phone and desktop", async ({ page }) => {
+  for (const width of [320, 402, 600, 874, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await ready(page);
-    if (width === 320)
+    if (width === 320) {
       await page.addStyleTag({ content: 'ecowitt-weather-card { --paper-font-body1_-_font-family: "DejaVu Sans", sans-serif; }' });
+      await update(page, "temperature", -18.6);
+      await update(page, "temperature_max", -11.4);
+      await update(page, "temperature_min", -22.1);
+      await update(page, "humidity", 100);
+    }
     const climate = page.locator(".climate");
     const extrema = climate.locator(".climate-extreme:visible");
     await expect(extrema).toHaveCount(2);
     const sizes = await extrema.evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)));
     expect(sizes.every((value) => value >= 10)).toBe(true);
     const bounds = await climate.evaluate(el => {
-      const heading = el.querySelector(".climate-heading-extrema")!;
-      const extrema = heading.getBoundingClientRect().width ? heading : el.querySelector(".climate-readings")!;
-      const current = el.querySelector(".climate-readings .climate-current-value .value")!.getBoundingClientRect();
-      const max = extrema.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
-      const min = extrema.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
-      const panel = el.getBoundingClientRect();
+      const temperature = el.querySelector('.climate-readings [data-key="temperature"]')!;
+      const current = temperature.querySelector(".climate-current-value .value")!.getBoundingClientRect();
+      const max = temperature.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
+      const min = temperature.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
+      const cell = temperature.getBoundingClientRect();
       const title = el.querySelector(".panel-heading h2")!.getBoundingClientRect();
-      const overlaps = (a: DOMRect, b: DOMRect) =>
-        a.left < b.right - 0.5 && a.right > b.left + 0.5 &&
-        a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
       return {
-        nonoverlap: [max, min].every(extreme => !overlaps(extreme, title) && !overlaps(extreme, current)),
+        besideReading: [max, min].every(extreme => extreme.width > 0 &&
+          extreme.left >= current.right - 0.5 && extreme.top >= title.bottom &&
+          extreme.top < current.bottom && extreme.bottom > current.top),
         vertical: min.top >= max.bottom - 1,
-        fits: Math.max(max.right, min.right) <= panel.right - 1,
+        fits: Math.max(max.right, min.right) <= cell.right + 0.5,
       };
     });
-    expect(bounds.nonoverlap).toBe(true);
+    expect(bounds.besideReading).toBe(true);
     expect(bounds.vertical).toBe(true);
     expect(bounds.fits).toBe(true);
     await noOverflow(page);
@@ -3827,7 +3840,7 @@ test("installed real windrose flips into the dashboard, retains instance across 
 test("wind keeps its layout and the four climate values fit at unchanged panel height on desktop and phone", async ({
   page,
 }) => {
-  for (const width of [320, 402, 792, 1024, 1440]) {
+  for (const width of [320, 402, 520, 792, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await ready(page);
     if (width === 320 || width === 792)
@@ -3862,8 +3875,15 @@ test("wind keeps its layout and the four climate values fit at unchanged panel h
       .evaluate(node => getComputedStyle(node).fontSize);
     for (const key of ["temperature", "humidity"])
       await expect(climate.locator(`[data-key="${key}"] .value`)).toHaveCSS("font-size", primarySize);
-    for (const key of ["feels_like", "absolute_humidity"])
-      await expect(climate.locator(`[data-key="${key}"] .value`)).toHaveCSS("font-size", secondarySize);
+    for (const key of ["feels_like", "absolute_humidity"]) {
+      const value = climate.locator(`[data-key="${key}"] .value`);
+      if (width < 760) {
+        const fontSize = await value.evaluate(node => parseFloat(getComputedStyle(node).fontSize));
+        expect(fontSize / parseFloat(primarySize)).toBeCloseTo(1.7 / 3, 2);
+      } else {
+        await expect(value).toHaveCSS("font-size", secondarySize);
+      }
+    }
     await expect(climate.locator('[data-key="humidity"]')).toHaveCSS("border-left-width", "2px");
     const geometry = await climate.evaluate(grid => {
       const bounds = grid.getBoundingClientRect();

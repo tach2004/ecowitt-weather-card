@@ -27,9 +27,6 @@ export const experienceStyles = css`
   .climate-size-reference {
     visibility: hidden;
   }
-  .climate-heading-extrema {
-    display: none;
-  }
   .climate .climate-readings {
     grid-template-columns: minmax(max-content, 1.65fr) repeat(3, minmax(min-content, 1fr));
     column-gap: clamp(2px, 0.35cqi, 8px);
@@ -59,28 +56,17 @@ export const experienceStyles = css`
       block-size: 1.35em;
     }
   }
+  /* Preserve the reference height where the extrema used to sit in the heading. */
   @container weather (max-width:599px) or ((min-width:760px) and (max-width:1379px)) {
-    .climate-heading {
-      gap: 4px;
-    }
-    .climate-heading-extrema {
-      display: flex;
-      align-items: center;
-      block-size: 28px;
-      margin-inline-start: auto;
-    }
-    .climate-heading .more {
-      margin-inline-start: 0;
-    }
-    .climate-readings .climate-extremes {
+    .climate-size-reference .climate-extremes {
       display: none;
     }
   }
   /* Keep each unit on its value's baseline. Narrow cards put temperature
      and humidity in two columns, with the secondary values below. */
-  @container weather (max-width:479px) or ((min-width:760px) and (max-width:1039px)) {
+  @container weather (max-width:519px) or ((min-width:760px) and (max-width:1339px)) {
     .climate .climate-readings {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: minmax(max-content, 1.25fr) minmax(min-content, 1fr);
       grid-template-rows: repeat(2, max-content);
       grid-auto-flow: column;
       gap: 2px 8px;
@@ -102,7 +88,15 @@ export const experienceStyles = css`
       padding-left: 8px;
     }
   }
-  @container weather (min-width:760px) and (max-width:1039px) {
+  @container weather (max-width:759px) {
+    .climate-secondary .value {
+      font-size: calc(var(--reading-size) * 1.7 / 3);
+    }
+    .climate-secondary .value .unit {
+      font-size: max(0.625rem, 0.48em);
+    }
+  }
+  @container weather (min-width:760px) and (max-width:1339px) {
     .climate-heading {
       transform: translateY(-12px);
     }
@@ -110,7 +104,7 @@ export const experienceStyles = css`
       margin-block: -26px -14px;
     }
   }
-  @container weather (min-width:1040px) and (max-width:1379px) {
+  @container weather (min-width:1340px) and (max-width:1379px) {
     .climate .climate-readings {
       column-gap: 2px;
     }

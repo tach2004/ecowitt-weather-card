@@ -24,7 +24,6 @@ interface RecordDefinition {
 const recordDefinitions: readonly RecordDefinition[] = [
   { key: "temperature", title: "Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "feels_like", title: "Gefühlte Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
-  { key: "dew_point", title: "Taupunkt", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "temperature_min", title: "Höchstes Tagesminimum", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "temperature_max", title: "Temperatur-Tagesmaximum", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "vpd", title: "Dampfdruckdefizit", group: "temperature", icon: "humidity", color: "#209bb7" },
@@ -44,6 +43,7 @@ const recordDefinitions: readonly RecordDefinition[] = [
   { key: "rain_event", title: "Regenereignis", group: "rain", icon: "rain", color: "#326bd5" },
   { key: "humidity", title: "Rel. Luftfeuchte", group: "humidity", icon: "humidity", color: "#209bb7" },
   { key: "absolute_humidity", title: "Abs. Luftfeuchte", group: "humidity", icon: "humidity", color: "#209bb7" },
+  { key: "dew_point", title: "Taupunkt", group: "humidity", icon: "temperature", color: "#d77940" },
   { key: "solar", title: "Solarstrahlung", group: "sun", icon: "sun", color: "#b88117" },
   { key: "solar_lux", title: "Beleuchtungsstärke", group: "sun", icon: "sun", color: "#b47b24" },
   { key: "uv", title: "UV-Index", group: "sun", icon: "sun", color: "#ab5688" },
