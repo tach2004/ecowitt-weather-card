@@ -793,6 +793,13 @@ export const cardStyles = css`
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
     gap: 10px;
   }
+  .record-pair {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    container: record-pair / inline-size;
+  }
   .record-tile {
     appearance: none;
     width: 100%;
@@ -829,6 +836,13 @@ export const cardStyles = css`
     height: 21px;
     flex: 0 0 auto;
     color: var(--record-accent);
+  }
+  @container record-pair (max-width:329px) {
+    .record-title {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
   }
   .record-number {
     font-size: clamp(1.45rem, 4.5vw, 1.95rem);

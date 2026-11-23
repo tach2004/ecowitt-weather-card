@@ -23,7 +23,7 @@ import {
 } from "./data";
 import { loadHistory, type HistoryResult, type HistorySeries } from "./history";
 import {
-  RECORD_GROUPS, haLocalDate, loadWeatherRecords,
+  RECORD_GROUPS, haLocalDate, loadWeatherRecords, recordHasExtremaPair,
   type WeatherRecord,
   type WeatherRecordsResult,
 } from "./records";
@@ -946,10 +946,7 @@ export class EcowittWeatherCard extends LitElement {
           <div data-key="feels_like" class="climate-secondary"><span class="label">Gefühlt</span>${feelsLike}</div>
           <div data-key="humidity"><span class="label"><span>rel. Luft<wbr>feuchte</span></span>${humidity}</div>
           <div data-key="absolute_humidity" class="climate-secondary">
-            <span class="label">
-              <span class="climate-density-label">abs. Luftfeuchte</span>
-              <span class="climate-density-label-short">abs. Feuchte</span>
-            </span>${absoluteHumidity}
+            <span class="label">abs. Luftfeuchte</span>${absoluteHumidity}
           </div>
         </div>
       </div>
@@ -1240,7 +1237,7 @@ export class EcowittWeatherCard extends LitElement {
     const zone = this.hass?.config?.time_zone || "UTC";
     return html`<div class="records-page">
       <p class="detail-caption">
-        Höchstwerte deiner ausgewählten Messquellen im frei wählbaren Zeitraum.
+        Höchstwerte und, je nach Messgröße, Tiefstwerte der ausgewählten Quellen im gewählten Zeitraum.
         Nur vorhandene Recorder-Daten, keine geschätzten Wetterrekorde.
       </p>
       <ecowitt-record-date-selector
@@ -1264,7 +1261,13 @@ export class EcowittWeatherCard extends LitElement {
             if (!items.length) return nothing;
             return html`<section class="record-group">
               <h3>${icon(group.icon)} ${group.title}</h3>
-              <div class="records-grid">${items.map(item => this._recordTile(item, zone))}</div>
+              <div class="records-grid">
+                ${items.map(item => recordHasExtremaPair(item)
+                  ? html`<div class="record-pair">
+                      ${this._recordTile(item, zone, "max")}${this._recordTile(item, zone, "min")}
+                    </div>`
+                  : this._recordTile(item, zone))}
+              </div>
             </section>`;
           })
         : nothing}
@@ -1280,8 +1283,11 @@ export class EcowittWeatherCard extends LitElement {
     </div>`;
   }
 
-  private _recordTile(item: WeatherRecord, zone: string) {
-    const { entityId, title, state, timestamp, unit, value } = item;
+  private _recordTile(item: WeatherRecord, zone: string, extremum?: "max" | "min") {
+    const { entityId, state, unit } = item;
+    const title = extremum ? `${item.title} · ${extremum === "max" ? "Maximum" : "Minimum"}` : item.title;
+    const value = extremum === "min" ? item.minimum?.value ?? null : item.value;
+    const timestamp = extremum === "min" ? item.minimum?.timestamp ?? null : item.timestamp;
     const date = timestamp === null ? "" : new Intl.DateTimeFormat("de-DE", {
       timeZone: zone, dateStyle: "medium", timeStyle: "short",
     }).format(timestamp);
@@ -1293,9 +1299,10 @@ export class EcowittWeatherCard extends LitElement {
         : state === "uncertain"
           ? "Tageswechsel nicht nachgewiesen – kein verlässlicher Rekord"
           : "Keine gültigen Aufzeichnungen im Zeitraum";
-    const source = this._source(entityId, title);
+    const source = this._source(entityId, item.title);
     return html`<button type="button" class="record-tile"
       data-record-key=${item.key}
+      data-record-extremum=${extremum ?? nothing}
       style=${`--record-accent: ${item.color}`}
       ?disabled=${state === "missing"}
       aria-label=${state === "missing" ? `${title}: Quelle fehlt` : `${title}: ${source} in HA öffnen`}

@@ -454,7 +454,7 @@ test("weather record button opens a separate themed view with local Recorder max
   await expect(dialog).toContainText("Wetterrekorde");
   await expect(dialog.locator("ecowitt-record-date-selector")).toHaveCount(1);
   await expect(dialog.getByRole("button", { name: "Kalender und Zeitraum auswählen" })).toBeVisible();
-  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-tile")).toHaveCount(11);
   await expect(dialog.locator(".record-number").first()).not.toHaveText("—");
   await expect(dialog).toContainText("Höchster Tagesregen");
   await expect(dialog).toContainText("UV-Index");
@@ -480,7 +480,7 @@ test("clicking a weather-record tile opens its configured HA sensor", async ({ p
   });
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-tile")).toHaveCount(11);
   const wind = dialog.locator('[data-record-key="wind_speed"]');
   await expect(wind).toHaveAttribute("type", "button");
   await wind.click();
@@ -507,11 +507,11 @@ test("an unassigned record source leaves no tile and a missing selected sensor c
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.locator('[data-record-key="solar"]')).toHaveCount(0);
-  await expect(dialog.locator('[data-record-key="pressure"]')).toBeDisabled();
+  await expect(dialog.locator('[data-record-key="pressure"]:disabled')).toHaveCount(2);
 });
 
 test("the record editor saves each sensor separately and only enabled sources appear on desktop and mobile", async ({ page }) => {
-  for (const width of [402, 1440]) {
+  for (const width of [320, 402, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await ready(page, "/?editor=1");
     const editor = page.locator("ecowitt-weather-card-editor");
@@ -545,7 +545,10 @@ test("the record editor saves each sensor separately and only enabled sources ap
           device_id: "demo-room", role: "WN31",
           extra_entities: ["sensor.demo_room_temperature"],
         }],
-        record_entities: ["sensor.demo_wind_speed", "sensor.demo_solar"],
+        record_entities: [
+          "sensor.demo_wind_speed", "sensor.demo_rain_rate", "sensor.demo_solar",
+          "sensor.demo_pressure", "sensor.demo_pressure_absolute",
+        ],
       });
       win.editor.hass = { ...win.hass };
       win.editor.setConfig(win.card._config);
@@ -575,19 +578,38 @@ test("the record editor saves each sensor separately and only enabled sources ap
       return config.record_entities;
     });
     expect(saved).toEqual([
-      "sensor.demo_wind_speed", "sensor.demo_temperature", "sensor.demo_room_temperature",
+      "sensor.demo_wind_speed", "sensor.demo_rain_rate", "sensor.demo_pressure",
+      "sensor.demo_pressure_absolute", "sensor.demo_temperature", "sensor.demo_room_temperature",
       "sensor.demo_humidity", "sensor.demo_absolute_humidity", "sensor.demo_feels_like",
     ]);
     await expect(options.getByRole("checkbox", { name: /sensor\.demo_room_temperature$/ })).toBeChecked();
     await expect(options.getByRole("checkbox", { name: /sensor\.demo_solar$/ })).not.toBeChecked();
     await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.locator(".record-group h3")).toHaveText(["Außenklima", "Wind"]);
-    await expect(dialog.locator(".record-tile .record-title")).toHaveText([
-      "Temperatur", "Temperatur", "Rel. Luftfeuchte", "Abs. Luftfeuchte", "Gefühlte Temperatur",
-      "Windgeschwindigkeit",
+    await expect(dialog.locator(".record-group h3")).toHaveText([
+      "Temperatur", "Wind", "Niederschlag", "Luftfeuchte", "Luftdruck",
     ]);
-    const room = dialog.locator(".record-tile").filter({ hasText: "Temperatur Nebenraum" });
+    await expect(dialog.locator(".record-tile .record-title")).toHaveText([
+      "Temperatur · Maximum", "Temperatur · Minimum",
+      "Temperatur · Maximum", "Temperatur · Minimum",
+      "Gefühlte Temperatur · Maximum", "Gefühlte Temperatur · Minimum",
+      "Windgeschwindigkeit", "Höchste Regenintensität",
+      "Rel. Luftfeuchte · Maximum", "Rel. Luftfeuchte · Minimum",
+      "Abs. Luftfeuchte · Maximum", "Abs. Luftfeuchte · Minimum",
+      "Luftdruck relativ · Maximum", "Luftdruck relativ · Minimum",
+      "Luftdruck absolut · Maximum", "Luftdruck absolut · Minimum",
+    ]);
+    const pairsAligned = await dialog.locator(".record-pair").evaluateAll(nodes =>
+      nodes.every(pair => {
+        const maximum = pair.querySelector('[data-record-extremum="max"]')!;
+        const minimum = pair.querySelector('[data-record-extremum="min"]')!;
+        const left = maximum.getBoundingClientRect();
+        const right = minimum.getBoundingClientRect();
+        return left.right < right.left && Math.abs(left.top - right.top) < 1 &&
+          [maximum, minimum].every(tile => tile.scrollWidth <= tile.clientWidth);
+      }));
+    expect(pairsAligned).toBe(true);
+    const room = dialog.locator('[data-record-extremum="min"]').filter({ hasText: "Temperatur Nebenraum" });
     await expect(room).toBeVisible();
     await expect(room).toContainText("WN31");
     const requested = await page.evaluate(() => {
@@ -596,6 +618,13 @@ test("the record editor saves each sensor separately and only enabled sources ap
         .searchParams.get("filter_entity_id")?.split(",").sort();
     });
     expect(requested).toEqual([...saved].sort());
+    await page.evaluate(() => document.addEventListener("hass-more-info", event => {
+      (window as any).__selectedRecordEntity = (event as CustomEvent).detail.entityId;
+    }, { once: true }));
+    await room.click();
+    await expect(dialog).not.toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as any).__selectedRecordEntity))
+      .toBe("sensor.demo_room_temperature");
   }
 });
 
@@ -604,13 +633,13 @@ test("energy-style record calendar presets and custom selections use local recor
   await page.getByRole("button", { name: "Wetterrekorde öffnen" }).click();
   const dialog = page.getByRole("dialog");
   const picker = dialog.locator("ecowitt-record-date-selector");
-  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-tile")).toHaveCount(11);
   await picker.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).click();
   await expect(picker.locator(".picker-presets button")).toHaveCount(10);
   await expect(picker.getByRole("button", { name: "Diese Woche" })).toBeVisible();
   await picker.getByRole("button", { name: "Gestern", exact: true }).click();
   await picker.getByRole("button", { name: "Auswählen", exact: true }).click();
-  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-tile")).toHaveCount(11);
   const requests = () => page.evaluate(() =>
     (window as DemoWindow).historyRequests.map(x => x.path));
   const yesterdayUrl = new URL((await requests()).at(-1)!, "http://fixture.invalid/");
@@ -624,7 +653,7 @@ test("energy-style record calendar presets and custom selections use local recor
   await picker.getByRole("button", { name: "Vorheriger Zeitraum" }).click();
   await expect.poll(async () => (await requests()).length).toBeGreaterThan(before);
   await picker.getByRole("button", { name: "Jetzt" }).click();
-  await expect(dialog.locator(".record-tile")).toHaveCount(9);
+  await expect(dialog.locator(".record-tile")).toHaveCount(11);
 });
 
 test("record-style current details preserve selected entities, live readings and graphs", async ({ page }) => {
@@ -668,13 +697,13 @@ test("mobile Companion records retain working fixed overlay, scroll and close co
       const dialog = page.getByRole("dialog");
       await expect(dialog).toContainText("Wetterrekorde");
       await expect(page.locator(".companion-overlay")).toBeVisible();
-      await expect(dialog.locator(".record-tile")).toHaveCount(9);
+      await expect(dialog.locator(".record-tile")).toHaveCount(11);
       const calendar = dialog.locator("ecowitt-record-date-selector");
       await calendar.getByRole("button", { name: "Kalender und Zeitraum auswählen" }).tap();
       await expect(calendar.getByRole("button", { name: "Letzte 30 Tage" })).toBeVisible();
       await calendar.getByRole("button", { name: "Letzte 30 Tage" }).tap();
       await calendar.getByRole("button", { name: "Auswählen", exact: true }).tap();
-      await expect(dialog.locator(".record-tile")).toHaveCount(9);
+      await expect(dialog.locator(".record-tile")).toHaveCount(11);
       const geometry = await dialog.evaluate(el => {
         const r = el.getBoundingClientRect();
         const content = el.querySelector(".detail-content")!;
@@ -3821,8 +3850,7 @@ test("wind keeps its layout and the four climate values fit at unchanged panel h
     );
     const climate = page.locator(".climate-readings");
     await expect(climate.locator(":scope > div .label")).toHaveText([
-      "Temperatur", "Gefühlt", "rel. Luftfeuchte",
-      width === 320 || width === 792 ? "abs. Feuchte" : "abs. Luftfeuchte",
+      "Temperatur", "Gefühlt", "rel. Luftfeuchte", "abs. Luftfeuchte",
     ], { useInnerText: true });
     await expect(
       page.locator('.climate [data-key="feels_like"]'),
@@ -3840,12 +3868,26 @@ test("wind keeps its layout and the four climate values fit at unchanged panel h
     const geometry = await climate.evaluate(grid => {
       const bounds = grid.getBoundingClientRect();
       const reference = grid.previousElementSibling!.getBoundingClientRect();
+      const style = getComputedStyle(grid);
+      const footprint = bounds.height + parseFloat(style.marginBlockStart) + parseFloat(style.marginBlockEnd);
+      const inlineUnits = [...grid.querySelectorAll(".value")].every(value => {
+        const number = Array.from(value.childNodes).find(node =>
+          node.nodeType === Node.TEXT_NODE && node.textContent?.trim())!;
+        const range = document.createRange();
+        range.selectNodeContents(number);
+        const numberBox = range.getBoundingClientRect();
+        const unitBox = value.querySelector(".unit")!.getBoundingClientRect();
+        return getComputedStyle(value).alignItems === "baseline" &&
+          unitBox.left >= numberBox.right - 0.5 && unitBox.top < numberBox.bottom - 2 &&
+          unitBox.right <= value.closest("[data-key]")!.getBoundingClientRect().right + 0.5;
+      });
       return {
-        matchingHeight: Math.abs(bounds.height - reference.height) < 0.5,
+        matchingHeight: Math.abs(footprint - reference.height) < 0.5,
         allInside: [...grid.children].every(el => el.getBoundingClientRect().right <= bounds.right + 0.5),
+        inlineUnits,
       };
     });
-    expect(geometry).toEqual({ matchingHeight: true, allInside: true });
+    expect(geometry).toEqual({ matchingHeight: true, allInside: true, inlineUnits: true });
     await expect(wind).not.toContainText("10 Min.");
     if (width < 760) {
       await expect(

@@ -239,16 +239,68 @@ test("checked climate sensors are distinct even below freezing, and unchecked so
   assert.deepEqual(result.records.map(({ key, entityId, value, unit }) => [key, entityId, value, unit]), [
     ["temperature", "sensor.demo_temperature", -4.1, "°C"],
     ["temperature", "sensor.demo_room_temperature", -2.3, "°C"],
+    ["feels_like", "sensor.demo_feels_like", -7.1, "°C"],
     ["humidity", "sensor.demo_humidity", 94, "%"],
     ["absolute_humidity", "sensor.demo_absolute_humidity", 3.4, "g/m³"],
-    ["feels_like", "sensor.demo_feels_like", -7.1, "°C"],
+  ]);
+  assert.deepEqual(result.records.map(({ minimum }) => minimum), [
+    { value: -12.4, timestamp: Date.parse(earlier) },
+    { value: -8.4, timestamp: Date.parse(later) },
+    { value: -7.1, timestamp: Date.parse(later) },
+    { value: 94, timestamp: Date.parse(earlier) },
+    { value: 3.4, timestamp: Date.parse(earlier) },
   ]);
   assert.equal(calls.length, 1);
   assert.equal(new URL(calls[0], "http://fixture.invalid").searchParams.get("filter_entity_id"),
-    "sensor.demo_temperature,sensor.demo_room_temperature,sensor.demo_humidity,sensor.demo_absolute_humidity,sensor.demo_feels_like");
+    "sensor.demo_temperature,sensor.demo_room_temperature,sensor.demo_feels_like,sensor.demo_humidity,sensor.demo_absolute_humidity");
   const empty = await loadWeatherRecords(hass, { ...selection, record_entities: [] }, "2026-11-17", "2026-11-17", now);
   assert.deepEqual(empty.records, []);
   assert.equal(calls.length, 1);
+});
+
+test("both pressure extrema use the selected dates, and mixed units and unrelated maxima keep their behavior", async () => {
+  const calls: string[] = [];
+  // Midnight for the selected day is 23:00 UTC on the preceding date.
+  const start = "2026-11-16T23:00:00Z";
+  const high = "2026-11-17T09:00:00Z";
+  const rows = [
+    sample("pressure", 970, "hPa", "2026-11-16T22:59:59Z"),
+    sample("pressure", 1007.2, "hPa", start),
+    sample("pressure", 1016.3, "hPa", high),
+    sample("pressure", 1021, "hPa", "2026-11-17T12:00:01Z"),
+    sample("pressure_absolute", 993.4, "hPa", high),
+    sample("pressure_absolute", 995.5, "hPa", start),
+    sample("wind_speed", 8, "km/h", start),
+    sample("wind_speed", 12, "km/h", high),
+    sample("feels_like", 18, "°F", high),
+    sample("feels_like", -7, "°C", start),
+  ];
+  const result = await loadWeatherRecords(
+    fixture(rows, calls),
+    {
+      ...config({
+        pressure: "sensor.demo_pressure",
+        pressure_absolute: "sensor.demo_pressure_absolute",
+        wind_speed: "sensor.demo_wind_speed",
+        feels_like: "sensor.demo_feels_like",
+      }),
+      record_entities: rows.map(row => row.entity_id),
+    },
+    "2026-11-17", "2026-11-17", now,
+  );
+  const [felt, wind, relative, absolute] = result.records;
+  assert.equal(felt.state, "unit-conflict");
+  assert.equal(felt.minimum, undefined);
+  assert.equal(wind.value, 12);
+  assert.equal(wind.minimum, undefined);
+  assert.deepEqual([relative.key, relative.value, relative.timestamp, relative.minimum], [
+    "pressure", 1016.3, Date.parse(high), { value: 1007.2, timestamp: Date.parse(start) },
+  ]);
+  assert.deepEqual([absolute.key, absolute.value, absolute.timestamp, absolute.minimum], [
+    "pressure_absolute", 995.5, Date.parse(start), { value: 993.4, timestamp: Date.parse(high) },
+  ]);
+  assert.equal(calls.length, 1);
+  assert.equal(new URL(calls[0], "http://fixture.invalid").searchParams.get("filter_entity_id")?.split(",").length, 4);
 });
 
 test("numeric diagnostic and legacy sensors can be selected, binary and weather statuses cannot", async () => {

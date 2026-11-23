@@ -27,8 +27,7 @@ export const experienceStyles = css`
   .climate-size-reference {
     visibility: hidden;
   }
-  .climate-heading-extrema,
-  .climate-density-label-short {
+  .climate-heading-extrema {
     display: none;
   }
   .climate .climate-readings {
@@ -45,7 +44,13 @@ export const experienceStyles = css`
     border-left-width: 2px;
   }
   .climate-readings .value {
+    display: inline-flex;
+    align-items: baseline;
     white-space: nowrap;
+  }
+  .climate-readings .value .unit {
+    display: inline;
+    margin-left: 4px;
   }
   @container weather (min-width:520px) {
     .climate-readings .label {
@@ -53,19 +58,8 @@ export const experienceStyles = css`
       align-items: flex-end;
       block-size: 1.35em;
     }
-    /* Units fit under the smaller values within the existing value area. */
-    .climate-secondary .value {
-      position: relative;
-    }
-    .climate-secondary .unit {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin: 0;
-      line-height: 1;
-    }
   }
-  @container weather (max-width:399px) or ((min-width:760px) and (max-width:1009px)) {
+  @container weather (max-width:599px) or ((min-width:760px) and (max-width:1379px)) {
     .climate-heading {
       gap: 4px;
     }
@@ -82,46 +76,46 @@ export const experienceStyles = css`
       display: none;
     }
   }
-  @container weather (max-width:359px) {
+  /* Keep each unit on its value's baseline. Narrow cards put temperature
+     and humidity in two columns, with the secondary values below. */
+  @container weather (max-width:479px) or ((min-width:760px) and (max-width:1039px)) {
     .climate .climate-readings {
-      column-gap: 1px;
-      margin-inline: -4px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(2, max-content);
+      grid-auto-flow: column;
+      gap: 2px 8px;
+      margin-block-start: -14px;
+    }
+    .climate .climate-readings .label {
+      display: block;
+      block-size: auto;
+      min-height: 0;
+      margin-bottom: 0;
+      line-height: 1.1;
     }
     .climate .climate-readings > div + div {
-      padding-left: 1px;
+      border-left: 0;
+      padding-left: 0;
+    }
+    .climate .climate-readings > :nth-child(n+3) {
+      border-left: 2px solid var(--line);
+      padding-left: 8px;
     }
   }
-  @container weather (min-width:760px) and (max-width:829px) {
+  @container weather (min-width:760px) and (max-width:1039px) {
+    .climate-heading {
+      transform: translateY(-12px);
+    }
     .climate .climate-readings {
-      margin-inline: -6px;
+      margin-block: -26px -14px;
     }
   }
-  @container weather (max-width:359px) or ((min-width:760px) and (max-width:829px)) {
-    .climate-density-label {
-      display: none;
-    }
-    .climate-density-label-short {
-      display: inline;
-    }
-  }
-  @container weather (min-width:760px) and (max-width:1269px) {
+  @container weather (min-width:1040px) and (max-width:1379px) {
     .climate .climate-readings {
       column-gap: 2px;
     }
     .climate .climate-readings > div + div {
       padding-left: 2px;
-    }
-  }
-  @container weather (min-width:760px) and (max-width:1009px) {
-    .climate-readings .value {
-      position: relative;
-    }
-    .climate-readings .unit {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      margin: 0;
-      line-height: 1;
     }
   }
   .climate-temperature-row {

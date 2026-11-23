@@ -4,9 +4,10 @@ import type { CardConfig, HassEntity, HomeAssistant, MetricKey } from "./types";
 
 /** Only configured sensors and locally retained Recorder states are considered. */
 export const RECORD_GROUPS = {
-  temperature: { title: "Außenklima", icon: "temperature", color: "#d77940" },
+  temperature: { title: "Temperatur", icon: "temperature", color: "#d77940" },
   wind: { title: "Wind", icon: "wind", color: "#209bb7" },
   rain: { title: "Niederschlag", icon: "rain", color: "#326bd5" },
+  humidity: { title: "Luftfeuchte", icon: "humidity", color: "#209bb7" },
   sun: { title: "Sonne & UV", icon: "sun", color: "#b88117" },
   pressure: { title: "Luftdruck", icon: "pressure", color: "#6a83ad" },
   extra: { title: "Weitere Messwerte", icon: "sensors", color: "#6a83ad" },
@@ -22,8 +23,6 @@ interface RecordDefinition {
 
 const recordDefinitions: readonly RecordDefinition[] = [
   { key: "temperature", title: "Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
-  { key: "humidity", title: "Rel. Luftfeuchte", group: "temperature", icon: "humidity", color: "#209bb7" },
-  { key: "absolute_humidity", title: "Abs. Luftfeuchte", group: "temperature", icon: "humidity", color: "#209bb7" },
   { key: "feels_like", title: "Gefühlte Temperatur", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "dew_point", title: "Taupunkt", group: "temperature", icon: "temperature", color: "#d77940" },
   { key: "temperature_min", title: "Höchstes Tagesminimum", group: "temperature", icon: "temperature", color: "#d77940" },
@@ -43,11 +42,13 @@ const recordDefinitions: readonly RecordDefinition[] = [
   { key: "rain_month", title: "Regen im Kalendermonat", group: "rain", icon: "rain", color: "#326bd5" },
   { key: "rain_year", title: "Regen im Kalenderjahr", group: "rain", icon: "rain", color: "#326bd5" },
   { key: "rain_event", title: "Regenereignis", group: "rain", icon: "rain", color: "#326bd5" },
+  { key: "humidity", title: "Rel. Luftfeuchte", group: "humidity", icon: "humidity", color: "#209bb7" },
+  { key: "absolute_humidity", title: "Abs. Luftfeuchte", group: "humidity", icon: "humidity", color: "#209bb7" },
   { key: "solar", title: "Solarstrahlung", group: "sun", icon: "sun", color: "#b88117" },
   { key: "solar_lux", title: "Beleuchtungsstärke", group: "sun", icon: "sun", color: "#b47b24" },
   { key: "uv", title: "UV-Index", group: "sun", icon: "sun", color: "#ab5688" },
-  { key: "pressure_absolute", title: "Luftdruck absolut", group: "pressure", icon: "pressure", color: "#6a83ad" },
   { key: "pressure", title: "Luftdruck relativ", group: "pressure", icon: "pressure", color: "#66789b" },
+  { key: "pressure_absolute", title: "Luftdruck absolut", group: "pressure", icon: "pressure", color: "#6a83ad" },
 ];
 
 const legacyRecordKeys: readonly MetricKey[] = [
@@ -62,13 +63,20 @@ interface RecordSource extends RecordDefinition {
 }
 
 export interface WeatherRecord extends RecordSource {
+  /** The highest recorded value and its time. */
   value: number | null;
   unit: string;
   timestamp: number | null;
+  minimum?: Pick<RecordedValue, "value" | "timestamp">;
   samples: number;
   /** Number of selected calendar days whose daily reset was not demonstrated. */
   unverifiedDays?: number;
   state: "ok" | "partial" | "uncertain" | "missing" | "empty" | "unit-conflict";
+}
+
+export function recordHasExtremaPair(record: WeatherRecord): boolean {
+  return record.key === "temperature" || record.key === "feels_like" ||
+    record.group === "humidity" || record.group === "pressure";
 }
 export interface WeatherRecordsResult {
   status: "ok" | "empty" | "unavailable" | "error";
@@ -372,13 +380,18 @@ export async function loadWeatherRecords(
     record.value = max.value;
     record.unit = max.unit;
     record.timestamp = max.timestamp;
+    if (recordHasExtremaPair(record)) {
+      const min = entries.reduce((best, entry) =>
+        entry.value < best.value ? entry : best);
+      record.minimum = { value: min.value, timestamp: min.timestamp };
+    }
     record.state = daily.unverifiedDays ? "partial" : "ok";
   }
   const hasDailySource = records.some(r => r.key === "rain_today" || r.key === "wind_gust_max");
   return {
     ...base, start, end, status: records.some(r => r.state === "ok" || r.state === "partial") ? "ok" : "empty",
     message: hasDailySource
-      ? "Nur Recorder-Messwerte. Tagesmaxima und Tageszähler werden erst nach erkennbarer Rücksetzung berücksichtigt. Fehlende Rücksetz-Nachweise und Aufzeichnungslücken können Rekorde verbergen."
+      ? "Nur Recorder-Messwerte. Tagesregen und die gespeicherte Tagesmaximalböe werden erst nach erkennbarer Rücksetzung berücksichtigt. Fehlende Rücksetz-Nachweise und Aufzeichnungslücken können Rekorde verbergen."
       : "Nur aufgezeichnete Recorder-Messwerte im ausgewählten Zeitraum.",
   };
 }
