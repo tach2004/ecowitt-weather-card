@@ -3441,8 +3441,8 @@ test("outdoor climate shows HA-local Recorder extrema and the unchanged current 
   });
   const climate = page.locator(".climate-readings");
   await expect(climate.locator(".climate-current-value")).toContainText("18,6");
-  const maximum = climate.locator(".climate-extreme.maximum");
-  const minimum = climate.locator(".climate-extreme.minimum");
+  const maximum = page.locator(".climate .climate-extreme.maximum:visible");
+  const minimum = page.locator(".climate .climate-extreme.minimum:visible");
   await expect(maximum).toHaveAttribute("data-source", "recorder");
   await expect(minimum).toHaveAttribute("data-source", "recorder");
   await expect(maximum).toContainText("12,0");
@@ -3453,12 +3453,6 @@ test("outdoor climate shows HA-local Recorder extrema and the unchanged current 
   await expect(climate.locator(":scope > div")).toHaveCount(4);
   await expect(climate.locator('[data-key="humidity"]')).toContainText("76");
   await expect(climate.locator('[data-key="feels_like"]')).toContainText("18,1");
-  const bounds = await climate.locator('[data-key="temperature"]').evaluate((el) => {
-    const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
-    const extrema = el.querySelector(".climate-extremes")!.getBoundingClientRect();
-    return { right: current.right, left: extrema.left };
-  });
-  expect(bounds.left).toBeGreaterThanOrEqual(bounds.right - 1);
   await expect(maximum).toBeVisible();
   await expect(minimum).toBeVisible();
   await noOverflow(page);
@@ -3468,19 +3462,29 @@ test("day extrema are slightly larger without overlapping the main temperature o
   for (const width of [320, 402, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await ready(page);
-    const climate = page.locator(".climate-readings");
-    const extrema = climate.locator(".climate-extreme");
+    if (width === 320)
+      await page.addStyleTag({ content: 'ecowitt-weather-card { --paper-font-body1_-_font-family: "DejaVu Sans", sans-serif; }' });
+    const climate = page.locator(".climate");
+    const extrema = climate.locator(".climate-extreme:visible");
     await expect(extrema).toHaveCount(2);
     const sizes = await extrema.evaluateAll((nodes) => nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)));
     expect(sizes.every((value) => value >= 10)).toBe(true);
-    const bounds = await climate.locator('[data-key="temperature"]').evaluate((el) => {
-      const current = el.querySelector(".climate-current-value")!.getBoundingClientRect();
-      const max = el.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
-      const min = el.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
-      const panel = el.closest(".climate")!.getBoundingClientRect();
-      const heading = el.closest(".climate")!.querySelector(".panel-heading h2")!.getBoundingClientRect();
-      const overlapsHeading = max.left < heading.right && max.bottom > heading.top && max.top < heading.bottom;
-      return { nonoverlap: max.left >= current.right - 1 && !overlapsHeading, vertical: min.top >= max.bottom - 1, fits: Math.max(max.right,min.right) <= panel.right - 1 };
+    const bounds = await climate.evaluate(el => {
+      const heading = el.querySelector(".climate-heading-extrema")!;
+      const extrema = heading.getBoundingClientRect().width ? heading : el.querySelector(".climate-readings")!;
+      const current = el.querySelector(".climate-readings .climate-current-value .value")!.getBoundingClientRect();
+      const max = extrema.querySelector(".climate-extreme.maximum")!.getBoundingClientRect();
+      const min = extrema.querySelector(".climate-extreme.minimum")!.getBoundingClientRect();
+      const panel = el.getBoundingClientRect();
+      const title = el.querySelector(".panel-heading h2")!.getBoundingClientRect();
+      const overlaps = (a: DOMRect, b: DOMRect) =>
+        a.left < b.right - 0.5 && a.right > b.left + 0.5 &&
+        a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
+      return {
+        nonoverlap: [max, min].every(extreme => !overlaps(extreme, title) && !overlaps(extreme, current)),
+        vertical: min.top >= max.bottom - 1,
+        fits: Math.max(max.right, min.right) <= panel.right - 1,
+      };
     });
     expect(bounds.nonoverlap).toBe(true);
     expect(bounds.vertical).toBe(true);
@@ -3491,9 +3495,8 @@ test("day extrema are slightly larger without overlapping the main temperature o
 
 test("explicitly configured minimum and maximum take priority and require no Recorder history", async ({ page }) => {
   await ready(page);
-  const climate = page.locator(".climate-readings");
-  const maximum = climate.locator(".climate-extreme.maximum");
-  const minimum = climate.locator(".climate-extreme.minimum");
+  const maximum = page.locator(".climate .climate-extreme.maximum:visible");
+  const minimum = page.locator(".climate .climate-extreme.minimum:visible");
   await expect(maximum).toHaveAttribute("data-source", "entity");
   await expect(minimum).toHaveAttribute("data-source", "entity");
   await expect(maximum).toContainText("20,3");
@@ -3798,6 +3801,8 @@ test("wind keeps its layout and the four climate values fit at unchanged panel h
   for (const width of [320, 402, 792, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await ready(page);
+    if (width === 320 || width === 792)
+      await page.addStyleTag({ content: 'ecowitt-weather-card { --paper-font-body1_-_font-family: "DejaVu Sans", sans-serif; }' });
     const wind = page.locator(".panel.wind");
     const positions = await wind
       .locator(".trio > div")
@@ -3816,8 +3821,9 @@ test("wind keeps its layout and the four climate values fit at unchanged panel h
     );
     const climate = page.locator(".climate-readings");
     await expect(climate.locator(":scope > div .label")).toHaveText([
-      "Temperatur", "Gefühlt", "rel. Luftfeuchte", "abs. Luftfeuchte",
-    ]);
+      "Temperatur", "Gefühlt", "rel. Luftfeuchte",
+      width === 320 || width === 792 ? "abs. Feuchte" : "abs. Luftfeuchte",
+    ], { useInnerText: true });
     await expect(
       page.locator('.climate [data-key="feels_like"]'),
     ).toContainText("18,1");
@@ -3946,9 +3952,8 @@ test("rain tile drops have colored visible strokes on light and dark themes with
     const before = await drops.evaluateAll((nodes) =>
       nodes.map((node) => node.getBoundingClientRect().y),
     );
-    await page.waitForTimeout(200);
-    expect(
-      await drops.evaluateAll(
+    await expect.poll(() =>
+      drops.evaluateAll(
         (nodes, before) =>
           nodes.some(
             (node, index) =>

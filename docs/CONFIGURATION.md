@@ -47,7 +47,7 @@ Ein eigenes Bild bleibt auf der Home-Assistant-Instanz. Dort lassen sich Auflös
 | `temperature_min`, `temperature_max` | Eigene Tagesextremwerte. Fehlt eine Zuordnung, kann der Recorder den Wert ergänzen. |
 | `wind_speed`, `wind_gust`, `wind_gust_max` | Aktuelle Windgeschwindigkeit, aktuelle Böen und Tagesmaximalböe |
 | `wind_direction`, `wind_direction_avg` | Aktuelle und mittlere Herkunftsrichtung in Grad |
-| `wind_speed_avg` | Altes Feld, das beim Speichern bestehender Konfigurationen erhalten bleibt. Es gibt dafür keine Anzeige. |
+| `wind_speed_avg` | Altes Feld für mittlere Windgeschwindigkeit. Eine bestehende Zuordnung bleibt erhalten und ist für Wetterrekorde auswählbar. |
 | `rain_today`, `rain_rate` | Regenmenge am Kalendertag und aktuelle Regenrate |
 | `rain_rate_secondary` | Optionale zweite Quelle für eine echte Regenrate |
 | `rain_wet` | Oberflächenfeuchtigkeit aus einem `binary_sensor` mit `device_class: moisture` oder ohne Geräteklasse |

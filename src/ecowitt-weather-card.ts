@@ -909,9 +909,12 @@ export class EcowittWeatherCard extends LitElement {
     </section>`;
   }
   private _climate() {
+    const extremes = html`<span class="climate-extremes">
+      ${this._climateExtreme("temperature_max")}${this._climateExtreme("temperature_min")}
+    </span>`;
     const temperature = html`<span class="climate-temperature-row">
       <span class="climate-current-value">${this._value("temperature")}</span>
-      <span class="climate-extremes">${this._climateExtreme("temperature_max")}${this._climateExtreme("temperature_min")}</span>
+      ${extremes}
     </span>`;
     const humidity = this._value("humidity");
     const feelsLike = this._value("feels_like");
@@ -926,9 +929,10 @@ export class EcowittWeatherCard extends LitElement {
       aria-label="Außenklimadetails öffnen"
       @click=${() => this._openDetail("temperature")}
     >
-      <div class="panel-heading">
+      <div class="panel-heading climate-heading">
         ${icon("temperature")}
         <h2>Außenklima</h2>
+        <span class="climate-heading-extrema">${extremes}</span>
         <span class="more">›</span>
       </div>
       <div class="climate-layout">
@@ -940,8 +944,13 @@ export class EcowittWeatherCard extends LitElement {
         <div class="trio climate-readings">
           <div data-key="temperature"><span class="label">Temperatur</span>${temperature}</div>
           <div data-key="feels_like" class="climate-secondary"><span class="label">Gefühlt</span>${feelsLike}</div>
-          <div data-key="humidity"><span class="label">rel. Luftfeuchte</span>${humidity}</div>
-          <div data-key="absolute_humidity" class="climate-secondary"><span class="label">abs. Luftfeuchte</span>${absoluteHumidity}</div>
+          <div data-key="humidity"><span class="label"><span>rel. Luft<wbr>feuchte</span></span>${humidity}</div>
+          <div data-key="absolute_humidity" class="climate-secondary">
+            <span class="label">
+              <span class="climate-density-label">abs. Luftfeuchte</span>
+              <span class="climate-density-label-short">abs. Feuchte</span>
+            </span>${absoluteHumidity}
+          </div>
         </div>
       </div>
     </button>`;

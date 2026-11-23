@@ -153,6 +153,7 @@ function format(value: number, key: MetricKey): string {
     "wind_direction",
     "wind_direction_avg",
     "humidity",
+    "absolute_humidity",
     "pressure",
     "solar",
     "solar_lux",

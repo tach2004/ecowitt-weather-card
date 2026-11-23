@@ -14,9 +14,6 @@ export const experienceStyles = css`
     border-left: 1px solid var(--line);
     padding-left: 14px;
   }
-  .climate {
-    position: relative;
-  }
   /* The former three-column layout reserves the same space even when its
      readings wrap at this width. The visible layout shares that grid area. */
   .climate-layout {
@@ -30,15 +27,19 @@ export const experienceStyles = css`
   .climate-size-reference {
     visibility: hidden;
   }
+  .climate-heading-extrema,
+  .climate-density-label-short {
+    display: none;
+  }
   .climate .climate-readings {
     grid-template-columns: minmax(max-content, 1.65fr) repeat(3, minmax(min-content, 1fr));
-    column-gap: clamp(2px, 0.55cqi, 10px);
+    column-gap: clamp(2px, 0.35cqi, 8px);
   }
   .climate-readings > div {
     overflow-wrap: normal;
   }
   .climate .climate-readings > div + div {
-    padding-left: clamp(2px, 0.55cqi, 10px);
+    padding-left: clamp(2px, 0.35cqi, 8px);
   }
   .climate-readings > [data-key="humidity"] {
     border-left-width: 2px;
@@ -52,12 +53,33 @@ export const experienceStyles = css`
       align-items: flex-end;
       block-size: 1.35em;
     }
+    /* Units fit under the smaller values within the existing value area. */
+    .climate-secondary .value {
+      position: relative;
+    }
+    .climate-secondary .unit {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin: 0;
+      line-height: 1;
+    }
   }
   @container weather (max-width:399px) or ((min-width:760px) and (max-width:1009px)) {
+    .climate-heading {
+      gap: 4px;
+    }
+    .climate-heading-extrema {
+      display: flex;
+      align-items: center;
+      block-size: 28px;
+      margin-inline-start: auto;
+    }
+    .climate-heading .more {
+      margin-inline-start: 0;
+    }
     .climate-readings .climate-extremes {
-      position: absolute;
-      top: 19px;
-      right: 49px;
+      display: none;
     }
   }
   @container weather (max-width:359px) {
@@ -68,14 +90,18 @@ export const experienceStyles = css`
     .climate .climate-readings > div + div {
       padding-left: 1px;
     }
-    .climate-readings .climate-extremes {
-      top: 15px;
-      right: 45px;
-    }
   }
   @container weather (min-width:760px) and (max-width:829px) {
     .climate .climate-readings {
       margin-inline: -6px;
+    }
+  }
+  @container weather (max-width:359px) or ((min-width:760px) and (max-width:829px)) {
+    .climate-density-label {
+      display: none;
+    }
+    .climate-density-label-short {
+      display: inline;
     }
   }
   @container weather (min-width:760px) and (max-width:1269px) {
@@ -85,10 +111,12 @@ export const experienceStyles = css`
     .climate .climate-readings > div + div {
       padding-left: 2px;
     }
-    .climate-secondary .value {
+  }
+  @container weather (min-width:760px) and (max-width:1009px) {
+    .climate-readings .value {
       position: relative;
     }
-    .climate-secondary .unit {
+    .climate-readings .unit {
       position: absolute;
       top: 100%;
       left: 0;
